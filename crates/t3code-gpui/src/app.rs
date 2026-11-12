@@ -7,6 +7,7 @@ use gpui_kit::component::{
     ActiveTheme as _, Selectable as _, Theme,
     button::{Button, ButtonVariants as _},
     command::{Command, CommandItem, CommandState},
+    diff::{Diff, DiffFile, DiffMode, DiffParseOptions, DiffState},
     h_flex,
     input::{CursorBlink, Input, InputEvent, InputState, Position, Textarea, TextareaState},
     menu::ContextMenuExt as _,
@@ -172,7 +173,7 @@ enum PanelPart {
 
 enum PanelBody {
     Document(Vec<PanelPart>),
-    Diff(Rc<Vec<completion::DiffLine>>),
+    Diff(Entity<DiffState>),
 }
 
 type FindHits = Rc<Vec<(usize, std::ops::Range<usize>)>>;
@@ -1546,14 +1547,43 @@ impl Root {
         cx.spawn(async move |this, cx| {
             let preview =
                 on_runtime(&runtime, async move { connection.diff_preview(&cwd).await }).await;
+            let preview = match preview {
+                Ok(preview) => {
+                    cx.background_spawn(async move {
+                        let lines = completion::diff_lines(&preview);
+                        let mut files = Vec::new();
+                        if let Some(sources) = preview["sources"].as_array() {
+                            for source in sources {
+                                let patch = source["diff"].as_str().unwrap_or_default();
+                                files.extend(
+                                    DiffFile::parse_with(
+                                        patch,
+                                        DiffParseOptions::new().truncated_hunks(true),
+                                    )
+                                    .map_err(|error| {
+                                        anyhow::anyhow!("Diff parse error: {error:?}")
+                                    })?,
+                                );
+                            }
+                        }
+                        Ok((lines, files))
+                    })
+                    .await
+                }
+                Err(error) => Err(error),
+            };
             let _ = this.update(cx, |root, cx| {
                 match preview {
-                    Ok(preview) => {
-                        let lines = completion::diff_lines(&preview);
+                    Ok((lines, files)) => {
                         let text = lines.iter().map(|l| l.text().to_string()).collect();
+                        let state = cx.new(|cx| {
+                            DiffState::new(files, cx)
+                                .with_mode(DiffMode::Unified)
+                                .with_syntax_max_line_length(500)
+                        });
                         root.file_panel = Some(FilePanel::new(
                             DIFF_TITLE.into(),
-                            PanelBody::Diff(Rc::new(lines)),
+                            PanelBody::Diff(state),
                             None,
                             text,
                         ));
@@ -1874,7 +1904,7 @@ impl Root {
                             .map(|(ix, part)| self.render_panel_part(ix, part, cx)),
                     )
                     .into_any_element(),
-                PanelBody::Diff(lines) => render_diff(lines.clone(), cx),
+                PanelBody::Diff(state) => div().flex_1().child(Diff::new(state)).into_any_element(),
             }
         };
         Some(
@@ -3916,43 +3946,4 @@ fn reveal_hit(panel: &FilePanel) {
     if let Some((line, _)) = panel.hits.get(panel.hit_at) {
         panel.scroll.scroll_to_item(*line, ScrollStrategy::Center);
     }
-}
-
-fn render_diff(lines: Rc<Vec<completion::DiffLine>>, cx: &App) -> AnyElement {
-    let theme = cx.theme();
-    let colors = (
-        theme.success,
-        theme.danger,
-        theme.primary,
-        theme.muted_foreground,
-        theme.foreground,
-    );
-    let mono = theme.mono_font_family.clone();
-    uniform_list("diff-lines", lines.len(), move |range, _, _| {
-        let (added, removed, hunk, meta, plain) = colors;
-        range
-            .map(|i| {
-                use completion::DiffLine::*;
-                let (color, strong) = match &lines[i] {
-                    Source(_) => (plain, true),
-                    File(_) => (meta, false),
-                    Hunk(_) => (hunk, false),
-                    Added(_) => (added, false),
-                    Removed(_) => (removed, false),
-                    Context(_) => (plain, false),
-                };
-                div()
-                    .px_3()
-                    .text_xs()
-                    .whitespace_nowrap()
-                    .text_color(color)
-                    .when(strong, |d| d.font_weight(FontWeight::BOLD))
-                    .child(lines[i].text().to_string())
-                    .into_any_element()
-            })
-            .collect()
-    })
-    .font_family(mono)
-    .flex_1()
-    .into_any_element()
 }
