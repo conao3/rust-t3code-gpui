@@ -21,6 +21,10 @@ pub enum RowEvent {
     Submit {
         request_id: String,
     },
+    Implement {
+        plan_id: String,
+        markdown: String,
+    },
 }
 
 pub struct RowView {
@@ -174,6 +178,27 @@ impl RowView {
                 .child(h_flex().gap_2().flex_wrap().children(buttons))
                 .into_any_element()
             }
+            Pending::Plan { plan_id, markdown } => {
+                let event = RowEvent::Implement {
+                    plan_id: plan_id.clone(),
+                    markdown: markdown.clone(),
+                };
+                card.child(
+                    h_flex().gap_2().child(
+                        Button::new("implement")
+                            .label("Implement plan")
+                            .compact()
+                            .primary()
+                            .disabled(self.responding)
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.responding = true;
+                                cx.emit(event.clone());
+                                cx.notify();
+                            })),
+                    ),
+                )
+                .into_any_element()
+            }
             Pending::Question {
                 request_id,
                 questions,
@@ -248,7 +273,7 @@ impl Render for RowView {
                 .text_color(theme.muted_foreground)
                 .child(self.row.text.clone())
                 .into_any_element(),
-            RowKind::Request => match self.row.pending.clone() {
+            RowKind::Request | RowKind::Plan => match self.row.pending.clone() {
                 Some(pending) => base
                     .py_1()
                     .child(self.render_pending(&pending, cx))

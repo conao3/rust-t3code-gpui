@@ -14,6 +14,7 @@ pub enum RowKind {
     Request,
     Error,
     Notice,
+    Plan,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +50,10 @@ pub enum Pending {
     Question {
         request_id: String,
         questions: Vec<Question>,
+    },
+    Plan {
+        plan_id: String,
+        markdown: String,
     },
 }
 
@@ -244,12 +249,16 @@ const TOOL_TYPES: &[&str] = &[
 
 pub fn rows(state: &ThreadState) -> Vec<Row> {
     let mut rows = Vec::new();
+    let mut open_plan: Option<(usize, String, String)> = None;
     for item in state.items() {
         let id = text(item, "id");
         let streaming = item
             .get("streaming")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        if text(item, "type") == "user_message" {
+            open_plan = None;
+        }
         match text(item, "type") {
             "user_message" => rows.push(Row {
                 key: id.to_string(),
@@ -273,6 +282,13 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                         live: streaming && i == last,
                         pending: None,
                     });
+                }
+                if text(item, "type") == "proposed_plan" && !streaming {
+                    open_plan = Some((
+                        rows.len(),
+                        text(item, "planId").to_string(),
+                        body.to_string(),
+                    ));
                 }
             }
             "reasoning" => rows.push(Row {
@@ -348,6 +364,18 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
             }),
             _ => {}
         }
+    }
+    if let Some((at, plan_id, markdown)) = open_plan {
+        rows.insert(
+            at,
+            Row {
+                key: format!("plan:{plan_id}"),
+                kind: RowKind::Plan,
+                text: "Plan".into(),
+                live: true,
+                pending: Some(Pending::Plan { plan_id, markdown }),
+            },
+        );
     }
     rows
 }
@@ -672,5 +700,29 @@ mod tests {
         assert_eq!(user_message_jump(&rows, 0, false, false), None);
         assert_eq!(user_message_jump(&rows, 0, false, true), Some(2));
         assert_eq!(user_message_jump(&rows, 2, false, true), None);
+    }
+
+    #[test]
+    fn the_latest_plan_offers_implementation_until_the_user_answers() {
+        let plan = json!({"id": "p", "ordinal": 2, "type": "proposed_plan", "planId": "plan-1",
+                          "markdown": "1. Do it", "streaming": false});
+        let open = state(vec![
+            json!({"id": "u", "ordinal": 1, "type": "user_message", "text": "plan it"}),
+            plan.clone(),
+        ]);
+        let list = rows(&open);
+        assert_eq!(list.last().unwrap().kind, RowKind::Plan);
+        assert_eq!(
+            list.last().unwrap().pending,
+            Some(Pending::Plan {
+                plan_id: "plan-1".into(),
+                markdown: "1. Do it".into()
+            })
+        );
+        let answered = state(vec![
+            plan,
+            json!({"id": "u2", "ordinal": 3, "type": "user_message", "text": "go"}),
+        ]);
+        assert!(rows(&answered).iter().all(|r| r.kind != RowKind::Plan));
     }
 }

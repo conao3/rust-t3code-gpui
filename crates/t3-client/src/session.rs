@@ -239,6 +239,28 @@ impl Connection {
         .await
     }
 
+    pub async fn implement_plan(
+        &self,
+        thread_id: &str,
+        plan_id: &str,
+        markdown: &str,
+    ) -> Result<u64> {
+        self.set_interaction_mode(thread_id, "default").await?;
+        self.dispatch(json!({
+            "type": "message.dispatch",
+            "threadId": thread_id,
+            "messageId": uuid::Uuid::new_v4().to_string(),
+            "text": format!("PLEASE IMPLEMENT THIS PLAN:\n{}", markdown.trim()),
+            "attachments": [],
+            "createdBy": "user",
+            "creationSource": "web",
+            "deliveryIntent": "auto",
+            "dispatchMode": {"type": "start_immediately"},
+            "sourcePlanRef": {"threadId": thread_id, "planId": plan_id},
+        }))
+        .await
+    }
+
     pub async fn stop_thread(&self, thread_id: &str) -> Result<u64> {
         self.dispatch(json!({"type": "thread.stop", "threadId": thread_id}))
             .await

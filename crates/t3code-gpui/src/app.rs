@@ -497,7 +497,7 @@ impl Root {
                         let row = row.clone();
                         cx.new(|cx| RowView::new(row, cx))
                     };
-                    if row.kind == RowKind::Request {
+                    if matches!(row.kind, RowKind::Request | RowKind::Plan) {
                         kept.insert(
                             row.key.clone(),
                             cx.subscribe_in(&view, window, Self::on_row_event),
@@ -538,6 +538,33 @@ impl Root {
             } => self.respond(view.clone(), request_id.clone(), decision.clone(), cx),
             RowEvent::Submit { request_id } => {
                 self.submit_answers(view.clone(), request_id.clone(), window, cx)
+            }
+            RowEvent::Implement { plan_id, markdown } => {
+                let (plan_id, markdown) = (plan_id.clone(), markdown.clone());
+                let view = view.clone();
+                let Some((environment, thread_id)) = self.current() else {
+                    return;
+                };
+                let Some(connection) = self.connection(&environment) else {
+                    return;
+                };
+                let runtime = self.runtime.clone();
+                cx.spawn(async move |this, cx| {
+                    let result = on_runtime(&runtime, async move {
+                        connection
+                            .implement_plan(&thread_id, &plan_id, &markdown)
+                            .await
+                    })
+                    .await;
+                    if let Err(error) = result {
+                        view.update(cx, |view, cx| view.set_responding(false, cx));
+                        let _ = this.update(cx, |root, cx| {
+                            root.message = Some(format!("Implementing the plan failed: {error:#}"));
+                            cx.notify();
+                        });
+                    }
+                })
+                .detach();
             }
         }
     }
