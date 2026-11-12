@@ -179,6 +179,49 @@ pub fn file_markdown(path: &str, contents: &str) -> String {
     format!("{fence}{extension}\n{contents}\n{fence}\n")
 }
 
+/// The diff sources T3 reports for a checkout as markdown: a heading per source with its file
+/// counts, and its diff in a `diff` fence.
+pub fn diff_markdown(preview: &Value) -> String {
+    let sources = preview
+        .get("sources")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    if sources.is_empty() {
+        return "No changes.".into();
+    }
+    let mut out = String::new();
+    for source in sources {
+        out.push_str(&format!("## {}\n\n", text(source, "title")));
+        for file in source
+            .get("files")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+        {
+            let count = |key: &str| file.get(key).and_then(Value::as_u64).unwrap_or(0);
+            out.push_str(&format!(
+                "- `{}` +{} -{}\n",
+                text(file, "path"),
+                count("additions"),
+                count("deletions")
+            ));
+        }
+        let diff = text(source, "diff");
+        if diff.is_empty() {
+            out.push_str("\nNo changes.\n\n");
+        } else {
+            out.push('\n');
+            out.push_str(&file_markdown("changes.diff", diff));
+            out.push('\n');
+        }
+        if source.get("truncated").and_then(Value::as_bool) == Some(true) {
+            out.push_str("The diff is longer than T3 sends; the rest is left out.\n\n");
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,5 +309,16 @@ mod tests {
             "`````txt\na ```` b\n`````\n"
         );
         assert_eq!(file_markdown("Makefile", "all:"), "```\nall:\n```\n");
+    }
+
+    #[test]
+    fn diffs_render_per_source_with_their_files() {
+        let preview = json!({"sources": [{"title": "Working tree", "diff": "--- a\n+++ b\n-x\n+y",
+            "files": [{"path": "a.rs", "additions": 1, "deletions": 1}], "truncated": false}]});
+        assert_eq!(
+            diff_markdown(&preview),
+            "## Working tree\n\n- `a.rs` +1 -1\n\n```diff\n--- a\n+++ b\n-x\n+y\n```\n\n"
+        );
+        assert_eq!(diff_markdown(&json!({"sources": []})), "No changes.");
     }
 }

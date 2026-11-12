@@ -35,6 +35,7 @@ type CommandFuture =
 
 const REDRAW_INTERVAL: Duration = Duration::from_millis(250);
 const UI_FONT: &str = "Noto Sans CJK JP";
+const DIFF_TITLE: &str = "Changes";
 const CURSOR_BLINK: Duration = Duration::from_millis(500);
 const CURSOR_BLINK_IDLE: Duration = Duration::from_secs(5);
 
@@ -49,6 +50,7 @@ actions!(
         Find,
         TogglePalette,
         ToggleFilePicker,
+        ToggleDiff,
         CloseFilePanel,
         CycleRuntimeMode,
         NextUserMessage,
@@ -80,6 +82,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "chat.find" => Box::new(Find),
         "commandPalette.toggle" => Box::new(TogglePalette),
         "filePicker.toggle" => Box::new(ToggleFilePicker),
+        "diff.toggle" => Box::new(ToggleDiff),
         "rightPanel.toggle" | "rightPanel.close" => Box::new(CloseFilePanel),
         _ => return None,
     })
@@ -1004,6 +1007,47 @@ impl Root {
                     .filter(|e| e.get("kind").and_then(Value::as_str) == Some("file"))
                     .filter_map(|e| e.get("path").and_then(Value::as_str).map(str::to_string))
                     .collect();
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn toggle_diff(&mut self, cx: &mut Context<Self>) {
+        if self
+            .file_panel
+            .as_ref()
+            .is_some_and(|p| p.path == DIFF_TITLE)
+        {
+            self.file_panel = None;
+            cx.notify();
+            return;
+        }
+        let Some((environment, cwd)) = self.composer_cwd() else {
+            self.message = Some("Open a thread first.".into());
+            cx.notify();
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let runtime = self.runtime.clone();
+        cx.spawn(async move |this, cx| {
+            let preview =
+                on_runtime(&runtime, async move { connection.diff_preview(&cwd).await }).await;
+            let _ = this.update(cx, |root, cx| {
+                match preview {
+                    Ok(preview) => {
+                        let markdown = completion::diff_markdown(&preview);
+                        let view = cx.new(|cx| TextViewState::markdown(&markdown, cx));
+                        root.file_panel = Some(FilePanel {
+                            path: DIFF_TITLE.into(),
+                            view,
+                            note: None,
+                        });
+                    }
+                    Err(error) => root.message = Some(format!("{error:#}")),
+                }
                 cx.notify();
             });
         })
@@ -2493,6 +2537,13 @@ impl Root {
                     .on_click(cx.listener(|root, _, _, cx| root.settle(cx))),
             )
             .child(
+                Button::new("diff")
+                    .label("Changes")
+                    .outline()
+                    .compact()
+                    .on_click(cx.listener(|root, _, _, cx| root.toggle_diff(cx))),
+            )
+            .child(
                 Button::new("browser")
                     .label("Open in browser")
                     .outline()
@@ -2622,6 +2673,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &ToggleFilePicker, window, cx| {
                 root.toggle_file_picker(window, cx)
             }))
+            .on_action(cx.listener(|root, _: &ToggleDiff, _, cx| root.toggle_diff(cx)))
             .on_action(cx.listener(|root, _: &CloseFilePanel, _, cx| {
                 root.file_panel = None;
                 cx.notify();
