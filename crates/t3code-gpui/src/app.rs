@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 use gpui_kit::component::{
     ActiveTheme as _, Selectable as _, Theme,
     button::{Button, ButtonVariants as _},
+    command::{Command, CommandItem, CommandState},
     h_flex,
     input::{Input, InputEvent, InputState, Textarea, TextareaState},
     menu::ContextMenuExt as _,
@@ -41,6 +42,7 @@ actions!(
         ToggleSidebar,
         TogglePin,
         Find,
+        TogglePalette,
         CycleRuntimeMode,
         NextUserMessage,
         PreviousUserMessage,
@@ -69,6 +71,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "sidebar.toggle" => Box::new(ToggleSidebar),
         "thread.pin" => Box::new(TogglePin),
         "chat.find" => Box::new(Find),
+        "commandPalette.toggle" => Box::new(TogglePalette),
         _ => return None,
     })
 }
@@ -82,6 +85,13 @@ enum ThreadOp {
     Settle,
     Unsettle,
     Archive,
+}
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = t3code_gpui, no_json)]
+struct OpenThreadAction {
+    environment: String,
+    thread_id: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Action)]
@@ -133,6 +143,8 @@ pub struct Root {
     message: Option<String>,
     picker_open: bool,
     find_input: Entity<InputState>,
+    palette: Entity<CommandState>,
+    palette_open: bool,
     find_open: bool,
     find_hits: Vec<usize>,
     find_at: usize,
@@ -195,6 +207,7 @@ impl Root {
             state
         });
         let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
+        let palette = cx.new(|cx| CommandState::new(window, cx));
         let weak = cx.entity().downgrade();
         let subscriptions = vec![
             cx.intercept_keystrokes(move |event, window, cx| {
@@ -238,6 +251,8 @@ impl Root {
             message: None,
             picker_open: false,
             find_input,
+            palette,
+            palette_open: false,
             find_open: false,
             find_hits: Vec::new(),
             find_at: 0,
@@ -712,6 +727,85 @@ impl Root {
         });
         self.load_composer();
         cx.notify();
+    }
+
+    fn toggle_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.palette_open = !self.palette_open;
+        if self.palette_open {
+            self.palette.update(cx, |state, cx| {
+                state.set_query("", window, cx);
+                state.focus(window, cx);
+            });
+        } else {
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let commands: [(&str, Box<dyn Action>); 8] = [
+            ("New thread", Box::new(NewThread)),
+            ("Next Done or waiting thread", Box::new(NextDone)),
+            ("Settle the thread", Box::new(Settle)),
+            ("Pin or unpin the thread", Box::new(TogglePin)),
+            ("Find in thread", Box::new(Find)),
+            ("Pick a model", Box::new(ToggleModelPicker)),
+            ("Cycle the runtime mode", Box::new(CycleRuntimeMode)),
+            ("Toggle the sidebar", Box::new(ToggleSidebar)),
+        ];
+        let threads = self.entries.iter().map(|entry| {
+            CommandItem::new()
+                .label(format!("{}  ·  {}", entry.title, entry.environment))
+                .keywords([entry.project_title.clone()])
+                .action(Box::new(OpenThreadAction {
+                    environment: entry.environment.clone(),
+                    thread_id: entry.thread_id.clone(),
+                }))
+        });
+        let weak = cx.entity().downgrade();
+        let closer = move |window: &mut Window, cx: &mut App| {
+            let _ = weak.update(cx, |root, cx| {
+                root.palette_open = false;
+                root.composer
+                    .update(cx, |state, cx| state.focus(window, cx));
+                cx.notify();
+            });
+        };
+        let close_on_cancel = closer.clone();
+        div()
+            .absolute()
+            .top(px(80.))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(
+                div()
+                    .w(px(640.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.background)
+                    .shadow_lg()
+                    .child(
+                        Command::new(&self.palette)
+                            .placeholder("Search threads and commands")
+                            .max_h(px(480.))
+                            .items(
+                                commands
+                                    .into_iter()
+                                    .map(|(label, action)| {
+                                        CommandItem::new().label(label).action(action)
+                                    })
+                                    .chain(threads),
+                            )
+                            .on_confirm(move |_, window, cx| closer(window, cx))
+                            .on_cancel(move |window, cx| close_on_cancel(window, cx)),
+                    ),
+            )
+            .into_any_element()
     }
 
     fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1935,7 +2029,11 @@ impl Render for Root {
             self.composer
                 .update(cx, |state, cx| state.set_value(text, window, cx));
         }
-        if !self.focus.contains_focused(window, cx) && self.open.is_none() && self.draft.is_none() {
+        if !self.focus.contains_focused(window, cx)
+            && self.open.is_none()
+            && self.draft.is_none()
+            && !self.palette_open
+        {
             self.focus.focus(window, cx);
         }
         let pane = match &self.draft {
@@ -1943,6 +2041,7 @@ impl Render for Root {
             None => self.render_thread(cx),
         };
         h_flex()
+            .relative()
             .size_full()
             .track_focus(&self.focus)
             .key_context("Root")
@@ -1952,6 +2051,13 @@ impl Render for Root {
                 cx.listener(|root, menu: &ThreadMenu, _, cx| root.thread_op(menu.clone(), cx)),
             )
             .on_action(cx.listener(|root, _: &Find, window, cx| root.open_find(window, cx)))
+            .on_action(
+                cx.listener(|root, _: &TogglePalette, window, cx| root.toggle_palette(window, cx)),
+            )
+            .on_action(cx.listener(|root, open: &OpenThreadAction, _, cx| {
+                root.palette_open = false;
+                root.open_thread(open.environment.clone(), open.thread_id.clone(), cx)
+            }))
             .on_action(cx.listener(|root, _: &TogglePin, _, cx| {
                 if let Some(entry) = root.open_entry().cloned() {
                     let op = if entry.pin_order.is_some() {
@@ -2001,6 +2107,9 @@ impl Render for Root {
                 root.child(self.render_sidebar(cx))
             })
             .child(pane)
+            .when(self.palette_open, |root_el| {
+                root_el.child(self.render_palette(cx))
+            })
     }
 }
 
