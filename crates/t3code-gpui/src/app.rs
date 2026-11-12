@@ -201,6 +201,7 @@ pub struct Root {
     picker_open: bool,
     attachments: Vec<attachments::Pending>,
     queued: Vec<timeline::Queued>,
+    thread_loading: bool,
     completion: Option<Completion>,
     completion_seq: u64,
     find_input: Entity<InputState>,
@@ -335,6 +336,7 @@ impl Root {
             picker_open: false,
             attachments: Vec::new(),
             queued: Vec::new(),
+            thread_loading: false,
             completion: None,
             completion_seq: 0,
             find_input,
@@ -781,12 +783,17 @@ impl Root {
 
     fn rebuild_rows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &self.open else { return };
-        let (rows, queued) = {
+        let (rows, queued, loading) = {
             let state = open.watch.state();
             let state = state.lock().expect("thread lock");
-            (timeline::rows(&state), timeline::queued(&state))
+            (
+                timeline::rows(&state),
+                timeline::queued(&state),
+                state.projection.is_empty(),
+            )
         };
         self.queued = queued;
+        self.thread_loading = loading;
         let mut existing: HashMap<String, Entity<RowView>> = self
             .rows
             .iter()
@@ -1000,6 +1007,7 @@ impl Root {
         self.row_views.clear();
         self.row_subscriptions.clear();
         self.list_state.reset(0);
+        self.thread_loading = true;
         self.user_cursor = None;
         self.list_state.set_follow_mode(FollowMode::Tail);
         self.message = None;
@@ -3145,16 +3153,30 @@ impl Root {
                         ),
                 )
             })
-            .child(
-                list(self.list_state.clone(), move |ix, _, _| {
-                    views
-                        .get(ix)
-                        .map(|v| v.clone().into_any_element())
-                        .unwrap_or_else(|| div().into_any_element())
-                })
-                .flex_1()
-                .w_full(),
-            )
+            .when(self.thread_loading, |pane| {
+                pane.child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_sm()
+                        .text_color(theme.muted_foreground)
+                        .child("Loading thread…"),
+                )
+            })
+            .when(!self.thread_loading, |pane| {
+                pane.child(
+                    list(self.list_state.clone(), move |ix, _, _| {
+                        views
+                            .get(ix)
+                            .map(|v| v.clone().into_any_element())
+                            .unwrap_or_else(|| div().into_any_element())
+                    })
+                    .flex_1()
+                    .w_full(),
+                )
+            })
             .children(message)
             .child(
                 div()
