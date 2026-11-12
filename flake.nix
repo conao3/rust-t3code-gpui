@@ -35,6 +35,7 @@
           buildLibs =
             runtimeLibs
             ++ (with pkgs; [
+              aws-lc
               openssl
               zlib
             ])
