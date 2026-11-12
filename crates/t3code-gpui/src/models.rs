@@ -155,6 +155,27 @@ pub fn new_thread(
     Some((model, runtime_mode))
 }
 
+/// The usage windows a provider instance reports (label and percent used), as the composer shows
+/// them.
+pub fn usage(config: &Value, instance_id: &str) -> Vec<(String, f64)> {
+    config
+        .get("providers")
+        .and_then(Value::as_array)
+        .and_then(|ps| ps.iter().find(|p| text(p, "instanceId") == instance_id))
+        .and_then(|p| p.pointer("/usageLimits/windows"))
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|w| {
+            Some((
+                text(w, "label").to_string(),
+                w.get("usedPercent")?.as_f64()?,
+            ))
+        })
+        .collect()
+}
+
 /// "Instance · model" for a model selection, with the names the server reports.
 pub fn label(config: Option<&Value>, selection: &Value) -> String {
     let instance_id = text(selection, "instanceId");
@@ -258,5 +279,20 @@ mod tests {
             "Claude conao3 · Opus 5.5"
         );
         assert_eq!(label(Some(&c), &selection("other", "m")), "other · m");
+    }
+
+    #[test]
+    fn usage_windows_come_from_the_instance() {
+        let config = json!({"providers": [
+            {"instanceId": "a", "usageLimits": {"windows": [
+                {"id": "s", "kind": "session", "label": "5h", "usedPercent": 34.5},
+                {"id": "w", "kind": "weekly", "label": "Week", "usedPercent": 12}]}},
+            {"instanceId": "b"},
+        ]});
+        assert_eq!(
+            usage(&config, "a"),
+            [("5h".to_string(), 34.5), ("Week".to_string(), 12.0)]
+        );
+        assert!(usage(&config, "b").is_empty());
     }
 }

@@ -2320,6 +2320,23 @@ impl Root {
                                 .on_click(cx.listener(|root, _, _, cx| root.toggle_plan(cx))),
                         )
                     })
+                    .children(
+                        config
+                            .as_ref()
+                            .map(|c| models::usage(c, &current_instance))
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|(label, percent)| {
+                                div()
+                                    .text_xs()
+                                    .text_color(if percent >= 80. {
+                                        theme.warning
+                                    } else {
+                                        theme.muted_foreground
+                                    })
+                                    .child(format!("{label} {percent:.0}%"))
+                            }),
+                    )
             });
         let picker = self.picker_open.then(|| {
             let groups = instances.iter().enumerate().map(|(gi, instance)| {
