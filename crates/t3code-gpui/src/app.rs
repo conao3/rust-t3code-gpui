@@ -224,6 +224,7 @@ pub struct Root {
     sidebar_hidden: bool,
     wake_scheduled: bool,
     collapsed: HashSet<sidebar::Section>,
+    collapsed_families: HashSet<(String, String)>,
     window_active: bool,
     shell_dirty: bool,
     thread_dirty: bool,
@@ -357,6 +358,7 @@ impl Root {
             sidebar_hidden: false,
             wake_scheduled: false,
             collapsed: HashSet::from([sidebar::Section::Settled]),
+            collapsed_families: HashSet::new(),
             window_active: window.is_window_active(),
             shell_dirty: false,
             thread_dirty: false,
@@ -2496,8 +2498,11 @@ impl Root {
             if collapsed {
                 continue;
             }
-            for (entry, depth) in shelf.rows {
+            for (entry, depth, family) in
+                sidebar::visible_rows(&shelf.rows, &self.collapsed_families)
+            {
                 index += 1;
+                let family_key = entry.key();
                 let selected = open.as_ref().is_some_and(|(env, id)| entry.is(env, id));
                 let dot = match entry.status {
                     ThreadStatus::Approval | ThreadStatus::Input => Some(theme.warning),
@@ -2550,6 +2555,33 @@ impl Root {
                                 .text_sm()
                                 .child(entry.title.clone()),
                         )
+                        .when_some(family, |row, family| {
+                            let label = match (family.collapsed, family.working) {
+                                (true, working) if working > 0 => {
+                                    format!("▸ {} · {working} working", family.children)
+                                }
+                                (true, _) => format!("▸ {}", family.children),
+                                (false, _) => format!("▾ {}", family.children),
+                            };
+                            let key = family_key.clone();
+                            row.child(
+                                div()
+                                    .id(("family", index))
+                                    .flex_none()
+                                    .px_1()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |root, _, _, cx| {
+                                        cx.stop_propagation();
+                                        if !root.collapsed_families.remove(&key) {
+                                            root.collapsed_families.insert(key.clone());
+                                        }
+                                        cx.notify();
+                                    }))
+                                    .child(label),
+                            )
+                        })
                         .when_some(dot, |row, color| {
                             row.child(div().flex_none().size_2().rounded_full().bg(color))
                         })

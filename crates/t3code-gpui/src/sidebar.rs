@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde_json::Value;
 use t3_client::projection::ShellState;
@@ -291,6 +291,50 @@ pub fn next_with<'a>(
         .find(|e| wanted(e))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Family {
+    pub children: usize,
+    pub working: usize,
+    pub collapsed: bool,
+}
+
+/// The rows of a shelf to draw: a thread with launched threads under it carries their count and
+/// how many are working, and the threads under a collapsed one are left out.
+pub fn visible_rows(
+    rows: &[(ThreadEntry, usize)],
+    collapsed: &HashSet<(String, String)>,
+) -> Vec<(ThreadEntry, usize, Option<Family>)> {
+    let mut out = Vec::new();
+    let mut skip_deeper_than: Option<usize> = None;
+    for (i, (entry, depth)) in rows.iter().enumerate() {
+        if let Some(limit) = skip_deeper_than {
+            if *depth > limit {
+                continue;
+            }
+            skip_deeper_than = None;
+        }
+        let descendants: Vec<&ThreadEntry> = rows[i + 1..]
+            .iter()
+            .take_while(|(_, d)| d > depth)
+            .map(|(e, _)| e)
+            .collect();
+        let is_collapsed = !descendants.is_empty() && collapsed.contains(&entry.key());
+        let family = (!descendants.is_empty()).then(|| Family {
+            children: descendants.len(),
+            working: descendants
+                .iter()
+                .filter(|e| e.status == ThreadStatus::Working)
+                .count(),
+            collapsed: is_collapsed,
+        });
+        if is_collapsed {
+            skip_deeper_than = Some(*depth);
+        }
+        out.push((entry.clone(), *depth, family));
+    }
+    out
+}
+
 pub fn needs_attention(status: ThreadStatus) -> bool {
     matches!(status, ThreadStatus::Done | ThreadStatus::Input)
 }
@@ -547,5 +591,44 @@ mod tests {
             })
             .collect();
         assert_eq!(layout, expected);
+    }
+
+    #[test]
+    fn collapsing_a_launcher_hides_its_family_and_counts_the_working() {
+        let rows = vec![
+            (entry("parent", ThreadStatus::Idle), 0),
+            (entry("child", ThreadStatus::Working), 1),
+            (entry("grandchild", ThreadStatus::Done), 2),
+            (entry("other", ThreadStatus::Idle), 0),
+        ];
+        let open = visible_rows(&rows, &HashSet::new());
+        assert_eq!(open.len(), 4);
+        assert_eq!(
+            open[0].2,
+            Some(Family {
+                children: 2,
+                working: 1,
+                collapsed: false
+            })
+        );
+        assert_eq!(
+            open[1].2,
+            Some(Family {
+                children: 1,
+                working: 0,
+                collapsed: false
+            })
+        );
+        assert_eq!(open[3].2, None);
+        let closed = visible_rows(
+            &rows,
+            &HashSet::from([("eos".to_string(), "parent".to_string())]),
+        );
+        let ids: Vec<&str> = closed
+            .iter()
+            .map(|(e, _, _)| e.thread_id.as_str())
+            .collect();
+        assert_eq!(ids, ["parent", "other"]);
+        assert!(closed[0].2.unwrap().collapsed);
     }
 }
