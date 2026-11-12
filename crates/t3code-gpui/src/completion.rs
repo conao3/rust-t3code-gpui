@@ -189,6 +189,19 @@ pub enum DiffLine {
     Context(String),
 }
 
+impl DiffLine {
+    pub fn text(&self) -> &str {
+        match self {
+            DiffLine::Source(t)
+            | DiffLine::File(t)
+            | DiffLine::Hunk(t)
+            | DiffLine::Added(t)
+            | DiffLine::Removed(t)
+            | DiffLine::Context(t) => t,
+        }
+    }
+}
+
 /// The diff sources T3 reports for a checkout as lines to color: a line per source and per
 /// changed file, then the diff with each line marked by what it does.
 pub fn diff_lines(preview: &Value) -> Vec<DiffLine> {
@@ -233,6 +246,38 @@ pub fn diff_lines(preview: &Value) -> Vec<DiffLine> {
         }
     }
     out
+}
+
+/// Every place the query occurs in the lines, ignoring case, as the line and the byte range in it.
+pub fn find_in_lines(lines: &[String], query: &str) -> Vec<(usize, std::ops::Range<usize>)> {
+    let query: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let mut hits = Vec::new();
+    for (n, line) in lines.iter().enumerate() {
+        let chars: Vec<(usize, char)> = line.char_indices().collect();
+        let mut i = 0;
+        while i < chars.len() {
+            let mut lowered = chars[i..].iter().flat_map(|(_, c)| c.to_lowercase());
+            if !query.iter().all(|q| lowered.next() == Some(*q)) {
+                i += 1;
+                continue;
+            }
+            let (mut folded, mut taken) = (0, 0);
+            for (_, c) in &chars[i..] {
+                folded += c.to_lowercase().count();
+                taken += 1;
+                if folded >= query.len() {
+                    break;
+                }
+            }
+            let end = chars.get(i + taken).map_or(line.len(), |(b, _)| *b);
+            hits.push((n, chars[i].0..end));
+            i += taken;
+        }
+    }
+    hits
 }
 
 #[cfg(test)]
@@ -343,5 +388,16 @@ mod tests {
                 DiffLine::Context(" z".into()),
             ]
         );
+    }
+
+    #[test]
+    fn finding_in_lines_ignores_case_and_keeps_byte_ranges() {
+        let lines = vec!["Foo foo".to_string(), "日本語のFOO".to_string()];
+        assert_eq!(
+            find_in_lines(&lines, "foo"),
+            [(0, 0..3), (0, 4..7), (1, 12..15)]
+        );
+        assert!(find_in_lines(&lines, "").is_empty());
+        assert_eq!(find_in_lines(&["aaa".to_string()], "aa"), [(0, 0..2)]);
     }
 }

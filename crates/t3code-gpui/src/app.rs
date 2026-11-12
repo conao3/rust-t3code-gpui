@@ -30,6 +30,7 @@ use crate::models;
 use crate::projects::{self, ProjectGroup};
 use crate::row_view::{RowEvent, RowView};
 use crate::sidebar::{self, ThreadEntry, ThreadStatus};
+use crate::tables;
 use crate::timeline::{self, Pending, Row, RowKind};
 
 type CommandFuture =
@@ -158,15 +159,68 @@ struct OpenThread {
     watch: ThreadWatch,
 }
 
+enum PanelPart {
+    Text(Entity<TextViewState>),
+    Table {
+        rows: Rc<Vec<Vec<String>>>,
+        header_rows: usize,
+        sort: Option<tables::Sort>,
+    },
+}
+
 enum PanelBody {
-    Markdown(Entity<TextViewState>),
+    Document(Vec<PanelPart>),
     Diff(Rc<Vec<completion::DiffLine>>),
 }
+
+type FindHits = Rc<Vec<(usize, std::ops::Range<usize>)>>;
 
 struct FilePanel {
     path: String,
     body: PanelBody,
     note: Option<String>,
+    lines: Rc<Vec<String>>,
+    hits: FindHits,
+    hit_at: usize,
+    scroll: UniformListScrollHandle,
+}
+
+impl FilePanel {
+    fn new(path: String, body: PanelBody, note: Option<String>, lines: Vec<String>) -> Self {
+        Self {
+            path,
+            body,
+            note,
+            lines: Rc::new(lines),
+            hits: Rc::default(),
+            hit_at: 0,
+            scroll: UniformListScrollHandle::new(),
+        }
+    }
+}
+
+/// The parts the file preview shows: a markdown file with its tables taken out so they can be
+/// sorted, anything else as one fenced block.
+fn document_parts(path: &str, contents: &str, cx: &mut App) -> Vec<PanelPart> {
+    let markdown = completion::file_markdown(path, contents);
+    if markdown != contents {
+        return vec![PanelPart::Text(
+            cx.new(|cx| TextViewState::markdown(&markdown, cx)),
+        )];
+    }
+    tables::split(contents)
+        .into_iter()
+        .map(|segment| match segment {
+            tables::Segment::Markdown(text) => {
+                PanelPart::Text(cx.new(|cx| TextViewState::markdown(&text, cx)))
+            }
+            tables::Segment::Table(rows) => PanelPart::Table {
+                rows: Rc::new(rows),
+                header_rows: 1,
+                sort: None,
+            },
+        })
+        .collect()
 }
 
 struct Completion {
@@ -211,6 +265,9 @@ pub struct Root {
     file_picker_open: bool,
     file_hits: Vec<String>,
     file_panel: Option<FilePanel>,
+    file_find_input: Entity<InputState>,
+    file_find_open: bool,
+    panel_focus: FocusHandle,
     find_open: bool,
     find_hits: Vec<usize>,
     find_at: usize,
@@ -284,6 +341,7 @@ impl Root {
             state
         });
         let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
+        let file_find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in file"));
         let host_inputs = [
             cx.new(|cx| InputState::new(window, cx).placeholder("Name (eos, helios)")),
             cx.new(|cx| InputState::new(window, cx).placeholder("Server URL or pairing URL")),
@@ -309,6 +367,14 @@ impl Root {
                 InputEvent::PressEnter { shift, .. } => root.step_find(!*shift, cx),
                 _ => {}
             }),
+            cx.subscribe(
+                &file_find_input,
+                |root, _, event: &InputEvent, cx| match event {
+                    InputEvent::Change => root.file_find_again(cx),
+                    InputEvent::PressEnter { shift, .. } => root.step_file_find(!*shift, cx),
+                    _ => {}
+                },
+            ),
             cx.subscribe(&composer, |root, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) && root.pending_composer.is_none() {
                     root.stash_composer(cx);
@@ -346,6 +412,9 @@ impl Root {
             file_picker_open: false,
             file_hits: Vec::new(),
             file_panel: None,
+            file_find_input,
+            file_find_open: false,
+            panel_focus: cx.focus_handle(),
             find_open: false,
             find_hits: Vec::new(),
             find_at: 0,
@@ -563,6 +632,24 @@ impl Root {
         {
             return true;
         }
+        if keystroke.key == "escape"
+            && self.find_open
+            && self.find_input.read(cx).focus_handle(cx).is_focused(window)
+        {
+            self.close_find(window, cx);
+            return true;
+        }
+        if keystroke.key == "escape"
+            && self.file_find_open
+            && self
+                .file_find_input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+        {
+            self.close_file_find(window, cx);
+            return true;
+        }
         let typed = keymap::Chord {
             control: modifiers.control,
             alt: modifiers.alt,
@@ -575,13 +662,6 @@ impl Root {
                 .and_then(action_for)
         {
             window.dispatch_action(action, cx);
-            return true;
-        }
-        if keystroke.key == "escape"
-            && self.find_open
-            && self.find_input.read(cx).focus_handle(cx).is_focused(window)
-        {
-            self.close_find(window, cx);
             return true;
         }
         if keystroke.key != "enter" || modifiers.alt || modifiers.shift || modifiers.platform {
@@ -1457,12 +1537,15 @@ impl Root {
             let _ = this.update(cx, |root, cx| {
                 match preview {
                     Ok(preview) => {
-                        let lines = Rc::new(completion::diff_lines(&preview));
-                        root.file_panel = Some(FilePanel {
-                            path: DIFF_TITLE.into(),
-                            body: PanelBody::Diff(lines),
-                            note: None,
-                        });
+                        let lines = completion::diff_lines(&preview);
+                        let text = lines.iter().map(|l| l.text().to_string()).collect();
+                        root.file_panel = Some(FilePanel::new(
+                            DIFF_TITLE.into(),
+                            PanelBody::Diff(Rc::new(lines)),
+                            None,
+                            text,
+                        ));
+                        root.file_find_again(cx);
                     }
                     Err(error) => root.message = Some(format!("{error:#}")),
                 }
@@ -1495,18 +1578,20 @@ impl Root {
                             .get("contents")
                             .and_then(Value::as_str)
                             .unwrap_or_default();
-                        let markdown = completion::file_markdown(&path, contents);
                         let note = (file.get("truncated").and_then(Value::as_bool) == Some(true))
                             .then(|| {
                                 "The file is longer than T3 sends; the rest is left out."
                                     .to_string()
                             });
-                        let view = cx.new(|cx| TextViewState::markdown(&markdown, cx));
-                        root.file_panel = Some(FilePanel {
+                        let parts = document_parts(&path, contents, cx);
+                        let lines = contents.lines().map(str::to_string).collect();
+                        root.file_panel = Some(FilePanel::new(
                             path,
-                            body: PanelBody::Markdown(view),
+                            PanelBody::Document(parts),
                             note,
-                        });
+                            lines,
+                        ));
+                        root.file_find_again(cx);
                     }
                     Err(error) => root.message = Some(format!("{error:#}")),
                 }
@@ -1568,8 +1653,42 @@ impl Root {
     fn render_file_panel(&self, cx: &Context<Self>) -> Option<AnyElement> {
         let panel = self.file_panel.as_ref()?;
         let theme = cx.theme();
+        let finding = self.file_find_open && !self.file_find_input.read(cx).value().is_empty();
+        let count = if panel.hits.is_empty() {
+            "No match".to_string()
+        } else {
+            format!("{} / {}", panel.hit_at + 1, panel.hits.len())
+        };
+        let body = if finding {
+            self.render_found_lines(panel, cx)
+        } else {
+            match &panel.body {
+                PanelBody::Document(parts) => div()
+                    .id("file-view")
+                    .flex_1()
+                    .overflow_y_scroll()
+                    .p_3()
+                    .children(
+                        parts
+                            .iter()
+                            .enumerate()
+                            .map(|(ix, part)| self.render_panel_part(ix, part, cx)),
+                    )
+                    .into_any_element(),
+                PanelBody::Diff(lines) => render_diff(lines.clone(), cx),
+            }
+        };
         Some(
             v_flex()
+                .track_focus(&self.panel_focus)
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|root, _, window, cx| {
+                        if !root.panel_focus.contains_focused(window, cx) {
+                            root.panel_focus.focus(window, cx);
+                        }
+                    }),
+                )
                 .w(px(620.))
                 .h_full()
                 .flex_none()
@@ -1591,16 +1710,61 @@ impl Root {
                                 .child(panel.path.clone()),
                         )
                         .child(
+                            Button::new("find-file")
+                                .label("Find")
+                                .compact()
+                                .outline()
+                                .on_click(cx.listener(|root, _, window, cx| {
+                                    root.open_file_find(window, cx)
+                                })),
+                        )
+                        .child(
                             Button::new("close-file")
                                 .label("Close")
                                 .compact()
                                 .outline()
-                                .on_click(cx.listener(|root, _, _, cx| {
-                                    root.file_panel = None;
-                                    cx.notify();
+                                .on_click(cx.listener(|root, _, window, cx| {
+                                    root.close_file_panel(window, cx)
                                 })),
                         ),
                 )
+                .when(self.file_find_open, |panel| {
+                    panel.child(
+                        h_flex()
+                            .px_3()
+                            .py_1()
+                            .gap_2()
+                            .border_b_1()
+                            .border_color(theme.border)
+                            .child(div().flex_1().child(Input::new(&self.file_find_input)))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(count),
+                            )
+                            .child(
+                                Button::new("file-find-previous")
+                                    .label("Previous")
+                                    .compact()
+                                    .outline()
+                                    .on_click(
+                                        cx.listener(|root, _, _, cx| {
+                                            root.step_file_find(false, cx)
+                                        }),
+                                    ),
+                            )
+                            .child(
+                                Button::new("file-find-next")
+                                    .label("Next")
+                                    .compact()
+                                    .outline()
+                                    .on_click(
+                                        cx.listener(|root, _, _, cx| root.step_file_find(true, cx)),
+                                    ),
+                            ),
+                    )
+                })
                 .children(panel.note.clone().map(|note| {
                     div()
                         .px_3()
@@ -1609,55 +1773,227 @@ impl Root {
                         .text_color(theme.muted_foreground)
                         .child(note)
                 }))
-                .child(match &panel.body {
-                    PanelBody::Markdown(view) => div()
-                        .id("file-view")
-                        .flex_1()
-                        .overflow_y_scroll()
-                        .p_3()
-                        .child(TextView::new(view).selectable(true))
-                        .into_any_element(),
-                    PanelBody::Diff(lines) => {
-                        let lines = lines.clone();
-                        let colors = (
-                            theme.success,
-                            theme.danger,
-                            theme.primary,
-                            theme.muted_foreground,
-                            theme.foreground,
-                        );
-                        let mono = theme.mono_font_family.clone();
-                        uniform_list("diff-lines", lines.len(), move |range, _, _| {
-                            let (added, removed, hunk, meta, plain) = colors;
-                            range
-                                .map(|i| {
-                                    use completion::DiffLine::*;
-                                    let (color, text, strong) = match &lines[i] {
-                                        Source(t) => (plain, t.clone(), true),
-                                        File(t) => (meta, t.clone(), false),
-                                        Hunk(t) => (hunk, t.clone(), false),
-                                        Added(t) => (added, t.clone(), false),
-                                        Removed(t) => (removed, t.clone(), false),
-                                        Context(t) => (plain, t.clone(), false),
-                                    };
-                                    div()
-                                        .px_3()
-                                        .text_xs()
-                                        .whitespace_nowrap()
-                                        .text_color(color)
-                                        .when(strong, |d| d.font_weight(FontWeight::BOLD))
-                                        .child(text)
-                                        .into_any_element()
-                                })
-                                .collect()
-                        })
-                        .font_family(mono)
-                        .flex_1()
-                        .into_any_element()
-                    }
-                })
+                .child(body)
                 .into_any_element(),
         )
+    }
+
+    fn render_panel_part(&self, ix: usize, part: &PanelPart, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let (rows, header_rows, sort) = match part {
+            PanelPart::Text(view) => {
+                return TextView::new(view).selectable(true).into_any_element();
+            }
+            PanelPart::Table {
+                rows,
+                header_rows,
+                sort,
+            } => (rows, *header_rows, *sort),
+        };
+        let columns = rows.iter().map(Vec::len).max().unwrap_or(1).max(1);
+        let cell = |text: String, header: bool| {
+            div()
+                .px_2()
+                .py_1()
+                .border_b_1()
+                .border_color(theme.border)
+                .text_sm()
+                .when(header, |d| d.font_weight(FontWeight::BOLD))
+                .child(text)
+        };
+        let mut grid = div().grid().grid_cols(columns as u16).w_full();
+        for row in rows.iter().take(header_rows) {
+            for column in 0..columns {
+                let text = row.get(column).cloned().unwrap_or_default();
+                let mark = match sort {
+                    Some(tables::Sort::Ascending(c)) if c == column => " ↑",
+                    Some(tables::Sort::Descending(c)) if c == column => " ↓",
+                    _ => "",
+                };
+                grid = grid.child(
+                    cell(format!("{text}{mark}"), true)
+                        .id(SharedString::from(format!("table-{ix}-head-{column}")))
+                        .cursor_pointer()
+                        .hover(|d| d.bg(theme.muted))
+                        .on_click(
+                            cx.listener(move |root, _, _, cx| root.sort_table(ix, column, cx)),
+                        ),
+                );
+            }
+        }
+        for row in tables::sorted(rows, header_rows, sort) {
+            for column in 0..columns {
+                grid = grid.child(cell(row.get(column).cloned().unwrap_or_default(), false));
+            }
+        }
+        v_flex()
+            .my_2()
+            .gap_1()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(format!("Header rows: {header_rows}"))
+                    .child(
+                        Button::new(SharedString::from(format!("table-{ix}-fewer")))
+                            .label("−")
+                            .compact()
+                            .ghost()
+                            .on_click(cx.listener(move |root, _, _, cx| {
+                                root.change_header_rows(ix, false, cx)
+                            })),
+                    )
+                    .child(
+                        Button::new(SharedString::from(format!("table-{ix}-more")))
+                            .label("+")
+                            .compact()
+                            .ghost()
+                            .on_click(cx.listener(move |root, _, _, cx| {
+                                root.change_header_rows(ix, true, cx)
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .border_1()
+                    .border_color(theme.border)
+                    .rounded_md()
+                    .child(grid),
+            )
+            .into_any_element()
+    }
+
+    fn render_found_lines(&self, panel: &FilePanel, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let lines = panel.lines.clone();
+        let hits = panel.hits.clone();
+        let current = hits.get(panel.hit_at).cloned();
+        let (plain, muted, mark, strong) = (
+            theme.foreground,
+            theme.muted_foreground,
+            theme.warning.opacity(0.35),
+            theme.warning,
+        );
+        let mono = theme.mono_font_family.clone();
+        let width = lines.len().to_string().len();
+        uniform_list("file-find-lines", lines.len(), move |range, _, _| {
+            range
+                .map(|n| {
+                    let from = hits.partition_point(|(line, _)| *line < n);
+                    let highlights: Vec<_> = hits[from..]
+                        .iter()
+                        .take_while(|(line, _)| *line == n)
+                        .map(|(line, bytes)| {
+                            let here = current.as_ref() == Some(&(*line, bytes.clone()));
+                            (
+                                bytes.clone(),
+                                HighlightStyle {
+                                    background_color: Some(if here { strong } else { mark }),
+                                    ..Default::default()
+                                },
+                            )
+                        })
+                        .collect();
+                    h_flex()
+                        .px_3()
+                        .gap_3()
+                        .text_xs()
+                        .whitespace_nowrap()
+                        .child(div().text_color(muted).child(format!("{:>width$}", n + 1)))
+                        .child(
+                            div().text_color(plain).child(
+                                StyledText::new(lines[n].clone()).with_highlights(highlights),
+                            ),
+                        )
+                        .into_any_element()
+                })
+                .collect()
+        })
+        .track_scroll(&panel.scroll)
+        .font_family(mono)
+        .flex_1()
+        .into_any_element()
+    }
+
+    fn sort_table(&mut self, part: usize, column: usize, cx: &mut Context<Self>) {
+        if let Some(PanelPart::Table { sort, .. }) = self.panel_part(part) {
+            *sort = tables::Sort::next(*sort, column);
+            cx.notify();
+        }
+    }
+
+    fn change_header_rows(&mut self, part: usize, more: bool, cx: &mut Context<Self>) {
+        if let Some(PanelPart::Table {
+            rows, header_rows, ..
+        }) = self.panel_part(part)
+        {
+            *header_rows = if more {
+                (*header_rows + 1).min(rows.len().saturating_sub(1)).max(1)
+            } else {
+                header_rows.saturating_sub(1)
+            };
+            cx.notify();
+        }
+    }
+
+    fn panel_part(&mut self, part: usize) -> Option<&mut PanelPart> {
+        match &mut self.file_panel.as_mut()?.body {
+            PanelBody::Document(parts) => parts.get_mut(part),
+            PanelBody::Diff(_) => None,
+        }
+    }
+
+    fn close_file_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.file_panel = None;
+        self.file_find_open = false;
+        self.composer
+            .update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
+    }
+
+    fn open_file_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.file_panel.is_none() {
+            return;
+        }
+        self.file_find_open = true;
+        self.file_find_input
+            .update(cx, |state, cx| state.focus(window, cx));
+        self.file_find_again(cx);
+    }
+
+    fn close_file_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.file_find_open = false;
+        self.panel_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    fn file_find_again(&mut self, cx: &mut Context<Self>) {
+        let query = self.file_find_input.read(cx).value().to_string();
+        let Some(panel) = self.file_panel.as_mut() else {
+            return;
+        };
+        panel.hits = Rc::new(completion::find_in_lines(&panel.lines, &query));
+        panel.hit_at = 0;
+        reveal_hit(panel);
+        cx.notify();
+    }
+
+    fn step_file_find(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let Some(panel) = self.file_panel.as_mut() else {
+            return;
+        };
+        let n = panel.hits.len();
+        if n == 0 {
+            return;
+        }
+        panel.hit_at = if forward {
+            (panel.hit_at + 1) % n
+        } else {
+            (panel.hit_at + n - 1) % n
+        };
+        reveal_hit(panel);
+        cx.notify();
     }
 
     fn toggle_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2804,6 +3140,8 @@ impl Root {
                     .px_3()
                     .pt_2()
                     .gap_2()
+                    .flex_wrap()
+                    .overflow_hidden()
                     .child(
                         Button::new("model")
                             .label(label)
@@ -3218,7 +3556,15 @@ impl Render for Root {
             .on_action(
                 cx.listener(|root, menu: &ThreadMenu, _, cx| root.thread_op(menu.clone(), cx)),
             )
-            .on_action(cx.listener(|root, _: &Find, window, cx| root.open_find(window, cx)))
+            .on_action(cx.listener(|root, _: &Find, window, cx| {
+                let in_file = root.panel_focus.contains_focused(window, cx)
+                    || (root.open.is_none() && root.file_panel.is_some());
+                if in_file {
+                    root.open_file_find(window, cx)
+                } else {
+                    root.open_find(window, cx)
+                }
+            }))
             .on_action(
                 cx.listener(|root, _: &TogglePalette, window, cx| root.toggle_palette(window, cx)),
             )
@@ -3233,9 +3579,8 @@ impl Render for Root {
                 root.settings_open = !root.settings_open;
                 cx.notify();
             }))
-            .on_action(cx.listener(|root, _: &CloseFilePanel, _, cx| {
-                root.file_panel = None;
-                cx.notify();
+            .on_action(cx.listener(|root, _: &CloseFilePanel, window, cx| {
+                root.close_file_panel(window, cx);
             }))
             .on_action(cx.listener(|root, open: &OpenFile, _, cx| {
                 root.file_picker_open = false;
@@ -3354,4 +3699,49 @@ pub fn run(
     });
     drop(runtime);
     Ok(())
+}
+
+fn reveal_hit(panel: &FilePanel) {
+    if let Some((line, _)) = panel.hits.get(panel.hit_at) {
+        panel.scroll.scroll_to_item(*line, ScrollStrategy::Center);
+    }
+}
+
+fn render_diff(lines: Rc<Vec<completion::DiffLine>>, cx: &App) -> AnyElement {
+    let theme = cx.theme();
+    let colors = (
+        theme.success,
+        theme.danger,
+        theme.primary,
+        theme.muted_foreground,
+        theme.foreground,
+    );
+    let mono = theme.mono_font_family.clone();
+    uniform_list("diff-lines", lines.len(), move |range, _, _| {
+        let (added, removed, hunk, meta, plain) = colors;
+        range
+            .map(|i| {
+                use completion::DiffLine::*;
+                let (color, strong) = match &lines[i] {
+                    Source(_) => (plain, true),
+                    File(_) => (meta, false),
+                    Hunk(_) => (hunk, false),
+                    Added(_) => (added, false),
+                    Removed(_) => (removed, false),
+                    Context(_) => (plain, false),
+                };
+                div()
+                    .px_3()
+                    .text_xs()
+                    .whitespace_nowrap()
+                    .text_color(color)
+                    .when(strong, |d| d.font_weight(FontWeight::BOLD))
+                    .child(lines[i].text().to_string())
+                    .into_any_element()
+            })
+            .collect()
+    })
+    .font_family(mono)
+    .flex_1()
+    .into_any_element()
 }

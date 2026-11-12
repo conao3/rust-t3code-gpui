@@ -8,6 +8,7 @@ mod models;
 mod projects;
 mod row_view;
 mod sidebar;
+mod tables;
 mod timeline;
 
 use std::path::PathBuf;
