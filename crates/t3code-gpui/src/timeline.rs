@@ -64,6 +64,7 @@ pub struct Row {
     pub text: String,
     pub live: bool,
     pub pending: Option<Pending>,
+    pub detail: String,
 }
 
 const DEFAULT_APPROVAL_OPTIONS: &[(&str, &str)] = &[
@@ -234,6 +235,56 @@ fn tool_summary(item: &Value) -> String {
     }
 }
 
+/// What a tool row shows when opened: the whole command and its output, the diff of a file
+/// change, or the input and output of another tool.
+fn tool_detail(item: &Value) -> String {
+    let pretty = |v: &Value| match v {
+        Value::String(s) => s.clone(),
+        Value::Null => String::new(),
+        other => serde_json::to_string_pretty(other).unwrap_or_default(),
+    };
+    let omitted = item.get("outputOmitted").and_then(Value::as_bool) == Some(true);
+    let output = || {
+        let output = pretty(item.get("output").unwrap_or(&Value::Null));
+        if omitted && output.is_empty() {
+            "(output left out; open the thread in the browser to see it)".to_string()
+        } else {
+            output
+        }
+    };
+    match text(item, "type") {
+        "command_execution" => {
+            let input = item.get("input").unwrap_or(&Value::Null);
+            let command = input
+                .get("command")
+                .map(pretty)
+                .unwrap_or_else(|| pretty(input));
+            let exit = item
+                .get("exitCode")
+                .and_then(Value::as_i64)
+                .map(|code| format!("\n[exit {code}]"))
+                .unwrap_or_default();
+            format!("$ {command}\n{}{exit}", output())
+        }
+        "file_change" => {
+            let diff = text(item, "diffStr");
+            if diff.is_empty() {
+                pretty(item.get("changes").unwrap_or(&Value::Null))
+            } else {
+                diff.to_string()
+            }
+        }
+        _ => {
+            let input = pretty(item.get("input").unwrap_or(&Value::Null));
+            [input, output()]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        }
+    }
+}
+
 const TOOL_TYPES: &[&str] = &[
     "command_execution",
     "file_change",
@@ -266,6 +317,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 text: text(item, "text").to_string(),
                 live: false,
                 pending: None,
+                detail: String::new(),
             }),
             "assistant_message" | "proposed_plan" => {
                 let body = match text(item, "type") {
@@ -281,6 +333,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                         text: block.to_string(),
                         live: streaming && i == last,
                         pending: None,
+                        detail: String::new(),
                     });
                 }
                 if text(item, "type") == "proposed_plan" && !streaming {
@@ -297,6 +350,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 text: first_line(text(item, "text"), 200),
                 live: streaming,
                 pending: None,
+                detail: text(item, "text").to_string(),
             }),
             "approval_request" | "user_input_request" | "secret_request" | "link_request" => {
                 let label = match text(item, "type") {
@@ -330,6 +384,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     text,
                     live: pending,
                     pending: card,
+                    detail: String::new(),
                 });
             }
             "error" => rows.push(Row {
@@ -342,6 +397,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     .to_string(),
                 live: false,
                 pending: None,
+                detail: String::new(),
             }),
             kind if TOOL_TYPES.contains(&kind) => rows.push(Row {
                 key: id.to_string(),
@@ -349,6 +405,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 text: tool_summary(item),
                 live: false,
                 pending: None,
+                detail: tool_detail(item),
             }),
             "system_notice" | "run_interrupt_request" | "run_interrupt_result" => rows.push(Row {
                 key: id.to_string(),
@@ -361,6 +418,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 ),
                 live: false,
                 pending: None,
+                detail: String::new(),
             }),
             _ => {}
         }
@@ -374,6 +432,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 text: "Plan".into(),
                 live: true,
                 pending: Some(Pending::Plan { plan_id, markdown }),
+                detail: String::new(),
             },
         );
     }
@@ -700,6 +759,7 @@ mod tests {
             text: String::new(),
             live: false,
             pending: None,
+            detail: String::new(),
         };
         let rows = [
             row(RowKind::User),
@@ -747,6 +807,7 @@ mod tests {
             text: text.into(),
             live: false,
             pending: None,
+            detail: String::new(),
         };
         let list = [
             row("Hello World"),
@@ -757,5 +818,18 @@ mod tests {
         assert_eq!(find_rows(&list, "hello"), [0, 2]);
         assert_eq!(find_rows(&list, "テキスト"), [3]);
         assert!(find_rows(&list, "  ").is_empty());
+    }
+
+    #[test]
+    fn opened_tool_rows_show_the_command_output_and_diffs() {
+        let command = json!({"type": "command_execution", "input": {"command": "ls"}, "output": "a\nb", "exitCode": 0});
+        assert_eq!(tool_detail(&command), "$ ls\na\nb\n[exit 0]");
+        let omitted = json!({"type": "command_execution", "input": {"command": "cat big"}, "outputOmitted": true});
+        assert!(tool_detail(&omitted).contains("left out"));
+        let change =
+            json!({"type": "file_change", "fileName": "a.rs", "diffStr": "@@ -1 +1 @@\n-a\n+b"});
+        assert_eq!(tool_detail(&change), "@@ -1 +1 @@\n-a\n+b");
+        let tool = json!({"type": "dynamic_tool", "input": {"q": 1}, "output": "done"});
+        assert_eq!(tool_detail(&tool), "{\n  \"q\": 1\n}\n\ndone");
     }
 }

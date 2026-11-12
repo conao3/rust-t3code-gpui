@@ -12,6 +12,8 @@ use gpui_kit::*;
 
 use crate::timeline::{Draft, Pending, Question, Row, RowKind};
 
+const DETAIL_LINES: usize = 400;
+
 #[derive(Clone)]
 pub enum RowEvent {
     Respond {
@@ -31,6 +33,7 @@ pub struct RowView {
     row: Row,
     markdown: Option<Entity<TextViewState>>,
     found: bool,
+    expanded: bool,
     drafts: HashMap<String, Draft>,
     responding: bool,
 }
@@ -45,6 +48,7 @@ impl RowView {
             row,
             markdown,
             found: false,
+            expanded: false,
             drafts: HashMap::new(),
             responding: false,
         }
@@ -277,13 +281,53 @@ impl Render for RowView {
                         .child(self.row.text.clone()),
                 )
                 .into_any_element(),
-            RowKind::Reasoning => base
-                .py_1()
-                .text_sm()
-                .text_color(theme.muted_foreground)
-                .child(format!("Thinking: {}", self.row.text))
-                .into_any_element(),
-            RowKind::Tool | RowKind::Notice => base
+            RowKind::Reasoning | RowKind::Tool => {
+                let summary = if self.row.kind == RowKind::Reasoning {
+                    format!("Thinking: {}", self.row.text)
+                } else {
+                    self.row.text.clone()
+                };
+                let openable = !self.row.detail.is_empty();
+                let marker = match (openable, self.expanded) {
+                    (false, _) => "",
+                    (true, false) => "▸ ",
+                    (true, true) => "▾ ",
+                };
+                let detail = self.expanded.then(|| {
+                    let lines: Vec<&str> = self.row.detail.lines().collect();
+                    let shown = lines.len().min(DETAIL_LINES);
+                    let mut text = lines[..shown].join("\n");
+                    if lines.len() > shown {
+                        text.push_str(&format!("\n… {} more lines", lines.len() - shown));
+                    }
+                    div()
+                        .mt_1()
+                        .p_2()
+                        .rounded_md()
+                        .bg(theme.secondary)
+                        .font_family(theme.mono_font_family.clone())
+                        .text_xs()
+                        .whitespace_normal()
+                        .child(text)
+                });
+                base.id("row")
+                    .py_0p5()
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .when(self.row.kind == RowKind::Tool, |row| {
+                        row.font_family(theme.mono_font_family.clone())
+                    })
+                    .when(openable, |row| {
+                        row.cursor_pointer().on_click(cx.listener(|view, _, _, cx| {
+                            view.expanded = !view.expanded;
+                            cx.notify();
+                        }))
+                    })
+                    .child(format!("{marker}{summary}"))
+                    .children(detail)
+                    .into_any_element()
+            }
+            RowKind::Notice => base
                 .py_0p5()
                 .text_sm()
                 .font_family(theme.mono_font_family.clone())
