@@ -325,6 +325,21 @@ impl Connection {
         }
     }
 
+    pub async fn read_file(&self, cwd: &str, path: &str) -> Result<Value> {
+        self.rpc()
+            .await?
+            .call(
+                "projects.readFile",
+                json!({"cwd": cwd, "relativePath": path}),
+                DISPATCH_TIMEOUT,
+            )
+            .await
+            .map_err(|e| match e {
+                RpcError::Failed { message, .. } => anyhow!("T3 could not read {path}: {message}"),
+                other => other.into(),
+            })
+    }
+
     pub async fn search_entries(&self, cwd: &str, query: &str, limit: u64) -> Result<Value> {
         self.rpc()
             .await?

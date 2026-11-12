@@ -184,6 +184,11 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
         .as_str()
         .unwrap()
         .to_string();
+    let read = connection
+        .read_file(&workspace_root, "README.md")
+        .await
+        .expect("projects.readFile");
+    assert_eq!(read["contents"], "integration\n");
     let found = connection
         .search_entries(&workspace_root, "READ", 10)
         .await

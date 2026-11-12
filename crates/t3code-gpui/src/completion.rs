@@ -158,6 +158,27 @@ pub fn line_column(text: &str, offset: usize) -> (u32, u32) {
     (line as u32, column as u32)
 }
 
+/// A file as the markdown the preview renders: markdown as it is, anything else inside a fence
+/// named by its extension, so code is highlighted. The fence is longer than any run of backticks
+/// in the file.
+pub fn file_markdown(path: &str, contents: &str) -> String {
+    let extension = path
+        .rsplit('.')
+        .next()
+        .filter(|e| *e != path)
+        .unwrap_or_default();
+    if matches!(extension, "md" | "markdown") {
+        return contents.to_string();
+    }
+    let longest = contents
+        .split(|c| c != '`')
+        .map(str::len)
+        .max()
+        .unwrap_or(0);
+    let fence = "`".repeat(longest.max(2) + 1);
+    format!("{fence}{extension}\n{contents}\n{fence}\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -231,5 +252,19 @@ mod tests {
             line_column("one\nにほんご x", "one\nにほんご".len()),
             (1, 4)
         );
+    }
+
+    #[test]
+    fn files_render_as_markdown_or_fenced_code() {
+        assert_eq!(file_markdown("README.md", "# hi"), "# hi");
+        assert_eq!(
+            file_markdown("src/main.rs", "fn main() {}"),
+            "```rs\nfn main() {}\n```\n"
+        );
+        assert_eq!(
+            file_markdown("notes.txt", "a ```` b"),
+            "`````txt\na ```` b\n`````\n"
+        );
+        assert_eq!(file_markdown("Makefile", "all:"), "```\nall:\n```\n");
     }
 }

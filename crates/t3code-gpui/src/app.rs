@@ -9,6 +9,7 @@ use gpui_kit::component::{
     h_flex,
     input::{CursorBlink, Input, InputEvent, InputState, Position, Textarea, TextareaState},
     menu::ContextMenuExt as _,
+    text::{TextView, TextViewState},
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -47,6 +48,8 @@ actions!(
         TogglePin,
         Find,
         TogglePalette,
+        ToggleFilePicker,
+        CloseFilePanel,
         CycleRuntimeMode,
         NextUserMessage,
         PreviousUserMessage,
@@ -76,6 +79,8 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "thread.pin" => Box::new(TogglePin),
         "chat.find" => Box::new(Find),
         "commandPalette.toggle" => Box::new(TogglePalette),
+        "filePicker.toggle" => Box::new(ToggleFilePicker),
+        "rightPanel.toggle" | "rightPanel.close" => Box::new(CloseFilePanel),
         _ => return None,
     })
 }
@@ -89,6 +94,12 @@ enum ThreadOp {
     Settle,
     Unsettle,
     Archive,
+}
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = t3code_gpui, no_json)]
+struct OpenFile {
+    path: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Action)]
@@ -138,6 +149,12 @@ struct OpenThread {
     watch: ThreadWatch,
 }
 
+struct FilePanel {
+    path: String,
+    view: Entity<TextViewState>,
+    note: Option<String>,
+}
+
 struct Completion {
     trigger: completion::Trigger,
     suggestions: Vec<completion::Suggestion>,
@@ -175,6 +192,10 @@ pub struct Root {
     find_input: Entity<InputState>,
     palette: Entity<CommandState>,
     palette_open: bool,
+    file_picker: Entity<CommandState>,
+    file_picker_open: bool,
+    file_hits: Vec<String>,
+    file_panel: Option<FilePanel>,
     find_open: bool,
     find_hits: Vec<usize>,
     find_at: usize,
@@ -238,6 +259,7 @@ impl Root {
         });
         let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
         let palette = cx.new(|cx| CommandState::new(window, cx));
+        let file_picker = cx.new(|cx| CommandState::new(window, cx));
         let weak = cx.entity().downgrade();
         let subscriptions = vec![
             cx.intercept_keystrokes(move |event, window, cx| {
@@ -288,6 +310,10 @@ impl Root {
             find_input,
             palette,
             palette_open: false,
+            file_picker,
+            file_picker_open: false,
+            file_hits: Vec::new(),
+            file_panel: None,
             find_open: false,
             find_hits: Vec::new(),
             find_at: 0,
@@ -939,6 +965,194 @@ impl Root {
         });
         self.load_composer();
         cx.notify();
+    }
+
+    fn toggle_file_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.file_picker_open = !self.file_picker_open;
+        if self.file_picker_open {
+            self.file_hits.clear();
+            self.file_picker.update(cx, |state, cx| {
+                state.set_query("", window, cx);
+                state.focus(window, cx);
+            });
+        } else {
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    fn search_files(&mut self, query: String, cx: &mut Context<Self>) {
+        let Some((environment, cwd)) = self.composer_cwd() else {
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let runtime = self.runtime.clone();
+        cx.spawn(async move |this, cx| {
+            let found = on_runtime(&runtime, async move {
+                connection.search_entries(&cwd, &query, 50).await
+            })
+            .await;
+            let _ = this.update(cx, |root, cx| {
+                root.file_hits = found
+                    .ok()
+                    .and_then(|r| r.get("entries").and_then(Value::as_array).cloned())
+                    .unwrap_or_default()
+                    .iter()
+                    .filter(|e| e.get("kind").and_then(Value::as_str) == Some("file"))
+                    .filter_map(|e| e.get("path").and_then(Value::as_str).map(str::to_string))
+                    .collect();
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn open_file(&mut self, path: String, cx: &mut Context<Self>) {
+        let Some((environment, cwd)) = self.composer_cwd() else {
+            self.message = Some("Open a thread or a new thread first.".into());
+            cx.notify();
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let runtime = self.runtime.clone();
+        cx.spawn(async move |this, cx| {
+            let read = on_runtime(&runtime, {
+                let path = path.clone();
+                async move { connection.read_file(&cwd, &path).await }
+            })
+            .await;
+            let _ = this.update(cx, |root, cx| {
+                match read {
+                    Ok(file) => {
+                        let contents = file
+                            .get("contents")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let markdown = completion::file_markdown(&path, contents);
+                        let note = (file.get("truncated").and_then(Value::as_bool) == Some(true))
+                            .then(|| {
+                                "The file is longer than T3 sends; the rest is left out."
+                                    .to_string()
+                            });
+                        let view = cx.new(|cx| TextViewState::markdown(&markdown, cx));
+                        root.file_panel = Some(FilePanel { path, view, note });
+                    }
+                    Err(error) => root.message = Some(format!("{error:#}")),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn render_file_picker(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let weak = cx.entity().downgrade();
+        let search = weak.clone();
+        let closer = move |window: &mut Window, cx: &mut App| {
+            let _ = weak.update(cx, |root, cx| {
+                root.file_picker_open = false;
+                root.composer
+                    .update(cx, |state, cx| state.focus(window, cx));
+                cx.notify();
+            });
+        };
+        let close_on_cancel = closer.clone();
+        div()
+            .absolute()
+            .top(px(80.))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(
+                div()
+                    .w(px(640.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.background)
+                    .shadow_lg()
+                    .child(
+                        Command::new(&self.file_picker)
+                            .placeholder("Open a file in the project")
+                            .filterable(false)
+                            .max_h(px(480.))
+                            .items(self.file_hits.iter().map(|path| {
+                                CommandItem::new()
+                                    .label(path.clone())
+                                    .action(Box::new(OpenFile { path: path.clone() }))
+                            }))
+                            .on_query(move |query, _, cx| {
+                                let query = query.to_string();
+                                let _ = search.update(cx, |root, cx| root.search_files(query, cx));
+                            })
+                            .on_confirm(move |_, window, cx| closer(window, cx))
+                            .on_cancel(move |window, cx| close_on_cancel(window, cx)),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn render_file_panel(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        let panel = self.file_panel.as_ref()?;
+        let theme = cx.theme();
+        Some(
+            v_flex()
+                .w(px(620.))
+                .h_full()
+                .flex_none()
+                .border_l_1()
+                .border_color(theme.border)
+                .child(
+                    h_flex()
+                        .px_3()
+                        .py_2()
+                        .gap_2()
+                        .border_b_1()
+                        .border_color(theme.border)
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .text_sm()
+                                .child(panel.path.clone()),
+                        )
+                        .child(
+                            Button::new("close-file")
+                                .label("Close")
+                                .compact()
+                                .outline()
+                                .on_click(cx.listener(|root, _, _, cx| {
+                                    root.file_panel = None;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .children(panel.note.clone().map(|note| {
+                    div()
+                        .px_3()
+                        .py_1()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(note)
+                }))
+                .child(
+                    div()
+                        .id("file-view")
+                        .flex_1()
+                        .overflow_y_scroll()
+                        .p_3()
+                        .child(TextView::new(&panel.view).selectable(true)),
+                )
+                .into_any_element(),
+        )
     }
 
     fn toggle_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2383,6 +2597,7 @@ impl Render for Root {
             && self.open.is_none()
             && self.draft.is_none()
             && !self.palette_open
+            && !self.file_picker_open
         {
             self.focus.focus(window, cx);
         }
@@ -2404,6 +2619,17 @@ impl Render for Root {
             .on_action(
                 cx.listener(|root, _: &TogglePalette, window, cx| root.toggle_palette(window, cx)),
             )
+            .on_action(cx.listener(|root, _: &ToggleFilePicker, window, cx| {
+                root.toggle_file_picker(window, cx)
+            }))
+            .on_action(cx.listener(|root, _: &CloseFilePanel, _, cx| {
+                root.file_panel = None;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|root, open: &OpenFile, _, cx| {
+                root.file_picker_open = false;
+                root.open_file(open.path.clone(), cx)
+            }))
             .on_action(cx.listener(|root, open: &OpenThreadAction, _, cx| {
                 root.palette_open = false;
                 root.open_thread(open.environment.clone(), open.thread_id.clone(), cx)
@@ -2457,8 +2683,12 @@ impl Render for Root {
                 root.child(self.render_sidebar(cx))
             })
             .child(pane)
+            .children(self.render_file_panel(cx))
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))
+            })
+            .when(self.file_picker_open, |root_el| {
+                root_el.child(self.render_file_picker(cx))
             })
     }
 }
