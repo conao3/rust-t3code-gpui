@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -7,6 +7,7 @@ use gpui_kit::component::{
     button::{Button, ButtonVariants as _},
     h_flex,
     input::{Textarea, TextareaState},
+    menu::ContextMenuExt as _,
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -67,6 +68,25 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
     })
 }
 
+#[derive(Clone, Debug, PartialEq)]
+enum ThreadOp {
+    Pin,
+    Unpin,
+    Snooze(u64),
+    Unsnooze,
+    Settle,
+    Unsettle,
+    Archive,
+}
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = t3code_gpui, no_json)]
+struct ThreadMenu {
+    environment: String,
+    thread_id: String,
+    op: ThreadOp,
+}
+
 fn now_iso() -> String {
     humantime::format_rfc3339_millis(SystemTime::now()).to_string()
 }
@@ -110,6 +130,8 @@ pub struct Root {
     key_rules: Vec<keymap::Rule>,
     settings: ClientSettings,
     sidebar_hidden: bool,
+    wake_scheduled: bool,
+    collapsed: HashSet<sidebar::Section>,
     window_active: bool,
     shell_dirty: bool,
     thread_dirty: bool,
@@ -193,6 +215,8 @@ impl Root {
             key_rules: Vec::new(),
             settings,
             sidebar_hidden: false,
+            wake_scheduled: false,
+            collapsed: HashSet::from([sidebar::Section::Settled]),
             window_active: window.is_window_active(),
             shell_dirty: false,
             thread_dirty: false,
@@ -300,6 +324,7 @@ impl Root {
             self.rebuild_entries();
             self.notify_attention();
             self.rebuild_key_rules();
+            self.schedule_wake(window, cx);
             self.visit_if_done();
             cx.notify();
         }
@@ -323,6 +348,42 @@ impl Root {
         }
     }
 
+    /// Rebuilds the shelves a minute later while a thread is snoozed, so it wakes on time.
+    fn schedule_wake(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let now = now_iso();
+        let snoozed = self.entries.iter().any(|e| {
+            e.snoozed_until
+                .as_deref()
+                .is_some_and(|until| until > now.as_str())
+        });
+        if !snoozed || self.wake_scheduled {
+            return;
+        }
+        self.wake_scheduled = true;
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_secs(60))
+                .await;
+            let _ = this.update_in(cx, |root, window, cx| {
+                root.wake_scheduled = false;
+                root.shell_dirty = true;
+                root.refresh(window, cx);
+            });
+        })
+        .detach();
+    }
+
+    fn label_of(&self, environment_id: &str) -> Option<String> {
+        self.connections
+            .iter()
+            .find(|c| c.environment_id().as_deref() == Some(environment_id))
+            .map(|c| c.label().to_string())
+    }
+
+    fn shelves_of(&self, entries: &[ThreadEntry]) -> Vec<sidebar::Shelf> {
+        sidebar::shelves(entries, &now_iso(), |id| self.label_of(id))
+    }
+
     fn rebuild_entries(&mut self) {
         let mut entries = Vec::new();
         for connection in &self.connections {
@@ -330,8 +391,11 @@ impl Root {
             let shell = shell.lock().expect("shell lock");
             entries.extend(sidebar::entries(connection.label(), &shell));
         }
-        sidebar::sort_entries(&mut entries);
-        self.entries = entries;
+        self.entries = self
+            .shelves_of(&entries)
+            .into_iter()
+            .flat_map(|shelf| shelf.rows.into_iter().map(|(entry, _)| entry))
+            .collect();
     }
 
     fn notify_attention(&mut self) {
@@ -343,6 +407,7 @@ impl Root {
                 .map(|e| {
                     let what = match e.status {
                         ThreadStatus::Input => "Waiting for input",
+                        ThreadStatus::Approval => "Waiting for approval",
                         _ => "Done",
                     };
                     (format!("{what} · {}", e.environment), e.title.clone())
@@ -623,7 +688,9 @@ impl Root {
             (Some(ThreadStatus::Working), Some(run_id)) if self.settings.steer_follow_ups => {
                 Delivery::Steer { run_id }
             }
-            (Some(ThreadStatus::Working | ThreadStatus::Input), _) => Delivery::Queue,
+            (Some(ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval), _) => {
+                Delivery::Queue
+            }
             _ => Delivery::Start,
         };
         let runtime = self.runtime.clone();
@@ -701,6 +768,47 @@ impl Root {
             if let Err(error) = result {
                 let _ = this.update(cx, |root, cx| {
                     root.message = Some(format!("Settle failed: {error:#}"));
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn thread_op(&mut self, menu: ThreadMenu, cx: &mut Context<Self>) {
+        let Some(connection) = self.connection(&menu.environment) else {
+            return;
+        };
+        let until = match menu.op {
+            ThreadOp::Snooze(hours) => Some(
+                humantime::format_rfc3339_millis(
+                    SystemTime::now() + Duration::from_secs(hours * 3600),
+                )
+                .to_string(),
+            ),
+            _ => None,
+        };
+        let runtime = self.runtime.clone();
+        let thread_id = menu.thread_id.clone();
+        let op = menu.op.clone();
+        cx.spawn(async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                match op {
+                    ThreadOp::Pin => connection.pin_thread(&thread_id, true).await,
+                    ThreadOp::Unpin => connection.pin_thread(&thread_id, false).await,
+                    ThreadOp::Snooze(_) => {
+                        connection.snooze_thread(&thread_id, until.as_deref()).await
+                    }
+                    ThreadOp::Unsnooze => connection.snooze_thread(&thread_id, None).await,
+                    ThreadOp::Settle => connection.settle_thread(&thread_id, true).await,
+                    ThreadOp::Unsettle => connection.settle_thread(&thread_id, false).await,
+                    ThreadOp::Archive => connection.archive_thread(&thread_id).await,
+                }
+            })
+            .await;
+            if let Err(error) = result {
+                let _ = this.update(cx, |root, cx| {
+                    root.message = Some(format!("Thread update failed: {error:#}"));
                     cx.notify();
                 });
             }
@@ -1130,57 +1238,126 @@ impl Root {
                 }))
         });
         let open = self.current();
-        let rows = self
-            .visible_entries()
-            .into_iter()
-            .enumerate()
-            .map(|(i, entry)| {
+        let primary = self.connections.first().map(|c| c.label().to_string());
+        let shelves = self.shelves_of(&self.visible_entries());
+        let mut rows: Vec<AnyElement> = Vec::new();
+        let mut index = 0usize;
+        for shelf in shelves {
+            let section = shelf.section;
+            let collapsed = self.collapsed.contains(&section);
+            rows.push(
+                h_flex()
+                    .id(SharedString::from(format!("shelf-{}", section.label())))
+                    .px_2()
+                    .pt_2()
+                    .pb_1()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |root, _, _, cx| {
+                        if !root.collapsed.remove(&section) {
+                            root.collapsed.insert(section);
+                        }
+                        cx.notify();
+                    }))
+                    .child(if collapsed { "▸" } else { "▾" })
+                    .child(section.label())
+                    .child(format!("{}", shelf.rows.len()))
+                    .into_any_element(),
+            );
+            if collapsed {
+                continue;
+            }
+            for (entry, depth) in shelf.rows {
+                index += 1;
                 let selected = open.as_ref().is_some_and(|(env, id)| entry.is(env, id));
                 let dot = match entry.status {
-                    ThreadStatus::Input => Some(theme.warning),
+                    ThreadStatus::Approval | ThreadStatus::Input => Some(theme.warning),
                     ThreadStatus::Working => Some(theme.primary),
                     ThreadStatus::Failed => Some(theme.danger),
                     ThreadStatus::Done => Some(theme.success),
                     ThreadStatus::Idle | ThreadStatus::Settled => None,
                 };
+                let remote = primary.as_ref() != Some(&entry.environment);
                 let (environment, thread_id) = entry.key();
-                h_flex()
-                    .id(("thread", i))
-                    .w_full()
-                    .px_2()
-                    .py_1()
-                    .gap_2()
-                    .rounded_md()
-                    .when(selected, |row| row.bg(theme.list_active))
-                    .when(entry.status == ThreadStatus::Settled, |row| {
-                        row.text_color(theme.muted_foreground)
-                    })
-                    .hover(|row| row.bg(theme.secondary))
-                    .on_click(cx.listener(move |root, _, _, cx| {
-                        root.open_thread(environment.clone(), thread_id.clone(), cx)
-                    }))
-                    .child(
-                        div()
-                            .flex_none()
-                            .px_1()
-                            .rounded_sm()
-                            .text_xs()
-                            .border_1()
-                            .border_color(theme.border)
-                            .child(entry.environment.clone()),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .child(entry.title.clone()),
-                    )
-                    .when_some(dot, |row, color| {
-                        row.child(div().flex_none().size_2().rounded_full().bg(color))
-                    })
-            });
+                let menu_target = (environment.clone(), thread_id.clone());
+                let pinned = entry.pin_order.is_some();
+                let snoozed = section == sidebar::Section::Snoozed;
+                let settled = entry.status == ThreadStatus::Settled;
+                rows.push(
+                    h_flex()
+                        .id(("thread", index))
+                        .w_full()
+                        .pl(px(8. + 16. * depth as f32))
+                        .pr_2()
+                        .py_1()
+                        .gap_2()
+                        .rounded_md()
+                        .when(selected, |row| row.bg(theme.list_active))
+                        .when(settled || snoozed, |row| {
+                            row.text_color(theme.muted_foreground)
+                        })
+                        .hover(|row| row.bg(theme.secondary))
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            root.open_thread(environment.clone(), thread_id.clone(), cx)
+                        }))
+                        .child(
+                            div()
+                                .flex_none()
+                                .px_1()
+                                .rounded_sm()
+                                .text_xs()
+                                .border_1()
+                                .when(remote, |chip| {
+                                    chip.border_color(theme.warning).text_color(theme.warning)
+                                })
+                                .when(!remote, |chip| chip.border_color(theme.border))
+                                .child(entry.environment.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .text_sm()
+                                .child(entry.title.clone()),
+                        )
+                        .when_some(dot, |row, color| {
+                            row.child(div().flex_none().size_2().rounded_full().bg(color))
+                        })
+                        .context_menu(move |menu, _, _| {
+                            let (environment, thread_id) = menu_target.clone();
+                            let op = |op: ThreadOp| -> Box<dyn Action> {
+                                Box::new(ThreadMenu {
+                                    environment: environment.clone(),
+                                    thread_id: thread_id.clone(),
+                                    op,
+                                })
+                            };
+                            let menu = if pinned {
+                                menu.menu("Unpin", op(ThreadOp::Unpin))
+                            } else {
+                                menu.menu("Pin", op(ThreadOp::Pin))
+                            };
+                            let menu = if snoozed {
+                                menu.menu("Unsnooze", op(ThreadOp::Unsnooze))
+                            } else {
+                                menu.menu("Snooze 1 hour", op(ThreadOp::Snooze(1)))
+                                    .menu("Snooze 4 hours", op(ThreadOp::Snooze(4)))
+                                    .menu("Snooze 1 day", op(ThreadOp::Snooze(24)))
+                            };
+                            let menu = if settled {
+                                menu.menu("Unsettle", op(ThreadOp::Unsettle))
+                            } else {
+                                menu.menu("Settle", op(ThreadOp::Settle))
+                            };
+                            menu.separator().menu("Archive", op(ThreadOp::Archive))
+                        })
+                        .into_any_element(),
+                );
+            }
+        }
         v_flex()
             .w(px(320.))
             .h_full()
@@ -1424,7 +1601,10 @@ impl Root {
         let entry = self.open_entry();
         let title = entry.map(|e| e.title.clone()).unwrap_or_default();
         let status = entry.map(|e| e.status).unwrap_or(ThreadStatus::Idle);
-        let working = matches!(status, ThreadStatus::Working | ThreadStatus::Input);
+        let working = matches!(
+            status,
+            ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval
+        );
         let views = self.row_views.clone();
         let header = h_flex()
             .px_4()
@@ -1514,6 +1694,9 @@ impl Render for Root {
             .key_context("Root")
             .on_action(cx.listener(|root, _: &NextDone, _, cx| root.next_done(true, cx)))
             .on_action(cx.listener(|root, _: &PreviousDone, _, cx| root.next_done(false, cx)))
+            .on_action(
+                cx.listener(|root, menu: &ThreadMenu, _, cx| root.thread_op(menu.clone(), cx)),
+            )
             .on_action(cx.listener(|root, _: &ToggleSidebar, _, cx| {
                 root.sidebar_hidden = !root.sidebar_hidden;
                 cx.notify();

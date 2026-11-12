@@ -5,6 +5,7 @@ use t3_client::projection::ShellState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThreadStatus {
+    Approval,
     Input,
     Working,
     Failed,
@@ -16,6 +17,7 @@ pub enum ThreadStatus {
 impl ThreadStatus {
     pub fn label(self) -> &'static str {
         match self {
+            ThreadStatus::Approval => "Approval",
             ThreadStatus::Input => "Input",
             ThreadStatus::Working => "Working",
             ThreadStatus::Failed => "Failed",
@@ -35,6 +37,9 @@ pub struct ThreadEntry {
     pub project_title: String,
     pub status: ThreadStatus,
     pub updated_at: String,
+    pub pin_order: Option<String>,
+    pub snoozed_until: Option<String>,
+    pub launched_from: Option<(String, String)>,
 }
 
 fn text<'a>(value: &'a Value, key: &str) -> &'a str {
@@ -56,7 +61,10 @@ pub fn is_listed(thread: &Value) -> bool {
 
 pub fn status_of(thread: &Value) -> ThreadStatus {
     if present(thread, "pendingRuntimeRequest") {
-        return ThreadStatus::Input;
+        return match text(&thread["pendingRuntimeRequest"], "kind") {
+            "user_input" => ThreadStatus::Input,
+            _ => ThreadStatus::Approval,
+        };
     }
     if present(thread, "activeRunId") {
         return ThreadStatus::Working;
@@ -108,18 +116,132 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
                 project_title,
                 status: status_of(thread),
                 updated_at: text(thread, "updatedAt").to_string(),
+                pin_order: present(thread, "pinnedAt").then(|| {
+                    thread
+                        .get("pinOrderKey")
+                        .and_then(Value::as_str)
+                        .unwrap_or(text(thread, "pinnedAt"))
+                        .to_string()
+                }),
+                snoozed_until: present(thread, "snoozedUntil")
+                    .then(|| text(thread, "snoozedUntil").to_string()),
+                launched_from: thread.get("launchedFrom").and_then(|l| {
+                    Some((
+                        l.get("environmentId")?.as_str()?.to_string(),
+                        l.get("threadId")?.as_str()?.to_string(),
+                    ))
+                }),
             }
         })
         .collect()
 }
 
-pub fn sort_entries(entries: &mut [ThreadEntry]) {
-    entries.sort_by(|a, b| {
-        let settled = |e: &ThreadEntry| e.status == ThreadStatus::Settled;
-        settled(a)
-            .cmp(&settled(b))
-            .then_with(|| b.updated_at.cmp(&a.updated_at))
-    });
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Section {
+    Pinned,
+    Working,
+    Active,
+    Snoozed,
+    Settled,
+}
+
+impl Section {
+    pub fn label(self) -> &'static str {
+        match self {
+            Section::Pinned => "Pinned",
+            Section::Working => "Working",
+            Section::Active => "Threads",
+            Section::Snoozed => "Snoozed",
+            Section::Settled => "Settled",
+        }
+    }
+}
+
+/// The shelf a thread sits on, as T3's sidebar places it: snoozed before settled before pinned,
+/// and a working thread on the Working shelf unless it is snoozed, settled or pinned.
+pub fn section_of(entry: &ThreadEntry, now: &str) -> Section {
+    if entry
+        .snoozed_until
+        .as_deref()
+        .is_some_and(|until| until > now)
+    {
+        return Section::Snoozed;
+    }
+    if entry.status == ThreadStatus::Settled {
+        return Section::Settled;
+    }
+    if entry.pin_order.is_some() {
+        return Section::Pinned;
+    }
+    if entry.status == ThreadStatus::Working {
+        return Section::Working;
+    }
+    Section::Active
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Shelf {
+    pub section: Section,
+    pub rows: Vec<(ThreadEntry, usize)>,
+}
+
+/// The threads in shelves, newest first (pinned threads in their pin order), with a launched
+/// thread under the thread that launched it when both are on the same shelf. `label_of` names
+/// the host of a server environment id.
+pub fn shelves(
+    entries: &[ThreadEntry],
+    now: &str,
+    label_of: impl Fn(&str) -> Option<String>,
+) -> Vec<Shelf> {
+    let mut shelves: Vec<Shelf> = Vec::new();
+    for section in [
+        Section::Pinned,
+        Section::Working,
+        Section::Active,
+        Section::Snoozed,
+        Section::Settled,
+    ] {
+        let mut members: Vec<&ThreadEntry> = entries
+            .iter()
+            .filter(|e| section_of(e, now) == section)
+            .collect();
+        if section == Section::Pinned {
+            members.sort_by(|a, b| a.pin_order.cmp(&b.pin_order));
+        } else {
+            members.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        }
+        let parent_of = |e: &ThreadEntry| -> Option<(String, String)> {
+            let (environment_id, thread_id) = e.launched_from.as_ref()?;
+            let parent = (label_of(environment_id)?, thread_id.clone());
+            members.iter().any(|m| m.key() == parent).then_some(parent)
+        };
+        let mut rows = Vec::new();
+        fn place<'a>(
+            entry: &'a ThreadEntry,
+            depth: usize,
+            children: &dyn Fn(&ThreadEntry) -> Vec<&'a ThreadEntry>,
+            rows: &mut Vec<(ThreadEntry, usize)>,
+        ) {
+            rows.push((entry.clone(), depth));
+            for child in children(entry) {
+                place(child, depth + 1, children, rows);
+            }
+        }
+        let children = |parent: &ThreadEntry| -> Vec<&ThreadEntry> {
+            members
+                .iter()
+                .filter(|m| parent_of(m).is_some_and(|p| p == parent.key()))
+                .copied()
+                .collect()
+        };
+        for entry in members.iter().filter(|m| parent_of(m).is_none()) {
+            place(entry, 0, &children, &mut rows);
+        }
+        if !rows.is_empty() {
+            shelves.push(Shelf { section, rows });
+        }
+    }
+    shelves
 }
 
 impl ThreadEntry {
@@ -181,7 +303,7 @@ pub fn newly_needing_attention<'a>(
 ) -> Vec<&'a ThreadEntry> {
     entries
         .iter()
-        .filter(|e| needs_attention(e.status))
+        .filter(|e| needs_attention(e.status) || e.status == ThreadStatus::Approval)
         .filter(|e| {
             previous
                 .get(&e.key())
@@ -217,8 +339,14 @@ mod tests {
 
     #[test]
     fn a_pending_request_wins_over_a_running_thread() {
-        let t = thread(json!({"activeRunId": "r1", "pendingRuntimeRequest": {"id": "q"}}));
-        assert_eq!(status_of(&t), ThreadStatus::Input);
+        let question = thread(
+            json!({"activeRunId": "r1", "pendingRuntimeRequest": {"id": "q", "kind": "user_input"}}),
+        );
+        assert_eq!(status_of(&question), ThreadStatus::Input);
+        let approval = thread(
+            json!({"activeRunId": "r1", "pendingRuntimeRequest": {"id": "q", "kind": "command"}}),
+        );
+        assert_eq!(status_of(&approval), ThreadStatus::Approval);
         assert_eq!(
             status_of(&thread(json!({"activeRunId": "r1"}))),
             ThreadStatus::Working
@@ -263,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn entries_name_the_project_and_sort_settled_last() {
+    fn entries_go_on_shelves_newest_first_with_settled_last() {
         let shell = ShellState {
             sequence: 1,
             projects: vec![json!({"id": "p1", "title": "idea"})],
@@ -276,12 +404,26 @@ mod tests {
             ],
             synchronized: true,
         };
-        let mut list = entries("eos", &shell);
-        sort_entries(&mut list);
-        let ids: Vec<&str> = list.iter().map(|e| e.thread_id.as_str()).collect();
-        assert_eq!(ids, ["new", "old", "settled"]);
-        assert_eq!(list[0].project_title, "idea");
-        assert_eq!(list[0].environment, "eos");
+        let list = entries("eos", &shell);
+        let shelves = shelves(&list, "2026-11-12T05:00:00.000Z", |_| None);
+        let layout: Vec<(Section, Vec<&str>)> = shelves
+            .iter()
+            .map(|s| {
+                (
+                    s.section,
+                    s.rows.iter().map(|(e, _)| e.thread_id.as_str()).collect(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            layout,
+            [
+                (Section::Active, vec!["new", "old"]),
+                (Section::Settled, vec!["settled"])
+            ]
+        );
+        assert_eq!(shelves[0].rows[0].0.project_title, "idea");
+        assert_eq!(shelves[0].rows[0].0.environment, "eos");
     }
 
     fn entry(id: &str, status: ThreadStatus) -> ThreadEntry {
@@ -293,6 +435,9 @@ mod tests {
             project_title: String::new(),
             status,
             updated_at: String::new(),
+            pin_order: None,
+            snoozed_until: None,
+            launched_from: None,
         }
     }
 
@@ -344,5 +489,63 @@ mod tests {
             .map(|e| e.thread_id.as_str())
             .collect();
         assert_eq!(ids, ["a", "c"]);
+    }
+
+    #[test]
+    fn shelves_follow_t3_and_launched_threads_nest_under_their_launcher() {
+        let now = "2026-11-12T05:00:00.000Z";
+        let at = |id: &str, status: ThreadStatus, updated: &str| {
+            let mut e = entry(id, status);
+            e.updated_at = updated.into();
+            e
+        };
+        let mut pinned_b = at("pin-b", ThreadStatus::Idle, "1");
+        pinned_b.pin_order = Some("b".into());
+        let mut pinned_a = at("pin-a", ThreadStatus::Working, "0");
+        pinned_a.pin_order = Some("a".into());
+        let mut snoozed = at("snoozed", ThreadStatus::Settled, "9");
+        snoozed.snoozed_until = Some("2026-11-12T06:00:00.000Z".into());
+        let mut woke = at("woke", ThreadStatus::Idle, "2");
+        woke.snoozed_until = Some("2026-11-12T04:00:00.000Z".into());
+        let parent = at("parent", ThreadStatus::Idle, "3");
+        let mut child = at("child", ThreadStatus::Done, "8");
+        child.launched_from = Some(("env-eos".into(), "parent".into()));
+        let mut orphan = at("orphan", ThreadStatus::Idle, "7");
+        orphan.launched_from = Some(("env-eos".into(), "missing".into()));
+        let working = at("working", ThreadStatus::Working, "5");
+        let list = [
+            pinned_b, pinned_a, snoozed, woke, parent, child, orphan, working,
+        ];
+        let label = |id: &str| (id == "env-eos").then(|| "eos".to_string());
+        let layout: Vec<(Section, Vec<(String, usize)>)> = shelves(&list, now, label)
+            .into_iter()
+            .map(|s| {
+                (
+                    s.section,
+                    s.rows.into_iter().map(|(e, d)| (e.thread_id, d)).collect(),
+                )
+            })
+            .collect();
+        let expected: Vec<(Section, Vec<(&str, usize)>)> = vec![
+            (Section::Pinned, vec![("pin-a", 0), ("pin-b", 0)]),
+            (Section::Working, vec![("working", 0)]),
+            (
+                Section::Active,
+                vec![("orphan", 0), ("parent", 0), ("child", 1), ("woke", 0)],
+            ),
+            (Section::Snoozed, vec![("snoozed", 0)]),
+        ];
+        let expected: Vec<(Section, Vec<(String, usize)>)> = expected
+            .into_iter()
+            .map(|(s, rows)| {
+                (
+                    s,
+                    rows.into_iter()
+                        .map(|(id, d)| (id.to_string(), d))
+                        .collect(),
+                )
+            })
+            .collect();
+        assert_eq!(layout, expected);
     }
 }

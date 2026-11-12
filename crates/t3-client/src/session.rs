@@ -254,6 +254,34 @@ impl Connection {
         .await
     }
 
+    pub async fn pin_thread(&self, thread_id: &str, pinned: bool) -> Result<u64> {
+        let kind = if pinned { "thread.pin" } else { "thread.unpin" };
+        self.dispatch(json!({"type": kind, "threadId": thread_id}))
+            .await
+    }
+
+    pub async fn snooze_thread(&self, thread_id: &str, until: Option<&str>) -> Result<u64> {
+        match until {
+            Some(until) => {
+                self.dispatch(
+                    json!({"type": "thread.snooze", "threadId": thread_id, "snoozedUntil": until}),
+                )
+                .await
+            }
+            None => {
+                self.dispatch(
+                    json!({"type": "thread.unsnooze", "threadId": thread_id, "reason": "user"}),
+                )
+                .await
+            }
+        }
+    }
+
+    pub async fn archive_thread(&self, thread_id: &str) -> Result<u64> {
+        self.dispatch(json!({"type": "thread.archive", "threadId": thread_id}))
+            .await
+    }
+
     pub async fn settle_thread(&self, thread_id: &str, settled: bool) -> Result<u64> {
         if settled {
             self.dispatch(json!({"type": "thread.settle", "threadId": thread_id}))
