@@ -7,7 +7,7 @@ use gpui_kit::component::{
     button::{Button, ButtonVariants as _},
     command::{Command, CommandItem, CommandState},
     h_flex,
-    input::{CursorBlink, Input, InputEvent, InputState, Textarea, TextareaState},
+    input::{CursorBlink, Input, InputEvent, InputState, Position, Textarea, TextareaState},
     menu::ContextMenuExt as _,
     v_flex,
 };
@@ -19,6 +19,7 @@ use t3_client::session::{Change, Connection, ConnectionStatus, Delivery, Launch,
 use tokio::runtime::{Handle, Runtime};
 
 use crate::client_settings::ClientSettings;
+use crate::completion;
 use crate::drafts::{self, Drafts};
 use crate::keymap;
 use crate::models;
@@ -120,6 +121,12 @@ struct OpenThread {
     watch: ThreadWatch,
 }
 
+struct Completion {
+    trigger: completion::Trigger,
+    suggestions: Vec<completion::Suggestion>,
+    selected: usize,
+}
+
 struct NewThreadDraft {
     group: Option<String>,
     carry: Option<Value>,
@@ -144,6 +151,8 @@ pub struct Root {
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
+    completion: Option<Completion>,
+    completion_seq: u64,
     find_input: Entity<InputState>,
     palette: Entity<CommandState>,
     palette_open: bool,
@@ -231,6 +240,7 @@ impl Root {
             cx.subscribe(&composer, |root, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) && root.pending_composer.is_none() {
                     root.stash_composer(cx);
+                    root.update_completion(cx);
                 }
             }),
         ];
@@ -252,6 +262,8 @@ impl Root {
             composer,
             message: None,
             picker_open: false,
+            completion: None,
+            completion_seq: 0,
             find_input,
             palette,
             palette_open: false,
@@ -280,6 +292,138 @@ impl Root {
 
     /// Runs the keybinding of a typed chord, and submits the composer on the key the send shortcut
     /// names. Returns whether the keystroke was used.
+    /// The directory a file mention searches: the open thread's worktree or its project, or the
+    /// project the new thread starts in.
+    fn composer_cwd(&self) -> Option<(String, String)> {
+        if self.draft.is_some() {
+            let (environment, project_id, ..) = self.draft_target()?;
+            let project = self.project_value(&environment, &project_id)?;
+            let root = project.get("workspaceRoot")?.as_str()?.to_string();
+            return Some((environment, root));
+        }
+        let (environment, thread_id) = self.current()?;
+        let thread = self.thread_value(&environment, &thread_id)?;
+        if let Some(worktree) = thread.get("worktreePath").and_then(Value::as_str) {
+            return Some((environment, worktree.to_string()));
+        }
+        let project_id = thread.get("projectId")?.as_str()?;
+        let project = self.project_value(&environment, project_id)?;
+        let root = project.get("workspaceRoot")?.as_str()?.to_string();
+        Some((environment, root))
+    }
+
+    fn update_completion(&mut self, cx: &mut Context<Self>) {
+        let state = self.composer.read(cx);
+        let text = state.value().to_string();
+        let cursor = state.cursor();
+        self.completion_seq += 1;
+        let Some(trigger) = completion::trigger(&text, cursor) else {
+            if self.completion.take().is_some() {
+                cx.notify();
+            }
+            return;
+        };
+        if trigger.kind == completion::TriggerKind::Path {
+            let Some((environment, cwd)) = self.composer_cwd() else {
+                return;
+            };
+            let Some(connection) = self.connection(&environment) else {
+                return;
+            };
+            let seq = self.completion_seq;
+            let runtime = self.runtime.clone();
+            let query = trigger.query.clone();
+            cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(Duration::from_millis(120))
+                    .await;
+                if this
+                    .read_with(cx, |root, _| root.completion_seq != seq)
+                    .unwrap_or(true)
+                {
+                    return;
+                }
+                let found = on_runtime(&runtime, async move {
+                    connection.search_entries(&cwd, &query, 20).await
+                })
+                .await;
+                let _ = this.update(cx, |root, cx| {
+                    if root.completion_seq != seq {
+                        return;
+                    }
+                    root.completion = found.ok().map(|result| Completion {
+                        trigger,
+                        suggestions: completion::path_suggestions(&result),
+                        selected: 0,
+                    });
+                    cx.notify();
+                });
+            })
+            .detach();
+            return;
+        }
+        let provider = self.composer_target().and_then(|(environment, model, ..)| {
+            let instance = model?.get("instanceId")?.as_str()?.to_string();
+            let config = self.config_of(&environment)?;
+            config
+                .get("providers")?
+                .as_array()?
+                .iter()
+                .find(|p| p.get("instanceId").and_then(Value::as_str) == Some(&instance))
+                .cloned()
+        });
+        let suggestions = provider
+            .map(|p| completion::provider_suggestions(&p, trigger.kind, &trigger.query))
+            .unwrap_or_default();
+        self.completion = Some(Completion {
+            trigger,
+            suggestions,
+            selected: 0,
+        });
+        cx.notify();
+    }
+
+    /// Moves through and accepts the completion list while it is open. Returns whether the key
+    /// was used.
+    fn completion_key(
+        &mut self,
+        keystroke: &Keystroke,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(open) = self
+            .completion
+            .as_mut()
+            .filter(|c| !c.suggestions.is_empty())
+        else {
+            return false;
+        };
+        if !self.composer.read(cx).focus_handle(cx).is_focused(window) {
+            return false;
+        }
+        let n = open.suggestions.len().min(8);
+        match keystroke.key.as_str() {
+            "down" => open.selected = (open.selected + 1) % n,
+            "up" => open.selected = (open.selected + n - 1) % n,
+            "escape" => self.completion = None,
+            "enter" | "tab" if !keystroke.modifiers.control => {
+                let text = self.composer.read(cx).value().to_string();
+                let (value, at) =
+                    completion::apply(&text, &open.trigger, &open.suggestions[open.selected]);
+                let (line, column) = completion::line_column(&value, at);
+                self.completion = None;
+                self.composer.update(cx, |state, cx| {
+                    state.set_value(value, window, cx);
+                    state.set_cursor_position(Position::new(line, column), window, cx);
+                });
+                self.stash_composer(cx);
+            }
+            _ => return false,
+        }
+        cx.notify();
+        true
+    }
+
     fn intercept(
         &mut self,
         event: &KeystrokeEvent,
@@ -288,6 +432,9 @@ impl Root {
     ) -> bool {
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
+        if self.completion_key(keystroke, window, cx) {
+            return true;
+        }
         let typed = keymap::Chord {
             control: modifiers.control,
             alt: modifiers.alt,
@@ -1797,8 +1944,40 @@ impl Root {
                 .border_color(theme.border)
                 .child(v_flex().gap_2().children(groups))
         });
+        let suggestions = self
+            .completion
+            .as_ref()
+            .filter(|c| !c.suggestions.is_empty())
+            .map(|c| {
+                v_flex()
+                    .mx_3()
+                    .mt_2()
+                    .p_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .children(c.suggestions.iter().take(8).enumerate().map(|(i, s)| {
+                        h_flex()
+                            .px_2()
+                            .py_0p5()
+                            .gap_3()
+                            .rounded_sm()
+                            .when(i == c.selected, |row| row.bg(theme.list_active))
+                            .child(div().text_sm().child(s.label.clone()))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(s.detail.clone()),
+                            )
+                    }))
+            });
         v_flex()
             .children(picker)
+            .children(suggestions)
             .children(toolbar)
             .child(
                 h_flex()

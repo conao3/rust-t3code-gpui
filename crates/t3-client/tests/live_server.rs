@@ -42,6 +42,7 @@ async fn start_server() -> Server {
     let base = home.path().join("t3");
     let workspace = home.path().join("workspace");
     std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::write(workspace.join("README.md"), "integration\n").unwrap();
     let port = free_port();
     let child = Command::new(t3_bin())
         .arg("serve")
@@ -170,6 +171,23 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
         .as_str()
         .unwrap()
         .to_string();
+    let workspace_root = shell.lock().unwrap().projects[0]["workspaceRoot"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let found = connection
+        .search_entries(&workspace_root, "READ", 10)
+        .await
+        .expect("projects.searchEntries");
+    assert!(
+        found["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["path"] == "README.md"),
+        "{found}"
+    );
+
     let thread_id = uuid::Uuid::new_v4().to_string();
     connection
         .dispatch(json!({

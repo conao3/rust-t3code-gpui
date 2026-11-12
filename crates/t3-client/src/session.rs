@@ -299,6 +299,23 @@ impl Connection {
         }
     }
 
+    pub async fn search_entries(&self, cwd: &str, query: &str, limit: u64) -> Result<Value> {
+        self.rpc()
+            .await?
+            .call(
+                "projects.searchEntries",
+                json!({"cwd": cwd, "query": query, "limit": limit}),
+                DISPATCH_TIMEOUT,
+            )
+            .await
+            .map_err(|e| match e {
+                RpcError::Failed { message, .. } => {
+                    anyhow!("T3 could not search the project: {message}")
+                }
+                other => other.into(),
+            })
+    }
+
     pub async fn archive_thread(&self, thread_id: &str) -> Result<u64> {
         self.dispatch(json!({"type": "thread.archive", "threadId": thread_id}))
             .await
