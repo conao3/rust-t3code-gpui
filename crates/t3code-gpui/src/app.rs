@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -157,9 +158,14 @@ struct OpenThread {
     watch: ThreadWatch,
 }
 
+enum PanelBody {
+    Markdown(Entity<TextViewState>),
+    Diff(Rc<Vec<completion::DiffLine>>),
+}
+
 struct FilePanel {
     path: String,
-    view: Entity<TextViewState>,
+    body: PanelBody,
     note: Option<String>,
 }
 
@@ -1441,11 +1447,10 @@ impl Root {
             let _ = this.update(cx, |root, cx| {
                 match preview {
                     Ok(preview) => {
-                        let markdown = completion::diff_markdown(&preview);
-                        let view = cx.new(|cx| TextViewState::markdown(&markdown, cx));
+                        let lines = Rc::new(completion::diff_lines(&preview));
                         root.file_panel = Some(FilePanel {
                             path: DIFF_TITLE.into(),
-                            view,
+                            body: PanelBody::Diff(lines),
                             note: None,
                         });
                     }
@@ -1487,7 +1492,11 @@ impl Root {
                                     .to_string()
                             });
                         let view = cx.new(|cx| TextViewState::markdown(&markdown, cx));
-                        root.file_panel = Some(FilePanel { path, view, note });
+                        root.file_panel = Some(FilePanel {
+                            path,
+                            body: PanelBody::Markdown(view),
+                            note,
+                        });
                     }
                     Err(error) => root.message = Some(format!("{error:#}")),
                 }
@@ -1590,14 +1599,53 @@ impl Root {
                         .text_color(theme.muted_foreground)
                         .child(note)
                 }))
-                .child(
-                    div()
+                .child(match &panel.body {
+                    PanelBody::Markdown(view) => div()
                         .id("file-view")
                         .flex_1()
                         .overflow_y_scroll()
                         .p_3()
-                        .child(TextView::new(&panel.view).selectable(true)),
-                )
+                        .child(TextView::new(view).selectable(true))
+                        .into_any_element(),
+                    PanelBody::Diff(lines) => {
+                        let lines = lines.clone();
+                        let colors = (
+                            theme.success,
+                            theme.danger,
+                            theme.primary,
+                            theme.muted_foreground,
+                            theme.foreground,
+                        );
+                        let mono = theme.mono_font_family.clone();
+                        uniform_list("diff-lines", lines.len(), move |range, _, _| {
+                            let (added, removed, hunk, meta, plain) = colors;
+                            range
+                                .map(|i| {
+                                    use completion::DiffLine::*;
+                                    let (color, text, strong) = match &lines[i] {
+                                        Source(t) => (plain, t.clone(), true),
+                                        File(t) => (meta, t.clone(), false),
+                                        Hunk(t) => (hunk, t.clone(), false),
+                                        Added(t) => (added, t.clone(), false),
+                                        Removed(t) => (removed, t.clone(), false),
+                                        Context(t) => (plain, t.clone(), false),
+                                    };
+                                    div()
+                                        .px_3()
+                                        .text_xs()
+                                        .whitespace_nowrap()
+                                        .text_color(color)
+                                        .when(strong, |d| d.font_weight(FontWeight::BOLD))
+                                        .child(text)
+                                        .into_any_element()
+                                })
+                                .collect()
+                        })
+                        .font_family(mono)
+                        .flex_1()
+                        .into_any_element()
+                    }
+                })
                 .into_any_element(),
         )
     }
