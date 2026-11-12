@@ -7,7 +7,7 @@ use gpui_kit::component::{
     button::{Button, ButtonVariants as _},
     command::{Command, CommandItem, CommandState},
     h_flex,
-    input::{Input, InputEvent, InputState, Textarea, TextareaState},
+    input::{CursorBlink, Input, InputEvent, InputState, Textarea, TextareaState},
     menu::ContextMenuExt as _,
     v_flex,
 };
@@ -32,6 +32,8 @@ type CommandFuture =
 
 const REDRAW_INTERVAL: Duration = Duration::from_millis(250);
 const UI_FONT: &str = "Noto Sans CJK JP";
+const CURSOR_BLINK: Duration = Duration::from_millis(500);
+const CURSOR_BLINK_IDLE: Duration = Duration::from_secs(5);
 
 actions!(
     t3code_gpui,
@@ -2120,10 +2122,13 @@ pub fn run(config: Config, settings: ClientSettings) -> anyhow::Result<()> {
     let handle = runtime.handle().clone();
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
-        let theme = Theme::global_mut(cx);
-        theme.font_family = UI_FONT.into();
-        theme.font_size = px(settings.font_size_interface);
-        theme.mono_font_size = px(settings.font_size_code);
+        Theme::update(cx, |theme| {
+            theme.font_family = UI_FONT.into();
+            theme.font_size = px(settings.font_size_interface);
+            theme.mono_font_size = px(settings.font_size_code);
+            theme.cursor_blink =
+                CursorBlink::blinking(CURSOR_BLINK).with_idle_timeout(CURSOR_BLINK_IDLE);
+        });
         let root = Some("Root");
         cx.bind_keys([KeyBinding::new("escape", Cancel, root)]);
         let options = WindowOptions {
