@@ -248,6 +248,26 @@ struct NewThreadDraft {
     interaction_mode: String,
 }
 
+struct TimelinePane {
+    views: Vec<Entity<RowView>>,
+    list: ListState,
+}
+
+impl Render for TimelinePane {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let views = self.views.clone();
+        list(self.list.clone(), move |ix, _, _| {
+            views
+                .get(ix)
+                .map(|view| view.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element())
+        })
+        .flex_1()
+        .w_full()
+        .h_full()
+    }
+}
+
 pub struct Root {
     runtime: Handle,
     connections: Vec<Arc<Connection>>,
@@ -258,6 +278,7 @@ pub struct Root {
     draft: Option<NewThreadDraft>,
     rows: Vec<Row>,
     row_views: Vec<Entity<RowView>>,
+    timeline_pane: Entity<TimelinePane>,
     row_subscriptions: HashMap<String, Subscription>,
     list_state: ListState,
     user_cursor: Option<usize>,
@@ -406,6 +427,10 @@ impl Root {
             draft: None,
             rows: Vec::new(),
             row_views: Vec::new(),
+            timeline_pane: cx.new(|_| TimelinePane {
+                views: Vec::new(),
+                list: list_state.clone(),
+            }),
             row_subscriptions: HashMap::new(),
             list_state,
             user_cursor: None,
@@ -937,6 +962,10 @@ impl Root {
         }
         self.rows = rows;
         self.row_views = views;
+        self.timeline_pane.update(cx, |pane, cx| {
+            pane.views = self.row_views.clone();
+            cx.notify();
+        });
         self.row_subscriptions = kept;
         self.find_again(false, cx);
         cx.notify();
@@ -3616,7 +3645,6 @@ impl Root {
             status,
             ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval
         );
-        let views = self.row_views.clone();
         let header = h_flex()
             .px_4()
             .py_2()
@@ -3743,14 +3771,9 @@ impl Root {
             })
             .when(!self.thread_loading, |pane| {
                 pane.child(
-                    list(self.list_state.clone(), move |ix, _, _| {
-                        views
-                            .get(ix)
-                            .map(|v| v.clone().into_any_element())
-                            .unwrap_or_else(|| div().into_any_element())
-                    })
-                    .flex_1()
-                    .w_full(),
+                    self.timeline_pane
+                        .clone()
+                        .cached(StyleRefinement::default().flex_1().w_full()),
                 )
             })
             .children(message)
