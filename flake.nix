@@ -58,7 +58,19 @@
               "t3code-gpui"
             ];
             doCheck = false;
-            nativeBuildInputs = nativeTools ++ [ pkgs.makeWrapper ];
+            nativeBuildInputs =
+              nativeTools
+              ++ [ pkgs.makeWrapper ]
+              ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.copyDesktopItems ];
+            desktopItems = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              (pkgs.makeDesktopItem {
+                name = "t3code-gpui";
+                desktopName = "T3 Code (GPUI)";
+                comment = "Native frontend for T3 Code";
+                exec = "t3code-gpui";
+                categories = [ "Development" ];
+              })
+            ];
             buildInputs = buildLibs;
             postFixup = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               wrapProgram $out/bin/t3code-gpui \
