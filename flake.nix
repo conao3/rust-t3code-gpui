@@ -68,10 +68,14 @@
                 desktopName = "T3 Code (GPUI)";
                 comment = "Native frontend for T3 Code";
                 exec = "t3code-gpui";
+                icon = "t3code-gpui";
                 categories = [ "Development" ];
               })
             ];
             buildInputs = buildLibs;
+            postInstall = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+              install -Dm644 assets/t3code-gpui.svg $out/share/icons/hicolor/scalable/apps/t3code-gpui.svg
+            '';
             postFixup = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               wrapProgram $out/bin/t3code-gpui \
                 --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath runtimeLibs}
