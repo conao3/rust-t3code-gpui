@@ -1,4 +1,5 @@
 mod app;
+mod client_settings;
 mod keymap;
 mod models;
 mod projects;
@@ -100,7 +101,12 @@ fn run(cli: Cli) -> Result<(), Failure> {
         None
         | Some(Command::Desktop {
             command: DesktopCommand::StartApp,
-        }) => app::run(load(cli.config)?).map_err(Failure::Other),
+        }) => {
+            let settings = client_settings::default_path()
+                .and_then(|path| client_settings::ClientSettings::load(&path))
+                .map_err(Failure::Other)?;
+            app::run(load(cli.config)?, settings).map_err(Failure::Other)
+        }
         Some(Command::Environment { command }) => {
             let config = load(cli.config)?;
             let output = match command {

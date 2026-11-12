@@ -40,6 +40,13 @@ pub enum Change {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Delivery {
+    Start,
+    Queue,
+    Steer { run_id: String },
+}
+
 pub struct Launch<'a> {
     pub thread_id: &'a str,
     pub project_id: &'a str,
@@ -207,11 +214,16 @@ impl Connection {
             .context("T3 returned no thread id for the new thread")
     }
 
-    pub async fn send_message(&self, thread_id: &str, text: &str, queue: bool) -> Result<u64> {
-        let dispatch_mode = if queue {
-            json!({"type": "queue_after_active"})
-        } else {
-            json!({"type": "start_immediately"})
+    pub async fn send_message(
+        &self,
+        thread_id: &str,
+        text: &str,
+        delivery: Delivery,
+    ) -> Result<u64> {
+        let dispatch_mode = match delivery {
+            Delivery::Start => json!({"type": "start_immediately"}),
+            Delivery::Queue => json!({"type": "queue_after_active"}),
+            Delivery::Steer { run_id } => json!({"type": "steer_active", "targetRunId": run_id}),
         };
         self.dispatch(json!({
             "type": "message.dispatch",

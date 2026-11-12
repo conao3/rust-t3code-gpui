@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -7,16 +6,17 @@ use gpui_kit::component::{
     ActiveTheme as _, Selectable as _, Theme,
     button::{Button, ButtonVariants as _},
     h_flex,
-    input::{InputEvent, Textarea, TextareaState},
+    input::{Textarea, TextareaState},
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use serde_json::Value;
 use t3_client::config::Config;
-use t3_client::session::{Change, Connection, ConnectionStatus, Launch, ThreadWatch};
+use t3_client::session::{Change, Connection, ConnectionStatus, Delivery, Launch, ThreadWatch};
 use tokio::runtime::{Handle, Runtime};
 
+use crate::client_settings::ClientSettings;
 use crate::keymap;
 use crate::models;
 use crate::projects::{self, ProjectGroup};
@@ -48,11 +48,6 @@ actions!(
         ToggleModelPicker,
     ]
 );
-
-#[derive(Default)]
-struct KeyRules(Rc<Vec<keymap::Rule>>);
-
-impl Global for KeyRules {}
 
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
@@ -112,6 +107,8 @@ pub struct Root {
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
+    key_rules: Vec<keymap::Rule>,
+    settings: ClientSettings,
     sidebar_hidden: bool,
     window_active: bool,
     shell_dirty: bool,
@@ -124,7 +121,13 @@ pub struct Root {
 }
 
 impl Root {
-    fn new(config: Config, runtime: Handle, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(
+        config: Config,
+        settings: ClientSettings,
+        runtime: Handle,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let (sender, receiver) = async_channel::unbounded::<Change>();
         let connections: Vec<Arc<Connection>> = config
             .environments
@@ -151,24 +154,20 @@ impl Root {
             }
         });
         let composer = cx.new(|cx| {
-            let mut state =
-                TextareaState::new(window, cx).placeholder("Message (Ctrl+Enter to send)");
+            let mut state = TextareaState::new(window, cx).placeholder("Message");
             state.set_auto_grow(2, 12, cx);
             state
         });
+        let weak = cx.entity().downgrade();
         let subscriptions = vec![
-            cx.subscribe_in(
-                &composer,
-                window,
-                |root, _, event: &InputEvent, window, cx| {
-                    if let InputEvent::PressEnter {
-                        secondary: true, ..
-                    } = event
-                    {
-                        root.send(window, cx);
-                    }
-                },
-            ),
+            cx.intercept_keystrokes(move |event, window, cx| {
+                let handled = weak
+                    .update(cx, |root, cx| root.intercept(event, window, cx))
+                    .unwrap_or(false);
+                if handled {
+                    cx.stop_propagation();
+                }
+            }),
             cx.observe_window_activation(window, |root, window, _| {
                 root.window_active = window.is_window_active();
             }),
@@ -191,6 +190,8 @@ impl Root {
             composer,
             message: None,
             picker_open: false,
+            key_rules: Vec::new(),
+            settings,
             sidebar_hidden: false,
             window_active: window.is_window_active(),
             shell_dirty: false,
@@ -201,6 +202,44 @@ impl Root {
             _subscriptions: subscriptions,
             _changes: changes,
         }
+    }
+
+    /// Runs the keybinding of a typed chord, and submits the composer on the key the send shortcut
+    /// names. Returns whether the keystroke was used.
+    fn intercept(
+        &mut self,
+        event: &KeystrokeEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let keystroke = &event.keystroke;
+        let modifiers = keystroke.modifiers;
+        let typed = keymap::Chord {
+            control: modifiers.control,
+            alt: modifiers.alt,
+            shift: modifiers.shift,
+            platform: modifiers.platform,
+            key: keystroke.key.clone(),
+        };
+        if let Some(action) =
+            keymap::command_for(&self.key_rules, &typed, |c| action_for(c).is_some())
+                .and_then(action_for)
+        {
+            window.dispatch_action(action, cx);
+            return true;
+        }
+        if keystroke.key != "enter" || modifiers.alt || modifiers.shift || modifiers.platform {
+            return false;
+        }
+        if !self.composer.read(cx).focus_handle(cx).is_focused(window) {
+            return false;
+        }
+        let text = self.composer.read(cx).value().to_string();
+        if !modifiers.control && self.settings.requires_modifier(&text) {
+            return false;
+        }
+        self.send(window, cx);
+        true
     }
 
     fn connection(&self, label: &str) -> Option<Arc<Connection>> {
@@ -260,7 +299,7 @@ impl Root {
         if std::mem::take(&mut self.shell_dirty) {
             self.rebuild_entries();
             self.notify_attention();
-            self.rebuild_key_rules(cx);
+            self.rebuild_key_rules();
             self.visit_if_done();
             cx.notify();
         }
@@ -271,7 +310,7 @@ impl Root {
 
     /// The keybindings of the primary host that has sent its configuration, as T3 uses the primary
     /// server's keybindings.
-    fn rebuild_key_rules(&self, cx: &mut Context<Self>) {
+    fn rebuild_key_rules(&mut self) {
         let rules = self.connections.iter().find_map(|c| {
             c.config()
                 .lock()
@@ -279,10 +318,8 @@ impl Root {
                 .as_ref()
                 .map(keymap::rules)
         });
-        if let Some(rules) = rules
-            && *cx.global::<KeyRules>().0 != rules
-        {
-            cx.set_global(KeyRules(Rc::new(rules)));
+        if let Some(rules) = rules {
+            self.key_rules = rules;
         }
     }
 
@@ -312,13 +349,21 @@ impl Root {
                 })
                 .collect();
         self.statuses = self.entries.iter().map(|e| (e.key(), e.status)).collect();
+        if !self.settings.desktop_notifications {
+            return;
+        }
+        let sound = self.settings.notification_sound;
         for (summary, body) in attention {
             self.runtime.spawn_blocking(move || {
-                let _ = notify_rust::Notification::new()
+                let mut notification = notify_rust::Notification::new();
+                notification
                     .appname("T3 Code")
                     .summary(&summary)
-                    .body(&body)
-                    .show();
+                    .body(&body);
+                if sound {
+                    notification.sound_name("message-new-instant");
+                }
+                let _ = notification.show();
             });
         }
     }
@@ -568,16 +613,26 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
-        let queue = self
-            .open_entry()
-            .is_some_and(|e| matches!(e.status, ThreadStatus::Working | ThreadStatus::Input));
+        let status = self.open_entry().map(|e| e.status);
+        let active_run = self.thread_value(&environment, &thread_id).and_then(|t| {
+            t.get("activeRunId")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        });
+        let delivery = match (status, active_run) {
+            (Some(ThreadStatus::Working), Some(run_id)) if self.settings.steer_follow_ups => {
+                Delivery::Steer { run_id }
+            }
+            (Some(ThreadStatus::Working | ThreadStatus::Input), _) => Delivery::Queue,
+            _ => Delivery::Start,
+        };
         let runtime = self.runtime.clone();
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
         cx.spawn_in(window, async move |this, cx| {
             let sent = on_runtime(&runtime, {
                 let text = text.clone();
-                async move { connection.send_message(&thread_id, &text, queue).await }
+                async move { connection.send_message(&thread_id, &text, delivery).await }
             })
             .await;
             let _ = this.update_in(cx, |root, window, cx| {
@@ -1189,9 +1244,10 @@ impl Root {
                     .as_ref()
                     .map(|m| models::label(config.as_ref(), m))
                     .unwrap_or_else(|| "Pick a model".into());
-                let plan = instances
-                    .iter()
-                    .any(|i| i.instance_id == current_instance && i.interaction_mode_toggle);
+                let plan = self.settings.plan_mode_enabled
+                    && instances
+                        .iter()
+                        .any(|i| i.instance_id == current_instance && i.interaction_mode_toggle);
                 h_flex()
                     .px_3()
                     .pt_2()
@@ -1271,7 +1327,12 @@ impl Root {
                     .p_3()
                     .gap_2()
                     .items_end()
-                    .child(div().flex_1().child(Textarea::new(&self.composer)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(px(self.settings.font_size_prompt))
+                            .child(Textarea::new(&self.composer)),
+                    )
                     .child(button),
             )
             .into_any_element()
@@ -1488,36 +1549,17 @@ impl Render for Root {
     }
 }
 
-pub fn run(config: Config) -> anyhow::Result<()> {
+pub fn run(config: Config, settings: ClientSettings) -> anyhow::Result<()> {
     let runtime = Runtime::new()?;
     let handle = runtime.handle().clone();
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
-        Theme::global_mut(cx).font_family = UI_FONT.into();
+        let theme = Theme::global_mut(cx);
+        theme.font_family = UI_FONT.into();
+        theme.font_size = px(settings.font_size_interface);
+        theme.mono_font_size = px(settings.font_size_code);
         let root = Some("Root");
-        cx.bind_keys([
-            KeyBinding::new("escape", Cancel, root),
-            KeyBinding::new("ctrl-enter", Send, root),
-        ]);
-        cx.set_global(KeyRules::default());
-        cx.intercept_keystrokes(|event, window, cx| {
-            let keystroke = &event.keystroke;
-            let typed = keymap::Chord {
-                control: keystroke.modifiers.control,
-                alt: keystroke.modifiers.alt,
-                shift: keystroke.modifiers.shift,
-                platform: keystroke.modifiers.platform,
-                key: keystroke.key.clone(),
-            };
-            let rules = cx.global::<KeyRules>().0.clone();
-            let action = keymap::command_for(&rules, &typed, |c| action_for(c).is_some())
-                .and_then(action_for);
-            if let Some(action) = action {
-                window.dispatch_action(action, cx);
-                cx.stop_propagation();
-            }
-        })
-        .detach();
+        cx.bind_keys([KeyBinding::new("escape", Cancel, root)]);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(1400.), px(900.)), cx)),
             titlebar: Some(TitlebarOptions {
@@ -1527,7 +1569,7 @@ pub fn run(config: Config) -> anyhow::Result<()> {
             ..Default::default()
         };
         gpui_kit::open_window(options, cx, |window, cx| {
-            cx.new(|cx| Root::new(config, handle, window, cx))
+            cx.new(|cx| Root::new(config, settings, handle, window, cx))
         })
         .expect("open the window");
     });
