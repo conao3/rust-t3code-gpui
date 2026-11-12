@@ -21,7 +21,7 @@ use t3_client::session::{Change, Connection, ConnectionStatus, Delivery, Launch,
 use tokio::runtime::{Handle, Runtime};
 
 use crate::attachments;
-use crate::client_settings::ClientSettings;
+use crate::client_settings::{self, ClientSettings};
 use crate::completion;
 use crate::drafts::{self, Drafts};
 use crate::keymap;
@@ -53,6 +53,7 @@ actions!(
         ToggleFilePicker,
         ToggleDiff,
         ManageHosts,
+        OpenSettings,
         CloseFilePanel,
         CycleRuntimeMode,
         NextUserMessage,
@@ -86,6 +87,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "filePicker.toggle" => Box::new(ToggleFilePicker),
         "diff.toggle" => Box::new(ToggleDiff),
         "settings.connections" => Box::new(ManageHosts),
+        "settings.open" => Box::new(OpenSettings),
         "rightPanel.toggle" | "rightPanel.close" => Box::new(CloseFilePanel),
         _ => return None,
     })
@@ -211,6 +213,8 @@ pub struct Root {
     pending_composer: Option<String>,
     key_rules: Vec<keymap::Rule>,
     settings: ClientSettings,
+    settings_path: std::path::PathBuf,
+    settings_open: bool,
     sidebar_hidden: bool,
     wake_scheduled: bool,
     collapsed: HashSet<sidebar::Section>,
@@ -232,7 +236,7 @@ pub struct Root {
 impl Root {
     fn new(
         (config, config_path): (Config, std::path::PathBuf),
-        settings: ClientSettings,
+        (settings, settings_path): (ClientSettings, std::path::PathBuf),
         (drafts, drafts_path): (Drafts, std::path::PathBuf),
         runtime: Handle,
         window: &mut Window,
@@ -342,6 +346,8 @@ impl Root {
             pending_composer: None,
             key_rules: Vec::new(),
             settings,
+            settings_path,
+            settings_open: false,
             sidebar_hidden: false,
             wake_scheduled: false,
             collapsed: HashSet::from([sidebar::Section::Settled]),
@@ -1042,6 +1048,178 @@ impl Root {
         .detach();
     }
 
+    /// Writes client settings to the official app's file and applies them at once.
+    fn change_setting(&mut self, key: &'static str, value: Value, cx: &mut Context<Self>) {
+        match client_settings::update(&self.settings_path, &[(key, value)]) {
+            Ok(settings) => {
+                let (interface, code) = (settings.font_size_interface, settings.font_size_code);
+                self.settings = settings;
+                Theme::update(cx, |theme| {
+                    theme.font_size = px(interface);
+                    theme.mono_font_size = px(code);
+                });
+            }
+            Err(error) => self.message = Some(format!("Saving the settings failed: {error:#}")),
+        }
+        cx.notify();
+    }
+
+    fn render_settings(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let s = &self.settings;
+        let row =
+            |name: &'static str, key: &'static str, options: Vec<(SharedString, Value, bool)>| {
+                h_flex()
+                    .gap_2()
+                    .child(div().w(px(200.)).text_sm().child(name))
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .flex_wrap()
+                            .children(options.into_iter().enumerate().map(
+                                move |(i, (label, value, chosen))| {
+                                    Button::new(SharedString::from(format!("setting-{key}-{i}")))
+                                        .label(label)
+                                        .compact()
+                                        .when(chosen, |b| b.primary())
+                                        .when(!chosen, |b| b.outline())
+                                        .on_click(cx.listener(move |root, _, _, cx| {
+                                            root.change_setting(key, value.clone(), cx)
+                                        }))
+                                },
+                            )),
+                    )
+            };
+        let size = |name: &'static str, key: &'static str, current: f32| {
+            row(
+                name,
+                key,
+                vec![
+                    ("−".into(), Value::from((current - 1.).max(10.)), false),
+                    (format!("{current:.0}").into(), Value::from(current), true),
+                    ("+".into(), Value::from((current + 1.).min(28.)), false),
+                ],
+            )
+        };
+        use client_settings::SendShortcut::*;
+        let notification_mode = match (s.desktop_notifications, s.notification_sound) {
+            (false, false) => "off",
+            (true, false) => "notifications",
+            (false, true) => "sound",
+            (true, true) => "notifications-and-sound",
+        };
+        div()
+            .absolute()
+            .top(px(80.))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(
+                v_flex()
+                    .w(px(720.))
+                    .p_4()
+                    .gap_3()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.background)
+                    .shadow_lg()
+                    .child(
+                        h_flex().child(div().flex_1().child("Settings")).child(
+                            Button::new("close-settings")
+                                .label("Close")
+                                .compact()
+                                .outline()
+                                .on_click(cx.listener(|root, _, _, cx| {
+                                    root.settings_open = false;
+                                    cx.notify();
+                                })),
+                        ),
+                    )
+                    .child(row(
+                        "Send with",
+                        "sendShortcut",
+                        vec![
+                            (
+                                "Enter".into(),
+                                Value::from("enter"),
+                                s.send_shortcut == Enter,
+                            ),
+                            (
+                                "Ctrl+Enter for multiline".into(),
+                                Value::from("mod-enter-multiline"),
+                                s.send_shortcut == ModEnterMultiline,
+                            ),
+                            (
+                                "Ctrl+Enter always".into(),
+                                Value::from("mod-enter"),
+                                s.send_shortcut == ModEnter,
+                            ),
+                        ],
+                    ))
+                    .child(row(
+                        "While a turn runs",
+                        "followUpBehavior",
+                        vec![
+                            ("Steer".into(), Value::from("steer"), s.steer_follow_ups),
+                            ("Queue".into(), Value::from("queue"), !s.steer_follow_ups),
+                        ],
+                    ))
+                    .child(row(
+                        "Notifications",
+                        "notificationMode",
+                        vec![
+                            ("Off".into(), Value::from("off"), notification_mode == "off"),
+                            (
+                                "Notifications".into(),
+                                Value::from("notifications"),
+                                notification_mode == "notifications",
+                            ),
+                            (
+                                "Sound".into(),
+                                Value::from("sound"),
+                                notification_mode == "sound",
+                            ),
+                            (
+                                "Both".into(),
+                                Value::from("notifications-and-sound"),
+                                notification_mode == "notifications-and-sound",
+                            ),
+                        ],
+                    ))
+                    .child(row(
+                        "Plan mode",
+                        "planModeEnabled",
+                        vec![
+                            ("On".into(), Value::from(true), s.plan_mode_enabled),
+                            ("Off".into(), Value::from(false), !s.plan_mode_enabled),
+                        ],
+                    ))
+                    .child(size(
+                        "Interface text size",
+                        "fontSizeInterface",
+                        s.font_size_interface,
+                    ))
+                    .child(size(
+                        "Message text size",
+                        "fontSizePrompt",
+                        s.font_size_prompt,
+                    ))
+                    .child(size("Code text size", "fontSizeCode", s.font_size_code))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(format!(
+                                "Saved to {}, the file the official app reads too.",
+                                self.settings_path.display()
+                            )),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn toggle_hosts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.hosts_open = !self.hosts_open;
         if self.hosts_open {
@@ -1440,7 +1618,7 @@ impl Root {
 
     fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 9] = [
+        let commands: [(&str, Box<dyn Action>); 10] = [
             ("New thread", Box::new(NewThread)),
             ("Next Done or waiting thread", Box::new(NextDone)),
             ("Settle the thread", Box::new(Settle)),
@@ -1450,6 +1628,7 @@ impl Root {
             ("Cycle the runtime mode", Box::new(CycleRuntimeMode)),
             ("Toggle the sidebar", Box::new(ToggleSidebar)),
             ("Manage hosts", Box::new(ManageHosts)),
+            ("Settings", Box::new(OpenSettings)),
         ];
         let threads = self.entries.iter().map(|entry| {
             CommandItem::new()
@@ -2368,14 +2547,31 @@ impl Root {
             .child(statuses)
             .children(filters)
             .child(
-                div().px_2().pt_1().child(
-                    Button::new("hosts")
-                        .label("Hosts")
-                        .compact()
-                        .outline()
-                        .w_full()
-                        .on_click(cx.listener(|root, _, window, cx| root.toggle_hosts(window, cx))),
-                ),
+                h_flex()
+                    .px_2()
+                    .pt_1()
+                    .gap_1()
+                    .child(
+                        Button::new("hosts")
+                            .label("Hosts")
+                            .compact()
+                            .outline()
+                            .flex_1()
+                            .on_click(
+                                cx.listener(|root, _, window, cx| root.toggle_hosts(window, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("settings")
+                            .label("Settings")
+                            .compact()
+                            .outline()
+                            .flex_1()
+                            .on_click(cx.listener(|root, _, _, cx| {
+                                root.settings_open = !root.settings_open;
+                                cx.notify();
+                            })),
+                    ),
             )
             .child(
                 div().px_2().pt_2().child(
@@ -2931,6 +3127,10 @@ impl Render for Root {
             .on_action(
                 cx.listener(|root, _: &ManageHosts, window, cx| root.toggle_hosts(window, cx)),
             )
+            .on_action(cx.listener(|root, _: &OpenSettings, _, cx| {
+                root.settings_open = !root.settings_open;
+                cx.notify();
+            }))
             .on_action(cx.listener(|root, _: &CloseFilePanel, _, cx| {
                 root.file_panel = None;
                 cx.notify();
@@ -2999,6 +3199,9 @@ impl Render for Root {
             .when(self.hosts_open, |root_el| {
                 root_el.child(self.render_hosts(cx))
             })
+            .when(self.settings_open, |root_el| {
+                root_el.child(self.render_settings(cx))
+            })
             .when(self.file_picker_open, |root_el| {
                 root_el.child(self.render_file_picker(cx))
             })
@@ -3008,7 +3211,7 @@ impl Render for Root {
 pub fn run(
     config: Config,
     config_path: std::path::PathBuf,
-    settings: ClientSettings,
+    (settings, settings_path): (ClientSettings, std::path::PathBuf),
 ) -> anyhow::Result<()> {
     let drafts_path = drafts::default_path()?;
     let drafts = Drafts::load(&drafts_path)?;
@@ -3037,7 +3240,7 @@ pub fn run(
             cx.new(|cx| {
                 Root::new(
                     (config, config_path),
-                    settings,
+                    (settings.clone(), settings_path),
                     (drafts, drafts_path),
                     handle,
                     window,

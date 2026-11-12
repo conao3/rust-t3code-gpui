@@ -82,6 +82,34 @@ impl ClientSettings {
     }
 }
 
+/// Sets keys in the settings file, keeping every other key the file holds (the official app's
+/// settings this app does not use), and returns the settings as they now read.
+pub fn update(path: &Path, changes: &[(&str, Value)]) -> Result<ClientSettings> {
+    let mut value = match std::fs::read_to_string(path) {
+        Ok(text) => serde_json::from_str::<Value>(&text)
+            .with_context(|| format!("{} is not valid JSON", path.display()))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Value::Object(Default::default())
+        }
+        Err(error) => return Err(error).with_context(|| format!("cannot read {}", path.display())),
+    };
+    let object = value
+        .as_object_mut()
+        .with_context(|| format!("{} does not hold an object", path.display()))?;
+    for (key, change) in changes {
+        object.insert(key.to_string(), change.clone());
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    let partial = path.with_extension("json.partial");
+    std::fs::write(&partial, serde_json::to_vec_pretty(&value)?)
+        .with_context(|| format!("cannot write {}", partial.display()))?;
+    std::fs::rename(&partial, path)
+        .with_context(|| format!("cannot replace {}", path.display()))?;
+    Ok(ClientSettings::from_value(&value))
+}
+
 pub fn default_path() -> Result<PathBuf> {
     let home = match std::env::var_os("T3CODE_HOME") {
         Some(home) => PathBuf::from(home),
@@ -144,5 +172,30 @@ mod tests {
         let broken = dir.path().join("broken.json");
         std::fs::write(&broken, "{").unwrap();
         assert!(ClientSettings::load(&broken).is_err());
+    }
+
+    #[test]
+    fn updates_keep_the_keys_this_app_does_not_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("userdata/client-settings.json");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            r#"{"browserSearchEngine": "duckduckgo", "sendShortcut": "enter"}"#,
+        )
+        .unwrap();
+        let settings = update(
+            &path,
+            &[
+                ("sendShortcut", json!("mod-enter")),
+                ("fontSizeInterface", json!(18)),
+            ],
+        )
+        .unwrap();
+        assert_eq!(settings.send_shortcut, SendShortcut::ModEnter);
+        assert_eq!(settings.font_size_interface, 18.);
+        let written: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(written["browserSearchEngine"], "duckduckgo");
     }
 }

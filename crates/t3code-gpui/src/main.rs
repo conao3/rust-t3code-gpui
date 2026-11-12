@@ -108,12 +108,12 @@ fn run(cli: Cli) -> Result<(), Failure> {
         | Some(Command::Desktop {
             command: DesktopCommand::StartApp,
         }) => {
-            let settings = client_settings::default_path()
-                .and_then(|path| client_settings::ClientSettings::load(&path))
-                .map_err(Failure::Other)?;
+            let settings_path = client_settings::default_path().map_err(Failure::Other)?;
+            let settings =
+                client_settings::ClientSettings::load(&settings_path).map_err(Failure::Other)?;
             let path = config_path(cli.config)?;
             let config = Config::load(&path).map_err(Failure::Other)?;
-            app::run(config, path, settings).map_err(Failure::Other)
+            app::run(config, path, (settings, settings_path)).map_err(Failure::Other)
         }
         Some(Command::Environment { command }) => {
             let config = load(cli.config)?;
