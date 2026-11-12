@@ -11,14 +11,19 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use serde_json::Value;
 use t3_client::config::Config;
 use t3_client::session::{Change, Connection, ConnectionStatus, Launch, ThreadWatch};
 use tokio::runtime::{Handle, Runtime};
 
+use crate::models;
 use crate::projects::{self, ProjectGroup};
 use crate::row_view::{RowEvent, RowView};
 use crate::sidebar::{self, ThreadEntry, ThreadStatus};
 use crate::timeline::{self, Pending, Row, RowKind};
+
+type CommandFuture =
+    std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<u64>> + std::marker::Send>>;
 
 const REDRAW_INTERVAL: Duration = Duration::from_millis(250);
 const UI_FONT: &str = "Noto Sans CJK JP";
@@ -35,6 +40,7 @@ actions!(
         Settle,
         NewThread,
         Cancel,
+        ToggleModelPicker,
     ]
 );
 
@@ -56,6 +62,10 @@ struct OpenThread {
 
 struct NewThreadDraft {
     group: Option<String>,
+    carry: Option<Value>,
+    model: Option<Value>,
+    runtime_mode: Option<String>,
+    interaction_mode: String,
 }
 
 pub struct Root {
@@ -73,6 +83,7 @@ pub struct Root {
     user_cursor: Option<usize>,
     composer: Entity<TextareaState>,
     message: Option<String>,
+    picker_open: bool,
     window_active: bool,
     shell_dirty: bool,
     thread_dirty: bool,
@@ -93,7 +104,12 @@ impl Root {
             .collect();
         let shell_tasks = connections
             .iter()
-            .map(|connection| connection.spawn_shell(&runtime))
+            .flat_map(|connection| {
+                [
+                    connection.spawn_shell(&runtime),
+                    connection.spawn_config(&runtime),
+                ]
+            })
             .collect();
         let changes = cx.spawn_in(window, async move |this, cx| {
             while let Ok(change) = receiver.recv().await {
@@ -145,6 +161,7 @@ impl Root {
             user_cursor: None,
             composer,
             message: None,
+            picker_open: false,
             window_active: window.is_window_active(),
             shell_dirty: false,
             thread_dirty: false,
@@ -183,7 +200,9 @@ impl Root {
 
     fn on_change(&mut self, change: Change, window: &mut Window, cx: &mut Context<Self>) {
         match change {
-            Change::Status { .. } | Change::Shell { .. } => self.shell_dirty = true,
+            Change::Status { .. } | Change::Shell { .. } | Change::Config { .. } => {
+                self.shell_dirty = true
+            }
             Change::Thread {
                 environment,
                 thread_id,
@@ -666,6 +685,58 @@ impl Root {
         )
     }
 
+    fn thread_value(&self, environment: &str, thread_id: &str) -> Option<Value> {
+        let connection = self.connection(environment)?;
+        let shell = connection.shell();
+        let shell = shell.lock().expect("shell lock");
+        shell
+            .threads
+            .iter()
+            .find(|t| t.get("id").and_then(Value::as_str) == Some(thread_id))
+            .cloned()
+    }
+
+    fn project_value(&self, environment: &str, project_id: &str) -> Option<Value> {
+        let connection = self.connection(environment)?;
+        let shell = connection.shell();
+        let shell = shell.lock().expect("shell lock");
+        shell
+            .projects
+            .iter()
+            .find(|p| p.get("id").and_then(Value::as_str) == Some(project_id))
+            .cloned()
+    }
+
+    fn config_of(&self, environment: &str) -> Option<Value> {
+        let connection = self.connection(environment)?;
+        let config = connection.config();
+        let config = config.lock().expect("config lock");
+        config.clone()
+    }
+
+    /// Where the draft starts and with what: the host, the project, the model and the runtime mode.
+    fn draft_target(&self) -> Option<(String, String, Option<Value>, String)> {
+        let draft = self.draft.as_ref()?;
+        let groups = self.project_groups();
+        let group = groups
+            .iter()
+            .find(|g| Some(&g.key) == draft.group.as_ref())?;
+        let member = group.target().clone();
+        let project = self.project_value(&member.environment, &member.project_id)?;
+        let config = self.config_of(&member.environment);
+        let defaults = models::new_thread(config.as_ref(), &project, draft.carry.as_ref());
+        let model = draft
+            .model
+            .clone()
+            .or_else(|| defaults.as_ref().map(|(m, _)| m.clone()));
+        let runtime_mode = draft
+            .runtime_mode
+            .clone()
+            .or_else(|| defaults.map(|(_, r)| r))
+            .unwrap_or_else(|| "full-access".into());
+        Some((member.environment, member.project_id, model, runtime_mode))
+    }
+
     fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let groups = self.project_groups();
         let from_open = self.open_entry().and_then(|entry| {
@@ -674,14 +745,31 @@ impl Root {
                 .find(|g| g.contains(&entry.environment, &entry.project_id))
         });
         let group = from_open.or(groups.first()).map(|g| g.key.clone());
-        self.draft = Some(NewThreadDraft { group });
+        let carry = self
+            .current()
+            .and_then(|(env, id)| self.thread_value(&env, &id))
+            .and_then(|t| t.get("modelSelection").cloned())
+            .filter(|m| !m.is_null());
+        self.draft = Some(NewThreadDraft {
+            group,
+            carry,
+            model: None,
+            runtime_mode: None,
+            interaction_mode: "default".into(),
+        });
         self.message = None;
+        self.picker_open = false;
         self.close_thread(cx);
         self.composer
             .update(cx, |state, cx| state.focus(window, cx));
     }
 
     fn cancel(&mut self, cx: &mut Context<Self>) {
+        if self.picker_open {
+            self.picker_open = false;
+            cx.notify();
+            return;
+        }
         if self.draft.take().is_some() {
             self.message = None;
             cx.notify();
@@ -693,35 +781,29 @@ impl Root {
         if text.is_empty() {
             return;
         }
-        let groups = self.project_groups();
-        let selected = self.draft.as_ref().and_then(|d| d.group.clone());
-        let Some(group) = groups.iter().find(|g| Some(&g.key) == selected.as_ref()) else {
+        let Some((environment, project_id, model, runtime_mode)) = self.draft_target() else {
             self.message = Some("Pick a project first.".into());
             cx.notify();
             return;
         };
-        let member = group.target().clone();
-        let Some(connection) = self.connection(&member.environment) else {
-            return;
-        };
-        let settings = {
-            let shell = connection.shell();
-            let shell = shell.lock().expect("shell lock");
-            projects::launch_settings(&shell, &member.project_id)
-        };
-        let Some((model, runtime_mode)) = settings else {
-            self.message =
-                Some("This project has no default model and no thread to take one from.".into());
+        let Some(model) = model else {
+            self.message = Some("No model is available on this host. Pick one first.".into());
             cx.notify();
             return;
         };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let interaction_mode = self
+            .draft
+            .as_ref()
+            .map(|d| d.interaction_mode.clone())
+            .unwrap_or_else(|| "default".into());
         let thread_id = uuid::Uuid::new_v4().to_string();
-        let project_id = member.project_id.clone();
         let title = projects::title_seed(&text);
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
         let runtime = self.runtime.clone();
-        let environment = member.environment.clone();
         cx.spawn_in(window, async move |this, cx| {
             let launched = on_runtime(&runtime, {
                 let text = text.clone();
@@ -733,6 +815,7 @@ impl Root {
                             title: &title,
                             model,
                             runtime_mode: &runtime_mode,
+                            interaction_mode: &interaction_mode,
                             text: &text,
                         })
                         .await
@@ -750,6 +833,138 @@ impl Root {
             });
         })
         .detach();
+    }
+
+    /// The host, model, runtime mode and interaction mode the composer acts on: the open thread's,
+    /// or the draft's.
+    fn composer_target(&self) -> Option<(String, Option<Value>, String, String)> {
+        if let Some(draft) = &self.draft {
+            let (environment, _, model, runtime_mode) = self.draft_target()?;
+            return Some((
+                environment,
+                model,
+                runtime_mode,
+                draft.interaction_mode.clone(),
+            ));
+        }
+        let (environment, thread_id) = self.current()?;
+        let thread = self.thread_value(&environment, &thread_id)?;
+        let get = |key: &str| {
+            thread
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        };
+        let model = thread
+            .get("modelSelection")
+            .cloned()
+            .filter(|m| !m.is_null());
+        Some((
+            environment,
+            model,
+            get("runtimeMode"),
+            get("interactionMode"),
+        ))
+    }
+
+    fn dispatch_on_open(
+        &mut self,
+        what: &'static str,
+        cx: &mut Context<Self>,
+        command: impl FnOnce(Arc<Connection>, String) -> CommandFuture,
+    ) {
+        let Some((environment, thread_id)) = self.current() else {
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let runtime = self.runtime.clone();
+        let future = command(connection, thread_id);
+        cx.spawn(async move |this, cx| {
+            if let Err(error) = on_runtime(&runtime, future).await {
+                let _ = this.update(cx, |root, cx| {
+                    root.message = Some(format!("{what} failed: {error:#}"));
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn pick_model(&mut self, instance_id: String, slug: String, cx: &mut Context<Self>) {
+        self.picker_open = false;
+        let chosen = models::selection(&instance_id, &slug);
+        if let Some(draft) = self.draft.as_mut() {
+            draft.model = Some(chosen);
+            cx.notify();
+            return;
+        }
+        let switch = self
+            .composer_target()
+            .and_then(|(_, model, _, _)| model)
+            .is_some_and(|m| m.get("instanceId").and_then(Value::as_str) != Some(&instance_id));
+        self.dispatch_on_open("Model change", cx, move |connection, thread_id| {
+            Box::pin(async move { connection.set_model(&thread_id, chosen, switch).await })
+        });
+        cx.notify();
+    }
+
+    fn cycle_runtime_mode(&mut self, cx: &mut Context<Self>) {
+        let Some((environment, model, current, _)) = self.composer_target() else {
+            return;
+        };
+        let config = self.config_of(&environment);
+        let instance_id = model
+            .as_ref()
+            .and_then(|m| m.get("instanceId").and_then(Value::as_str))
+            .unwrap_or_default()
+            .to_string();
+        let modes: Vec<String> = config
+            .as_ref()
+            .and_then(|c| {
+                models::instances(c)
+                    .into_iter()
+                    .find(|i| i.instance_id == instance_id)
+            })
+            .map(|i| i.runtime_modes)
+            .unwrap_or_else(|| {
+                models::RUNTIME_MODES
+                    .iter()
+                    .map(|m| m.to_string())
+                    .collect()
+            });
+        let next = modes
+            .iter()
+            .position(|m| *m == current)
+            .map_or(0, |i| (i + 1) % modes.len());
+        let Some(next) = modes.get(next).cloned() else {
+            return;
+        };
+        if let Some(draft) = self.draft.as_mut() {
+            draft.runtime_mode = Some(next);
+            cx.notify();
+            return;
+        }
+        self.dispatch_on_open("Runtime mode change", cx, move |connection, thread_id| {
+            Box::pin(async move { connection.set_runtime_mode(&thread_id, &next).await })
+        });
+    }
+
+    fn toggle_plan(&mut self, cx: &mut Context<Self>) {
+        let Some((_, _, _, current)) = self.composer_target() else {
+            return;
+        };
+        let next = if current == "plan" { "default" } else { "plan" };
+        if let Some(draft) = self.draft.as_mut() {
+            draft.interaction_mode = next.into();
+            cx.notify();
+            return;
+        }
+        self.dispatch_on_open("Plan mode change", cx, move |connection, thread_id| {
+            Box::pin(async move { connection.set_interaction_mode(&thread_id, next).await })
+        });
     }
 
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -901,13 +1116,115 @@ impl Root {
         })
     }
 
-    fn render_composer(&self, button: Button) -> impl IntoElement {
-        h_flex()
-            .p_3()
-            .gap_2()
-            .items_end()
-            .child(div().flex_1().child(Textarea::new(&self.composer)))
-            .child(button)
+    fn render_composer(&self, button: Button, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let target = self.composer_target();
+        let config = target.as_ref().and_then(|(env, ..)| self.config_of(env));
+        let instances = config.as_ref().map(models::instances).unwrap_or_default();
+        let current = target.as_ref().and_then(|(_, model, ..)| model.clone());
+        let current_instance = current
+            .as_ref()
+            .and_then(|m| m.get("instanceId").and_then(Value::as_str))
+            .unwrap_or_default()
+            .to_string();
+        let current_slug = current
+            .as_ref()
+            .and_then(|m| m.get("model").and_then(Value::as_str))
+            .unwrap_or_default()
+            .to_string();
+        let toolbar = target
+            .as_ref()
+            .map(|(_, model, runtime_mode, interaction_mode)| {
+                let label = model
+                    .as_ref()
+                    .map(|m| models::label(config.as_ref(), m))
+                    .unwrap_or_else(|| "Pick a model".into());
+                let plan = instances
+                    .iter()
+                    .any(|i| i.instance_id == current_instance && i.interaction_mode_toggle);
+                h_flex()
+                    .px_3()
+                    .pt_2()
+                    .gap_2()
+                    .child(
+                        Button::new("model")
+                            .label(label)
+                            .compact()
+                            .outline()
+                            .selected(self.picker_open)
+                            .on_click(cx.listener(|root, _, _, cx| {
+                                root.picker_open = !root.picker_open;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("runtime-mode")
+                            .label(runtime_mode.clone())
+                            .compact()
+                            .outline()
+                            .on_click(cx.listener(|root, _, _, cx| root.cycle_runtime_mode(cx))),
+                    )
+                    .when(plan, |row| {
+                        row.child(
+                            Button::new("plan")
+                                .label("Plan")
+                                .compact()
+                                .outline()
+                                .selected(interaction_mode == "plan")
+                                .on_click(cx.listener(|root, _, _, cx| root.toggle_plan(cx))),
+                        )
+                    })
+            });
+        let picker = self.picker_open.then(|| {
+            let groups = instances.iter().enumerate().map(|(gi, instance)| {
+                let buttons = instance.models.iter().enumerate().map(|(mi, model)| {
+                    let chosen =
+                        instance.instance_id == current_instance && model.slug == current_slug;
+                    let instance_id = instance.instance_id.clone();
+                    let slug = model.slug.clone();
+                    Button::new(SharedString::from(format!("pick-{gi}-{mi}")))
+                        .label(model.name.clone())
+                        .compact()
+                        .when(chosen, |b| b.primary())
+                        .when(!chosen, |b| b.outline())
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            root.pick_model(instance_id.clone(), slug.clone(), cx)
+                        }))
+                });
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(instance.name.clone()),
+                    )
+                    .child(h_flex().gap_1().flex_wrap().children(buttons))
+            });
+            div()
+                .id("model-picker")
+                .mx_3()
+                .mt_2()
+                .p_2()
+                .max_h(px(320.))
+                .overflow_y_scroll()
+                .rounded_md()
+                .border_1()
+                .border_color(theme.border)
+                .child(v_flex().gap_2().children(groups))
+        });
+        v_flex()
+            .children(picker)
+            .children(toolbar)
+            .child(
+                h_flex()
+                    .p_3()
+                    .gap_2()
+                    .items_end()
+                    .child(div().flex_1().child(Textarea::new(&self.composer)))
+                    .child(button),
+            )
+            .into_any_element()
     }
 
     fn render_draft(&self, draft: &NewThreadDraft, cx: &mut Context<Self>) -> AnyElement {
@@ -973,6 +1290,7 @@ impl Root {
                             .label("Start")
                             .primary()
                             .on_click(cx.listener(|root, _, window, cx| root.launch(window, cx))),
+                        cx,
                     ),
                 ),
             )
@@ -1064,7 +1382,7 @@ impl Root {
                 div()
                     .border_t_1()
                     .border_color(theme.border)
-                    .child(self.render_composer(button)),
+                    .child(self.render_composer(button, cx)),
             )
             .into_any_element()
     }
@@ -1100,6 +1418,10 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &Settle, _, cx| root.settle(cx)))
             .on_action(cx.listener(|root, _: &NewThread, window, cx| root.new_thread(window, cx)))
             .on_action(cx.listener(|root, _: &Cancel, _, cx| root.cancel(cx)))
+            .on_action(cx.listener(|root, _: &ToggleModelPicker, _, cx| {
+                root.picker_open = !root.picker_open;
+                cx.notify();
+            }))
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
             .font_family(UI_FONT)
@@ -1126,6 +1448,7 @@ pub fn run(config: Config) -> anyhow::Result<()> {
             KeyBinding::new("ctrl-n", NewThread, root),
             KeyBinding::new("ctrl-shift-o", NewThread, root),
             KeyBinding::new("escape", Cancel, root),
+            KeyBinding::new("ctrl-shift-m", ToggleModelPicker, root),
             KeyBinding::new("ctrl-enter", Send, root),
         ]);
         let options = WindowOptions {

@@ -139,6 +139,7 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
     );
     let runtime = tokio::runtime::Handle::current();
     let _shell = connection.spawn_shell(&runtime);
+    let _config = connection.spawn_config(&runtime);
 
     let shell = connection.shell();
     wait_for(
@@ -151,6 +152,19 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
     )
     .await;
     assert!(connection.environment_id().is_some());
+    let config = connection.config();
+    wait_for(
+        &changes,
+        || {
+            config
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|c| c["providers"].is_array() && c["keybindings"].is_array())
+        },
+        "the server config snapshot",
+    )
+    .await;
 
     let project_id = shell.lock().unwrap().projects[0]["id"]
         .as_str()
@@ -235,6 +249,7 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
             title: "launched",
             model: json!({"instanceId": "integration-missing", "model": "none"}),
             runtime_mode: "full-access",
+            interaction_mode: "default",
             text: "hello",
         })
         .await

@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 
 use crate::config::Environment;
 use crate::http::Api;
-use crate::projection::{Applied, ShellState, ThreadState};
+use crate::projection::{Applied, ShellState, ThreadState, apply_config};
 use crate::rpc::{RpcClient, RpcError};
 
 const DISPATCH_TIMEOUT: Duration = Duration::from_secs(30);
@@ -31,6 +31,9 @@ pub enum Change {
     Shell {
         environment: String,
     },
+    Config {
+        environment: String,
+    },
     Thread {
         environment: String,
         thread_id: String,
@@ -43,6 +46,7 @@ pub struct Launch<'a> {
     pub title: &'a str,
     pub model: Value,
     pub runtime_mode: &'a str,
+    pub interaction_mode: &'a str,
     pub text: &'a str,
 }
 
@@ -54,6 +58,7 @@ pub struct Connection {
     status: Mutex<ConnectionStatus>,
     environment_id: Mutex<Option<String>>,
     shell: Arc<Mutex<ShellState>>,
+    config: Arc<Mutex<Option<Value>>>,
     changes: async_channel::Sender<Change>,
 }
 
@@ -67,6 +72,7 @@ impl Connection {
             status: Mutex::new(ConnectionStatus::Connecting),
             environment_id: Mutex::new(None),
             shell: Arc::new(Mutex::new(ShellState::default())),
+            config: Arc::new(Mutex::new(None)),
             changes,
         })
     }
@@ -92,6 +98,10 @@ impl Connection {
 
     pub fn shell(&self) -> Arc<Mutex<ShellState>> {
         self.shell.clone()
+    }
+
+    pub fn config(&self) -> Arc<Mutex<Option<Value>>> {
+        self.config.clone()
     }
 
     pub fn thread_url(&self, thread_id: &str) -> Option<String> {
@@ -171,7 +181,7 @@ impl Connection {
             "generateTitle": true,
             "modelSelection": launch.model,
             "runtimeMode": launch.runtime_mode,
-            "interactionMode": "default",
+            "interactionMode": launch.interaction_mode,
             "workspaceStrategy": {"type": "root"},
             "initialMessage": {
                 "messageId": uuid::Uuid::new_v4().to_string(),
@@ -262,6 +272,69 @@ impl Connection {
             "answers": answers,
         }))
         .await
+    }
+
+    pub async fn set_model(
+        &self,
+        thread_id: &str,
+        model: Value,
+        switch_provider: bool,
+    ) -> Result<u64> {
+        let kind = if switch_provider {
+            "provider.switch"
+        } else {
+            "thread.model-selection.set"
+        };
+        self.dispatch(json!({"type": kind, "threadId": thread_id, "modelSelection": model}))
+            .await
+    }
+
+    pub async fn set_runtime_mode(&self, thread_id: &str, runtime_mode: &str) -> Result<u64> {
+        self.dispatch(json!({"type": "thread.runtime-mode.set", "threadId": thread_id, "runtimeMode": runtime_mode}))
+            .await
+    }
+
+    pub async fn set_interaction_mode(
+        &self,
+        thread_id: &str,
+        interaction_mode: &str,
+    ) -> Result<u64> {
+        self.dispatch(json!({"type": "thread.interaction-mode.set", "threadId": thread_id, "interactionMode": interaction_mode}))
+            .await
+    }
+
+    pub fn spawn_config(self: &Arc<Self>, runtime: &Handle) -> JoinHandle<()> {
+        let connection = self.clone();
+        runtime.spawn(async move { connection.follow_config().await })
+    }
+
+    async fn follow_config(self: Arc<Self>) {
+        let mut retry = RETRY_FIRST;
+        loop {
+            if self.config_once(&mut retry).await.is_ok() {
+                retry = RETRY_FIRST;
+            }
+            tokio::time::sleep(retry).await;
+            retry = (retry * 2).min(RETRY_LIMIT);
+        }
+    }
+
+    async fn config_once(&self, retry: &mut Duration) -> Result<()> {
+        let rpc = self.rpc().await?;
+        let mut stream = rpc.stream("subscribeServerConfig", json!({})).await?;
+        while let Some(item) = stream.next().await {
+            let item = item?;
+            let applied = apply_config(&mut self.config.lock().expect("config lock"), &item);
+            if applied == Applied::Snapshot {
+                *retry = RETRY_FIRST;
+            }
+            if !matches!(applied, Applied::Ignored) {
+                self.notify(Change::Config {
+                    environment: self.label.clone(),
+                });
+            }
+        }
+        Ok(())
     }
 
     pub fn spawn_shell(self: &Arc<Self>, runtime: &Handle) -> JoinHandle<()> {

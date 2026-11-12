@@ -1,8 +1,6 @@
 use serde_json::Value;
 use t3_client::projection::ShellState;
 
-const DEFAULT_RUNTIME_MODE: &str = "full-access";
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Member {
     pub environment: String,
@@ -98,28 +96,6 @@ pub fn groups<'a>(
     groups
 }
 
-/// The model and runtime mode a new thread in the project starts with: the project's default
-/// model, else the model of its latest thread.
-pub fn launch_settings(shell: &ShellState, project_id: &str) -> Option<(Value, String)> {
-    let project = shell
-        .projects
-        .iter()
-        .find(|p| text(p, "id") == project_id)?;
-    let latest = latest_thread(shell, project_id);
-    let model = project
-        .get("defaultModelSelection")
-        .filter(|v| !v.is_null())
-        .or_else(|| latest.and_then(|t| t.get("modelSelection")))
-        .filter(|v| !v.is_null())?
-        .clone();
-    let runtime_mode = latest
-        .map(|t| text(t, "runtimeMode"))
-        .filter(|m| !m.is_empty())
-        .unwrap_or(DEFAULT_RUNTIME_MODE)
-        .to_string();
-    Some((model, runtime_mode))
-}
-
 pub fn title_seed(message: &str) -> String {
     let line = message
         .lines()
@@ -175,31 +151,6 @@ mod tests {
         assert_eq!(groups[0].target().project_id, "p-eos");
         assert!(groups[0].contains("helios", "p-helios"));
         assert_eq!(groups[1].key, "eos:/tmp/x");
-    }
-
-    #[test]
-    fn a_new_thread_takes_the_project_default_then_the_latest_thread_model() {
-        let model = json!({"instanceId": "claude", "model": "claude-opus-5-5"});
-        let older = json!({"instanceId": "codex", "model": "gpt"});
-        let mut s = shell(
-            vec![repo("p", "k")],
-            vec![
-                json!({"id": "a", "projectId": "p", "updatedAt": "2026-11-01T00:00:00.000Z",
-                       "modelSelection": older, "runtimeMode": "approval-required"}),
-                json!({"id": "b", "projectId": "p", "updatedAt": "2026-11-02T00:00:00.000Z",
-                       "modelSelection": model, "runtimeMode": "full-access"}),
-            ],
-        );
-        assert_eq!(
-            launch_settings(&s, "p"),
-            Some((model.clone(), "full-access".into()))
-        );
-        s.projects[0]["defaultModelSelection"] = older.clone();
-        assert_eq!(launch_settings(&s, "p").unwrap().0, older);
-        assert_eq!(
-            launch_settings(&shell(vec![repo("p", "k")], vec![]), "p"),
-            None
-        );
     }
 
     #[test]
