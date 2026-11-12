@@ -12,6 +12,7 @@ struct Server {
     child: Child,
     origin: String,
     token: String,
+    base: std::path::PathBuf,
     _home: tempfile::TempDir,
 }
 
@@ -108,6 +109,7 @@ async fn start_server() -> Server {
         child,
         origin,
         token,
+        base,
         _home: home,
     }
 }
@@ -171,6 +173,34 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
         .as_str()
         .unwrap()
         .to_string();
+    let paired = Command::new(t3_bin())
+        .args([
+            "pair",
+            "--ttl",
+            "2m",
+            "--label",
+            "t3-client-pair",
+            "--base-dir",
+        ])
+        .arg(&server.base)
+        .output()
+        .expect("t3 pair");
+    let printed = String::from_utf8_lossy(&paired.stdout);
+    let code = printed
+        .lines()
+        .find_map(|l| l.strip_prefix("Token: "))
+        .expect("t3 pair printed a token")
+        .trim()
+        .to_string();
+    let bearer = t3_client::http::Api::new(&server.origin, "")
+        .pair(&code, "t3-client-test")
+        .await
+        .expect("/oauth/token");
+    t3_client::http::Api::new(&server.origin, &bearer)
+        .get("/api/auth/session")
+        .await
+        .expect("the paired token authenticates");
+
     let png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
     let attachment = connection
         .upload_attachment("shot.png", "image/png", png)

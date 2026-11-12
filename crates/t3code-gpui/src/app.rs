@@ -15,7 +15,8 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use serde_json::Value;
-use t3_client::config::Config;
+use t3_client::config::{self, Config, Environment};
+use t3_client::http::Api;
 use t3_client::session::{Change, Connection, ConnectionStatus, Delivery, Launch, ThreadWatch};
 use tokio::runtime::{Handle, Runtime};
 
@@ -51,6 +52,7 @@ actions!(
         TogglePalette,
         ToggleFilePicker,
         ToggleDiff,
+        ManageHosts,
         CloseFilePanel,
         CycleRuntimeMode,
         NextUserMessage,
@@ -83,6 +85,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "commandPalette.toggle" => Box::new(TogglePalette),
         "filePicker.toggle" => Box::new(ToggleFilePicker),
         "diff.toggle" => Box::new(ToggleDiff),
+        "settings.connections" => Box::new(ManageHosts),
         "rightPanel.toggle" | "rightPanel.close" => Box::new(CloseFilePanel),
         _ => return None,
     })
@@ -216,14 +219,19 @@ pub struct Root {
     thread_dirty: bool,
     redraw_scheduled: bool,
     focus: FocusHandle,
-    _shell_tasks: Vec<tokio::task::JoinHandle<()>>,
+    host_tasks: HashMap<String, Vec<tokio::task::JoinHandle<()>>>,
+    config: Config,
+    config_path: std::path::PathBuf,
+    change_sender: async_channel::Sender<Change>,
+    hosts_open: bool,
+    host_inputs: [Entity<InputState>; 3],
     _subscriptions: Vec<Subscription>,
     _changes: Task<()>,
 }
 
 impl Root {
     fn new(
-        config: Config,
+        (config, config_path): (Config, std::path::PathBuf),
         settings: ClientSettings,
         (drafts, drafts_path): (Drafts, std::path::PathBuf),
         runtime: Handle,
@@ -236,13 +244,16 @@ impl Root {
             .iter()
             .map(|environment| Connection::new(environment, sender.clone()))
             .collect();
-        let shell_tasks = connections
+        let shell_tasks: HashMap<String, Vec<tokio::task::JoinHandle<()>>> = connections
             .iter()
-            .flat_map(|connection| {
-                [
-                    connection.spawn_shell(&runtime),
-                    connection.spawn_config(&runtime),
-                ]
+            .map(|connection| {
+                (
+                    connection.label().to_string(),
+                    vec![
+                        connection.spawn_shell(&runtime),
+                        connection.spawn_config(&runtime),
+                    ],
+                )
             })
             .collect();
         let changes = cx.spawn_in(window, async move |this, cx| {
@@ -261,6 +272,11 @@ impl Root {
             state
         });
         let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
+        let host_inputs = [
+            cx.new(|cx| InputState::new(window, cx).placeholder("Name (eos, helios)")),
+            cx.new(|cx| InputState::new(window, cx).placeholder("Server URL or pairing URL")),
+            cx.new(|cx| InputState::new(window, cx).placeholder("Pairing code or token")),
+        ];
         let palette = cx.new(|cx| CommandState::new(window, cx));
         let file_picker = cx.new(|cx| CommandState::new(window, cx));
         let weak = cx.entity().downgrade();
@@ -334,7 +350,12 @@ impl Root {
             thread_dirty: false,
             redraw_scheduled: false,
             focus: cx.focus_handle(),
-            _shell_tasks: shell_tasks,
+            host_tasks: shell_tasks,
+            config,
+            config_path,
+            change_sender: sender,
+            hosts_open: false,
+            host_inputs,
             _subscriptions: subscriptions,
             _changes: changes,
         }
@@ -1021,6 +1042,202 @@ impl Root {
         .detach();
     }
 
+    fn toggle_hosts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.hosts_open = !self.hosts_open;
+        if self.hosts_open {
+            self.host_inputs[0].update(cx, |state, cx| state.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    fn connect_host(&mut self, environment: &Environment) {
+        let connection = Connection::new(environment, self.change_sender.clone());
+        self.host_tasks.insert(
+            environment.label.clone(),
+            vec![
+                connection.spawn_shell(&self.runtime),
+                connection.spawn_config(&self.runtime),
+            ],
+        );
+        self.connections.push(connection);
+    }
+
+    /// Adds a host from the dialog: a pairing URL, or a server URL with a pairing code (exchanged
+    /// for a token) or a token. The token is checked against the server before it is saved.
+    fn add_host(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let [label, url, secret] = self
+            .host_inputs
+            .clone()
+            .map(|input| input.read(cx).value().trim().to_string());
+        if label.is_empty() || self.connection(&label).is_some() {
+            self.message = Some("Give the host a name no other host has.".into());
+            cx.notify();
+            return;
+        }
+        let (origin, code, is_token) = match config::pairing_url(&url) {
+            Some((origin, code)) => (origin, code, false),
+            None if secret.is_empty() => {
+                self.message = Some(
+                    "Paste a pairing URL, or a server URL with a pairing code or token.".into(),
+                );
+                cx.notify();
+                return;
+            }
+            None => {
+                let is_token = secret.len() > 32;
+                (url.trim_end_matches('/').to_string(), secret, is_token)
+            }
+        };
+        let runtime = self.runtime.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let token = on_runtime(&runtime, {
+                let origin = origin.clone();
+                async move {
+                    let token = if is_token {
+                        code
+                    } else {
+                        Api::new(&origin, "").pair(&code, "T3 Code (GPUI)").await?
+                    };
+                    Api::new(&origin, &token).get("/api/auth/session").await?;
+                    Ok(token)
+                }
+            })
+            .await;
+            let _ = this.update_in(cx, |root, window, cx| {
+                match token {
+                    Ok(token) => {
+                        let environment = Environment {
+                            label,
+                            http_base_url: origin,
+                            token,
+                        };
+                        let mut next = root.config.clone();
+                        next.environments.push(environment.clone());
+                        match next.save(&root.config_path) {
+                            Ok(()) => {
+                                root.config = next;
+                                root.connect_host(&environment);
+                                for input in root.host_inputs.clone() {
+                                    input.update(cx, |state, cx| state.set_value("", window, cx));
+                                }
+                                root.message = None;
+                            }
+                            Err(error) => {
+                                root.message = Some(format!("Saving the hosts failed: {error:#}"))
+                            }
+                        }
+                    }
+                    Err(error) => root.message = Some(format!("Adding the host failed: {error:#}")),
+                }
+                root.shell_dirty = true;
+                root.refresh(window, cx);
+            });
+        })
+        .detach();
+    }
+
+    fn remove_host(&mut self, label: String, window: &mut Window, cx: &mut Context<Self>) {
+        let mut next = self.config.clone();
+        next.environments.retain(|e| e.label != label);
+        if let Err(error) = next.save(&self.config_path) {
+            self.message = Some(format!("Saving the hosts failed: {error:#}"));
+            cx.notify();
+            return;
+        }
+        self.config = next;
+        for task in self.host_tasks.remove(&label).unwrap_or_default() {
+            task.abort();
+        }
+        self.connections.retain(|c| c.label() != label);
+        if self
+            .current()
+            .is_some_and(|(environment, _)| environment == label)
+        {
+            self.close_thread(cx);
+        }
+        if self.host_filter.as_deref() == Some(label.as_str()) {
+            self.host_filter = None;
+        }
+        self.shell_dirty = true;
+        self.refresh(window, cx);
+    }
+
+    fn render_hosts(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let rows = self
+            .config
+            .environments
+            .iter()
+            .enumerate()
+            .map(|(i, environment)| {
+                let label = environment.label.clone();
+                let removable = self.config.environments.len() > 1;
+                h_flex()
+                    .gap_2()
+                    .child(div().w(px(120.)).text_sm().child(environment.label.clone()))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .text_color(theme.muted_foreground)
+                            .child(environment.http_base_url.clone()),
+                    )
+                    .when(removable, |row| {
+                        row.child(
+                            Button::new(("remove-host", i))
+                                .label("Remove")
+                                .compact()
+                                .outline()
+                                .on_click(cx.listener(move |root, _, window, cx| {
+                                    root.remove_host(label.clone(), window, cx)
+                                })),
+                        )
+                    })
+            });
+        div()
+            .absolute()
+            .top(px(80.))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(
+                v_flex()
+                    .w(px(640.))
+                    .p_4()
+                    .gap_3()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.background)
+                    .shadow_lg()
+                    .child(h_flex().child(div().flex_1().child("Hosts")).child(
+                        Button::new("close-hosts")
+                            .label("Close")
+                            .compact()
+                            .outline()
+                            .on_click(cx.listener(|root, _, window, cx| root.toggle_hosts(window, cx))),
+                    ))
+                    .child(v_flex().gap_1().children(rows))
+                    .child(div().text_xs().text_color(theme.muted_foreground).child(
+                        "Add a host with the pairing URL from `t3 pair`, or its server URL and a pairing code or a token from `t3 auth session issue`. The first host is the primary one.",
+                    ))
+                    .children(self.host_inputs.iter().map(Input::new))
+                    .child(
+                        h_flex().justify_end().child(
+                            Button::new("add-host")
+                                .label("Add host")
+                                .compact()
+                                .primary()
+                                .on_click(cx.listener(|root, _, window, cx| root.add_host(window, cx))),
+                        ),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn toggle_diff(&mut self, cx: &mut Context<Self>) {
         if self
             .file_panel
@@ -1223,7 +1440,7 @@ impl Root {
 
     fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 8] = [
+        let commands: [(&str, Box<dyn Action>); 9] = [
             ("New thread", Box::new(NewThread)),
             ("Next Done or waiting thread", Box::new(NextDone)),
             ("Settle the thread", Box::new(Settle)),
@@ -1232,6 +1449,7 @@ impl Root {
             ("Pick a model", Box::new(ToggleModelPicker)),
             ("Cycle the runtime mode", Box::new(CycleRuntimeMode)),
             ("Toggle the sidebar", Box::new(ToggleSidebar)),
+            ("Manage hosts", Box::new(ManageHosts)),
         ];
         let threads = self.entries.iter().map(|entry| {
             CommandItem::new()
@@ -2150,6 +2368,16 @@ impl Root {
             .child(statuses)
             .children(filters)
             .child(
+                div().px_2().pt_1().child(
+                    Button::new("hosts")
+                        .label("Hosts")
+                        .compact()
+                        .outline()
+                        .w_full()
+                        .on_click(cx.listener(|root, _, window, cx| root.toggle_hosts(window, cx))),
+                ),
+            )
+            .child(
                 div().px_2().pt_2().child(
                     Button::new("new-thread")
                         .label("New thread")
@@ -2674,6 +2902,7 @@ impl Render for Root {
             && self.draft.is_none()
             && !self.palette_open
             && !self.file_picker_open
+            && !self.hosts_open
         {
             self.focus.focus(window, cx);
         }
@@ -2699,6 +2928,9 @@ impl Render for Root {
                 root.toggle_file_picker(window, cx)
             }))
             .on_action(cx.listener(|root, _: &ToggleDiff, _, cx| root.toggle_diff(cx)))
+            .on_action(
+                cx.listener(|root, _: &ManageHosts, window, cx| root.toggle_hosts(window, cx)),
+            )
             .on_action(cx.listener(|root, _: &CloseFilePanel, _, cx| {
                 root.file_panel = None;
                 cx.notify();
@@ -2764,13 +2996,20 @@ impl Render for Root {
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))
             })
+            .when(self.hosts_open, |root_el| {
+                root_el.child(self.render_hosts(cx))
+            })
             .when(self.file_picker_open, |root_el| {
                 root_el.child(self.render_file_picker(cx))
             })
     }
 }
 
-pub fn run(config: Config, settings: ClientSettings) -> anyhow::Result<()> {
+pub fn run(
+    config: Config,
+    config_path: std::path::PathBuf,
+    settings: ClientSettings,
+) -> anyhow::Result<()> {
     let drafts_path = drafts::default_path()?;
     let drafts = Drafts::load(&drafts_path)?;
     let runtime = Runtime::new()?;
@@ -2795,7 +3034,16 @@ pub fn run(config: Config, settings: ClientSettings) -> anyhow::Result<()> {
             ..Default::default()
         };
         gpui_kit::open_window(options, cx, |window, cx| {
-            cx.new(|cx| Root::new(config, settings, (drafts, drafts_path), handle, window, cx))
+            cx.new(|cx| {
+                Root::new(
+                    (config, config_path),
+                    settings,
+                    (drafts, drafts_path),
+                    handle,
+                    window,
+                    cx,
+                )
+            })
         })
         .expect("open the window");
     });

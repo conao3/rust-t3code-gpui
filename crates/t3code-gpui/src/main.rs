@@ -62,12 +62,15 @@ enum Failure {
     Other(anyhow::Error),
 }
 
+fn config_path(path: Option<PathBuf>) -> Result<PathBuf, Failure> {
+    match path {
+        Some(path) => Ok(path),
+        None => Config::default_path().map_err(Failure::Other),
+    }
+}
+
 fn load(path: Option<PathBuf>) -> Result<Config, Failure> {
-    let path = match path {
-        Some(path) => path,
-        None => Config::default_path().map_err(Failure::Other)?,
-    };
-    Config::load(&path).map_err(Failure::Other)
+    Config::load(&config_path(path)?).map_err(Failure::Other)
 }
 
 fn list_environments(config: &Config) -> Value {
@@ -108,7 +111,9 @@ fn run(cli: Cli) -> Result<(), Failure> {
             let settings = client_settings::default_path()
                 .and_then(|path| client_settings::ClientSettings::load(&path))
                 .map_err(Failure::Other)?;
-            app::run(load(cli.config)?, settings).map_err(Failure::Other)
+            let path = config_path(cli.config)?;
+            let config = Config::load(&path).map_err(Failure::Other)?;
+            app::run(config, path, settings).map_err(Failure::Other)
         }
         Some(Command::Environment { command }) => {
             let config = load(cli.config)?;

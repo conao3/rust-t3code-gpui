@@ -128,6 +128,65 @@ impl Api {
         self.request(reqwest::Method::POST, path, body).await
     }
 
+    /// Exchanges a one-time pairing credential for a bearer token, as T3's clients do at
+    /// `/oauth/token`.
+    pub async fn pair(&self, credential: &str, label: &str) -> Result<String> {
+        let response = self
+            .http
+            .post(format!("{}/oauth/token", self.origin))
+            .form(&[
+                (
+                    "grant_type",
+                    "urn:ietf:params:oauth:grant-type:token-exchange",
+                ),
+                ("subject_token", credential),
+                (
+                    "subject_token_type",
+                    "urn:t3:params:oauth:token-type:environment-bootstrap",
+                ),
+                (
+                    "requested_token_type",
+                    "urn:ietf:params:oauth:token-type:access_token",
+                ),
+                ("client_label", label),
+                ("client_device_type", "desktop"),
+            ])
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| {
+                err_exit(
+                    "T3_REQUEST_FAILED",
+                    exit::UNAVAILABLE,
+                    format!("POST /oauth/token failed: {e}"),
+                )
+            })?;
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(err(
+                "T3_API_ERROR",
+                format!(
+                    "T3 refused the pairing code (HTTP {status}): {}",
+                    text.chars().take(200).collect::<String>()
+                ),
+            ));
+        }
+        serde_json::from_str::<Value>(&text)
+            .ok()
+            .and_then(|v| {
+                v.get("access_token")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+            .ok_or_else(|| {
+                err(
+                    "T3_API_ERROR",
+                    "T3 answered the pairing without a token.".to_string(),
+                )
+            })
+    }
+
     /// Posts raw bytes, as an attachment upload sends a file to the URL T3 issued for it.
     pub async fn post_bytes(&self, path: &str, content_type: &str, bytes: Vec<u8>) -> Result<()> {
         let response = self

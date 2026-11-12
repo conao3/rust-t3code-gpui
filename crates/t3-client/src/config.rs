@@ -2,9 +2,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Environment {
     pub label: String,
@@ -12,10 +12,25 @@ pub struct Environment {
     pub token: String,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     pub environments: Vec<Environment>,
+}
+
+/// The server origin and pairing code of a pairing URL (`<origin>/pair#token=<code>`, or the
+/// same with `?token=`), as `t3 pair` prints it.
+pub fn pairing_url(url: &str) -> Option<(String, String)> {
+    let url = url.trim();
+    let (base, code) = url
+        .split_once("#token=")
+        .or_else(|| url.split_once("?token="))?;
+    let origin = base
+        .strip_suffix("/pair")
+        .unwrap_or(base)
+        .trim_end_matches('/');
+    let code = code.split(['&', '#']).next()?.trim();
+    (origin.starts_with("http") && !code.is_empty()).then(|| (origin.to_string(), code.to_string()))
 }
 
 impl Config {
@@ -75,6 +90,22 @@ impl Config {
         Ok(config)
     }
 
+    /// Writes the environments to `path` readable only by the owner, replacing the file in one step.
+    pub fn save(&self, path: &Path) -> Result<()> {
+        let text = serde_json::to_string_pretty(self)?;
+        Config::parse(&text)?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("cannot create {}", dir.display()))?;
+        }
+        let partial = path.with_extension("json.partial");
+        std::fs::write(&partial, format!("{text}\n"))
+            .with_context(|| format!("cannot write {}", partial.display()))?;
+        std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(0o600))?;
+        std::fs::rename(&partial, path)
+            .with_context(|| format!("cannot replace {}", path.display()))
+    }
+
     pub fn find(&self, label: &str) -> Option<&Environment> {
         self.environments.iter().find(|e| e.label == label)
     }
@@ -120,5 +151,41 @@ mod tests {
         assert!(Config::load(file.path()).is_err());
         std::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o600)).unwrap();
         assert!(Config::load(file.path()).is_ok());
+    }
+
+    #[test]
+    fn a_saved_config_loads_back_and_is_private() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t3code-gpui/environments.json");
+        let config = Config {
+            environments: vec![Environment {
+                label: "eos".into(),
+                http_base_url: "http://127.0.0.1:3773".into(),
+                token: "secret".into(),
+            }],
+        };
+        config.save(&path).unwrap();
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(Config::load(&path).unwrap(), config);
+        let empty = Config {
+            environments: vec![],
+        };
+        assert!(empty.save(&path).is_err());
+    }
+
+    #[test]
+    fn pairing_urls_give_the_origin_and_code() {
+        assert_eq!(
+            pairing_url("http://127.0.0.1:38792/pair#token=3FLT3TD7BAWT"),
+            Some(("http://127.0.0.1:38792".into(), "3FLT3TD7BAWT".into()))
+        );
+        assert_eq!(
+            pairing_url(" https://h.ts.net:8443/pair?token=ABC&x=1 "),
+            Some(("https://h.ts.net:8443".into(), "ABC".into()))
+        );
+        assert_eq!(pairing_url("3FLT3TD7BAWT"), None);
     }
 }
