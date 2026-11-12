@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use t3_client::config::Environment;
-use t3_client::session::{Change, Connection, ConnectionStatus};
+use t3_client::session::{Change, Connection, ConnectionStatus, Launch};
 
 struct Server {
     child: Child,
@@ -225,5 +225,24 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
             server.origin,
             connection.environment_id().unwrap()
         )
+    );
+
+    let launched_id = uuid::Uuid::new_v4().to_string();
+    let rejected = connection
+        .launch_thread(Launch {
+            thread_id: &launched_id,
+            project_id: &project_id,
+            title: "launched",
+            model: json!({"instanceId": "integration-missing", "model": "none"}),
+            runtime_mode: "full-access",
+            text: "hello",
+        })
+        .await
+        .expect_err("a disabled provider instance");
+    assert!(
+        rejected
+            .to_string()
+            .starts_with("T3 rejected the new thread: Provider instance"),
+        "{rejected:#}"
     );
 }

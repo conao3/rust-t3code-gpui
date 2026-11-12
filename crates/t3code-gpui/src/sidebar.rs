@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_json::Value;
 use t3_client::projection::ShellState;
 
@@ -28,6 +30,7 @@ impl ThreadStatus {
 pub struct ThreadEntry {
     pub environment: String,
     pub thread_id: String,
+    pub project_id: String,
     pub title: String,
     pub project_title: String,
     pub status: ThreadStatus,
@@ -100,6 +103,7 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
             ThreadEntry {
                 environment: environment.to_string(),
                 thread_id: text(thread, "id").to_string(),
+                project_id: project_id.to_string(),
                 title: text(thread, "title").to_string(),
                 project_title,
                 status: status_of(thread),
@@ -116,6 +120,71 @@ pub fn sort_entries(entries: &mut [ThreadEntry]) {
             .cmp(&settled(b))
             .then_with(|| b.updated_at.cmp(&a.updated_at))
     });
+}
+
+impl ThreadEntry {
+    pub fn is(&self, environment: &str, thread_id: &str) -> bool {
+        self.environment == environment && self.thread_id == thread_id
+    }
+
+    pub fn key(&self) -> (String, String) {
+        (self.environment.clone(), self.thread_id.clone())
+    }
+}
+
+/// The entries after the current one, wrapping around, without the current one. With no
+/// current entry, every entry from the top.
+fn ring<'a>(
+    entries: &'a [ThreadEntry],
+    current: Option<(&str, &str)>,
+    forward: bool,
+) -> Vec<&'a ThreadEntry> {
+    let position = current.and_then(|(env, id)| entries.iter().position(|e| e.is(env, id)));
+    let mut ordered: Vec<&ThreadEntry> = match position {
+        Some(i) => entries[i + 1..].iter().chain(&entries[..i]).collect(),
+        None => entries.iter().collect(),
+    };
+    if !forward {
+        ordered.reverse();
+    }
+    ordered
+}
+
+pub fn adjacent<'a>(
+    entries: &'a [ThreadEntry],
+    current: Option<(&str, &str)>,
+    forward: bool,
+) -> Option<&'a ThreadEntry> {
+    ring(entries, current, forward).into_iter().next()
+}
+
+pub fn next_with<'a>(
+    entries: &'a [ThreadEntry],
+    current: Option<(&str, &str)>,
+    wanted: impl Fn(&ThreadEntry) -> bool,
+) -> Option<&'a ThreadEntry> {
+    ring(entries, current, true).into_iter().find(|e| wanted(e))
+}
+
+pub fn needs_attention(status: ThreadStatus) -> bool {
+    matches!(status, ThreadStatus::Done | ThreadStatus::Input)
+}
+
+/// Threads that became Done or started waiting for input since the previous listing. Threads
+/// the previous listing did not have are not reported, so the first listing reports nothing.
+pub fn newly_needing_attention<'a>(
+    previous: &HashMap<(String, String), ThreadStatus>,
+    entries: &'a [ThreadEntry],
+) -> Vec<&'a ThreadEntry> {
+    entries
+        .iter()
+        .filter(|e| needs_attention(e.status))
+        .filter(|e| {
+            previous
+                .get(&e.key())
+                .is_some_and(|before| *before != e.status)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -210,5 +279,64 @@ mod tests {
         assert_eq!(ids, ["new", "old", "settled"]);
         assert_eq!(list[0].project_title, "idea");
         assert_eq!(list[0].environment, "eos");
+    }
+
+    fn entry(id: &str, status: ThreadStatus) -> ThreadEntry {
+        ThreadEntry {
+            environment: "eos".into(),
+            thread_id: id.into(),
+            project_id: "p".into(),
+            title: id.into(),
+            project_title: String::new(),
+            status,
+            updated_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn adjacent_threads_wrap_around_the_list() {
+        let list = [
+            entry("a", ThreadStatus::Idle),
+            entry("b", ThreadStatus::Done),
+            entry("c", ThreadStatus::Settled),
+        ];
+        let id = |e: Option<&ThreadEntry>| e.map(|e| e.thread_id.clone());
+        assert_eq!(
+            id(adjacent(&list, Some(("eos", "c")), true)),
+            Some("a".into())
+        );
+        assert_eq!(
+            id(adjacent(&list, Some(("eos", "a")), false)),
+            Some("c".into())
+        );
+        assert_eq!(id(adjacent(&list, None, true)), Some("a".into()));
+        assert_eq!(id(adjacent(&list, None, false)), Some("c".into()));
+        let open = |e: &ThreadEntry| e.status != ThreadStatus::Settled;
+        assert_eq!(
+            id(next_with(&list, Some(("eos", "b")), open)),
+            Some("a".into())
+        );
+        assert_eq!(id(next_with(&list[..1], Some(("eos", "a")), open)), None);
+    }
+
+    #[test]
+    fn attention_is_reported_once_per_change() {
+        let before: HashMap<(String, String), ThreadStatus> = [
+            (("eos".into(), "a".into()), ThreadStatus::Working),
+            (("eos".into(), "b".into()), ThreadStatus::Done),
+            (("eos".into(), "c".into()), ThreadStatus::Working),
+        ]
+        .into();
+        let now = [
+            entry("a", ThreadStatus::Done),
+            entry("b", ThreadStatus::Done),
+            entry("c", ThreadStatus::Input),
+            entry("new", ThreadStatus::Done),
+        ];
+        let ids: Vec<&str> = newly_needing_attention(&before, &now)
+            .iter()
+            .map(|e| e.thread_id.as_str())
+            .collect();
+        assert_eq!(ids, ["a", "c"]);
     }
 }

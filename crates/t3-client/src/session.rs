@@ -37,6 +37,15 @@ pub enum Change {
     },
 }
 
+pub struct Launch<'a> {
+    pub thread_id: &'a str,
+    pub project_id: &'a str,
+    pub title: &'a str,
+    pub model: Value,
+    pub runtime_mode: &'a str,
+    pub text: &'a str,
+}
+
 pub struct Connection {
     label: String,
     http_base_url: String,
@@ -150,6 +159,42 @@ impl Connection {
             .get("sequence")
             .and_then(Value::as_u64)
             .with_context(|| format!("T3 returned no sequence for {command_type}"))
+    }
+
+    pub async fn launch_thread(&self, launch: Launch<'_>) -> Result<String> {
+        let payload = json!({
+            "commandId": uuid::Uuid::new_v4().to_string(),
+            "creationSource": "web",
+            "threadId": launch.thread_id,
+            "projectId": launch.project_id,
+            "title": launch.title,
+            "generateTitle": true,
+            "modelSelection": launch.model,
+            "runtimeMode": launch.runtime_mode,
+            "interactionMode": "default",
+            "workspaceStrategy": {"type": "root"},
+            "initialMessage": {
+                "messageId": uuid::Uuid::new_v4().to_string(),
+                "text": launch.text,
+                "attachments": [],
+            },
+        });
+        let result = self
+            .rpc()
+            .await?
+            .call("orchestration.launchThread", payload, DISPATCH_TIMEOUT)
+            .await
+            .map_err(|e| match e {
+                RpcError::Failed { message, .. } => {
+                    anyhow!("T3 rejected the new thread: {message}")
+                }
+                other => other.into(),
+            })?;
+        result
+            .get("threadId")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .context("T3 returned no thread id for the new thread")
     }
 
     pub async fn send_message(&self, thread_id: &str, text: &str, queue: bool) -> Result<u64> {

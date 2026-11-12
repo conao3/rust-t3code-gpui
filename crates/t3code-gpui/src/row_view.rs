@@ -1,0 +1,275 @@
+use std::collections::HashMap;
+
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Selectable as _,
+    button::{Button, ButtonVariants as _},
+    h_flex,
+    text::{TextView, TextViewState},
+    v_flex,
+};
+use gpui_kit::prelude::FluentBuilder as _;
+use gpui_kit::*;
+
+use crate::timeline::{Draft, Pending, Question, Row, RowKind};
+
+#[derive(Clone)]
+pub enum RowEvent {
+    Respond {
+        request_id: String,
+        decision: String,
+    },
+    Submit {
+        request_id: String,
+    },
+}
+
+pub struct RowView {
+    row: Row,
+    markdown: Option<Entity<TextViewState>>,
+    drafts: HashMap<String, Draft>,
+    responding: bool,
+}
+
+impl EventEmitter<RowEvent> for RowView {}
+
+impl RowView {
+    pub fn new(row: Row, cx: &mut Context<Self>) -> Self {
+        let markdown = (row.kind == RowKind::Assistant)
+            .then(|| cx.new(|cx| TextViewState::markdown(&row.text, cx)));
+        Self {
+            row,
+            markdown,
+            drafts: HashMap::new(),
+            responding: false,
+        }
+    }
+
+    pub fn update(&mut self, row: Row, cx: &mut Context<Self>) {
+        if row == self.row {
+            return;
+        }
+        if let Some(markdown) = &self.markdown {
+            markdown.update(cx, |state, cx| state.set_text(&row.text, cx));
+        }
+        if row.pending != self.row.pending {
+            self.responding = false;
+            if row.pending.is_none() {
+                self.drafts.clear();
+            }
+        }
+        self.row = row;
+        cx.notify();
+    }
+
+    pub fn drafts(&self) -> &HashMap<String, Draft> {
+        &self.drafts
+    }
+
+    pub fn set_responding(&mut self, responding: bool, cx: &mut Context<Self>) {
+        self.responding = responding;
+        cx.notify();
+    }
+
+    fn render_question(
+        &self,
+        qi: usize,
+        question: &Question,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = cx.theme();
+        let draft = self.drafts.get(&question.id);
+        let options = question.options.iter().enumerate().map(|(oi, option)| {
+            let selected = draft.is_some_and(|d| d.selected.contains(&option.value));
+            let value = option.value.clone();
+            let question = question.clone();
+            Button::new(SharedString::from(format!("option-{qi}-{oi}")))
+                .label(option.label.clone())
+                .compact()
+                .outline()
+                .selected(selected)
+                .disabled(self.responding)
+                .when(!option.description.is_empty(), |b| {
+                    b.tooltip(option.description.clone())
+                })
+                .on_click(cx.listener(move |view, _, _, cx| {
+                    view.drafts
+                        .entry(question.id.clone())
+                        .or_default()
+                        .toggle(&question, &value);
+                    cx.notify();
+                }))
+        });
+        v_flex()
+            .gap_1()
+            .child(
+                h_flex()
+                    .gap_2()
+                    .when(!question.header.is_empty(), |row| {
+                        row.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child(question.header.clone()),
+                        )
+                    })
+                    .when(question.multi_select, |row| {
+                        row.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child("(multiple)"),
+                        )
+                    }),
+            )
+            .child(question.question.clone())
+            .child(h_flex().gap_1().flex_wrap().children(options))
+    }
+
+    fn render_pending(&self, pending: &Pending, cx: &mut Context<Self>) -> AnyElement {
+        let warning = cx.theme().warning;
+        let muted = cx.theme().muted_foreground;
+        let mono = cx.theme().mono_font_family.clone();
+        let card = v_flex()
+            .p_2()
+            .gap_2()
+            .rounded_md()
+            .border_1()
+            .border_color(warning)
+            .child(self.row.text.clone());
+        match pending {
+            Pending::Approval {
+                request_id,
+                subject,
+                options,
+            } => {
+                let buttons = options.iter().enumerate().map(|(i, option)| {
+                    let event = RowEvent::Respond {
+                        request_id: request_id.clone(),
+                        decision: option.decision.clone(),
+                    };
+                    let button = Button::new(("decision", i))
+                        .label(option.label.clone())
+                        .compact()
+                        .disabled(self.responding)
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            view.responding = true;
+                            cx.emit(event.clone());
+                            cx.notify();
+                        }));
+                    if option.decision == "accept" {
+                        button.primary()
+                    } else {
+                        button.outline()
+                    }
+                });
+                card.when(!subject.is_empty(), |card| {
+                    card.child(
+                        div()
+                            .text_sm()
+                            .font_family(mono)
+                            .text_color(muted)
+                            .child(subject.clone()),
+                    )
+                })
+                .child(h_flex().gap_2().flex_wrap().children(buttons))
+                .into_any_element()
+            }
+            Pending::Question {
+                request_id,
+                questions,
+            } => {
+                let request_id = request_id.clone();
+                let custom = questions.iter().any(|q| q.allow_custom);
+                let items: Vec<AnyElement> = questions
+                    .iter()
+                    .enumerate()
+                    .map(|(qi, q)| self.render_question(qi, q, cx).into_any_element())
+                    .collect();
+                card.children(items)
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Button::new("submit")
+                                    .label("Submit")
+                                    .compact()
+                                    .primary()
+                                    .disabled(self.responding)
+                                    .on_click(cx.listener(move |_, _, _, cx| {
+                                        cx.emit(RowEvent::Submit {
+                                            request_id: request_id.clone(),
+                                        });
+                                    })),
+                            )
+                            .when(custom, |row| {
+                                row.child(div().text_xs().text_color(muted).child(
+                                    "Text in the message box answers the first open question.",
+                                ))
+                            }),
+                    )
+                    .into_any_element()
+            }
+        }
+    }
+}
+
+impl Render for RowView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let base = div().w_full().px_4();
+        match self.row.kind {
+            RowKind::Assistant => match &self.markdown {
+                Some(state) => base
+                    .py_1()
+                    .child(TextView::new(state).selectable(true))
+                    .into_any_element(),
+                None => base.into_any_element(),
+            },
+            RowKind::User => base
+                .py_2()
+                .child(
+                    div()
+                        .p_3()
+                        .rounded_md()
+                        .bg(theme.secondary)
+                        .child(self.row.text.clone()),
+                )
+                .into_any_element(),
+            RowKind::Reasoning => base
+                .py_1()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .child(format!("Thinking: {}", self.row.text))
+                .into_any_element(),
+            RowKind::Tool | RowKind::Notice => base
+                .py_0p5()
+                .text_sm()
+                .font_family(theme.mono_font_family.clone())
+                .text_color(theme.muted_foreground)
+                .child(self.row.text.clone())
+                .into_any_element(),
+            RowKind::Request => match self.row.pending.clone() {
+                Some(pending) => base
+                    .py_1()
+                    .child(self.render_pending(&pending, cx))
+                    .into_any_element(),
+                None => base
+                    .py_1()
+                    .child(
+                        div()
+                            .p_2()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(theme.border)
+                            .child(self.row.text.clone()),
+                    )
+                    .into_any_element(),
+            },
+            RowKind::Error => base
+                .py_1()
+                .text_color(theme.danger)
+                .child(self.row.text.clone())
+                .into_any_element(),
+        }
+    }
+}

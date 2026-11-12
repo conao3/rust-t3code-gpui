@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_json::Value;
 use t3_client::projection::ThreadState;
 
@@ -15,11 +17,133 @@ pub enum RowKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalOption {
+    pub decision: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuestionOption {
+    pub label: String,
+    pub value: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Question {
+    pub id: String,
+    pub header: String,
+    pub question: String,
+    pub options: Vec<QuestionOption>,
+    pub multi_select: bool,
+    pub allow_custom: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pending {
+    Approval {
+        request_id: String,
+        subject: String,
+        options: Vec<ApprovalOption>,
+    },
+    Question {
+        request_id: String,
+        questions: Vec<Question>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
     pub key: String,
     pub kind: RowKind,
     pub text: String,
     pub live: bool,
+    pub pending: Option<Pending>,
+}
+
+const DEFAULT_APPROVAL_OPTIONS: &[(&str, &str)] = &[
+    ("cancel", "Cancel"),
+    ("decline", "Decline"),
+    ("acceptForSession", "Always allow this session"),
+    ("accept", "Approve"),
+];
+
+fn approval_options(item: &Value) -> Vec<ApprovalOption> {
+    match item.get("options").and_then(Value::as_array) {
+        Some(options) if !options.is_empty() => options
+            .iter()
+            .map(|o| ApprovalOption {
+                decision: text(o, "decision").to_string(),
+                label: text(o, "label").to_string(),
+            })
+            .collect(),
+        _ => DEFAULT_APPROVAL_OPTIONS
+            .iter()
+            .map(|(decision, label)| ApprovalOption {
+                decision: decision.to_string(),
+                label: label.to_string(),
+            })
+            .collect(),
+    }
+}
+
+fn array<'a>(value: &'a Value, key: &str) -> &'a [Value] {
+    value
+        .get(key)
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+}
+
+fn questions(item: &Value) -> Vec<Question> {
+    array(item, "questions")
+        .iter()
+        .map(|q| Question {
+            id: text(q, "id").to_string(),
+            header: text(q, "header").to_string(),
+            question: text(q, "question").to_string(),
+            options: array(q, "options")
+                .iter()
+                .map(|o| QuestionOption {
+                    label: text(o, "label").to_string(),
+                    value: o
+                        .get("value")
+                        .and_then(Value::as_str)
+                        .unwrap_or(text(o, "label"))
+                        .to_string(),
+                    description: text(o, "description").to_string(),
+                })
+                .collect(),
+            multi_select: q.get("multiSelect").and_then(Value::as_bool) == Some(true),
+            allow_custom: q.get("allowCustomAnswer").and_then(Value::as_bool) != Some(false),
+        })
+        .collect()
+}
+
+fn pending_of(state: &ThreadState, item: &Value) -> Option<Pending> {
+    let request_id = text(item, "requestId");
+    let pending = state
+        .pending_requests()
+        .iter()
+        .any(|r| text(r, "id") == request_id);
+    if request_id.is_empty() || !pending {
+        return None;
+    }
+    match text(item, "type") {
+        "approval_request" => Some(Pending::Approval {
+            request_id: request_id.to_string(),
+            subject: state
+                .request_subject(request_id)
+                .map(tool_summary)
+                .unwrap_or_default(),
+            options: approval_options(item),
+        }),
+        "user_input_request" => Some(Pending::Question {
+            request_id: request_id.to_string(),
+            questions: questions(item),
+        }),
+        _ => None,
+    }
 }
 
 pub fn split_blocks(text: &str) -> Vec<&str> {
@@ -131,6 +255,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 kind: RowKind::User,
                 text: text(item, "text").to_string(),
                 live: false,
+                pending: None,
             }),
             "assistant_message" | "proposed_plan" => {
                 let body = match text(item, "type") {
@@ -145,6 +270,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                         kind: RowKind::Assistant,
                         text: block.to_string(),
                         live: streaming && i == last,
+                        pending: None,
                     });
                 }
             }
@@ -153,9 +279,11 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 kind: RowKind::Reasoning,
                 text: first_line(text(item, "text"), 200),
                 live: streaming,
+                pending: None,
             }),
             "approval_request" | "user_input_request" | "secret_request" | "link_request" => {
-                let pending = matches!(text(item, "status"), "pending" | "waiting" | "running");
+                let card = pending_of(state, item);
+                let pending = card.is_some();
                 let label = match text(item, "type") {
                     "approval_request" => "Approval",
                     "user_input_request" => "Question",
@@ -179,6 +307,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     kind: RowKind::Request,
                     text: format!("{label} ({state_label}): {}", first_line(prompt, 200)),
                     live: pending,
+                    pending: card,
                 });
             }
             "error" => rows.push(Row {
@@ -190,12 +319,14 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     .unwrap_or("error")
                     .to_string(),
                 live: false,
+                pending: None,
             }),
             kind if TOOL_TYPES.contains(&kind) => rows.push(Row {
                 key: id.to_string(),
                 kind: RowKind::Tool,
                 text: tool_summary(item),
                 live: false,
+                pending: None,
             }),
             "system_notice" | "run_interrupt_request" | "run_interrupt_result" => rows.push(Row {
                 key: id.to_string(),
@@ -207,11 +338,85 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     200,
                 ),
                 live: false,
+                pending: None,
             }),
             _ => {}
         }
     }
     rows
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Draft {
+    pub selected: Vec<String>,
+    pub custom: String,
+}
+
+impl Draft {
+    pub fn toggle(&mut self, question: &Question, value: &str) {
+        if question.multi_select {
+            match self.selected.iter().position(|v| v == value) {
+                Some(i) => {
+                    self.selected.remove(i);
+                }
+                None => self.selected.push(value.to_string()),
+            }
+        } else {
+            self.selected = vec![value.to_string()];
+        }
+    }
+}
+
+pub fn answer(question: &Question, draft: Option<&Draft>) -> Option<Value> {
+    let custom = draft
+        .map(|d| d.custom.trim())
+        .filter(|c| question.allow_custom && !c.is_empty());
+    if let Some(custom) = custom {
+        return Some(Value::from(custom));
+    }
+    let selected: Vec<&String> = draft
+        .map(|d| d.selected.iter())
+        .into_iter()
+        .flatten()
+        .filter(|v| question.options.iter().any(|o| &o.value == *v))
+        .collect();
+    if question.multi_select {
+        (!selected.is_empty())
+            .then(|| Value::from(selected.into_iter().cloned().collect::<Vec<_>>()))
+    } else {
+        selected.first().map(|v| Value::from(v.as_str()))
+    }
+}
+
+pub fn answers(questions: &[Question], drafts: &HashMap<String, Draft>) -> Option<Value> {
+    let mut map = serde_json::Map::new();
+    for question in questions {
+        map.insert(
+            question.id.clone(),
+            answer(question, drafts.get(&question.id))?,
+        );
+    }
+    Some(Value::Object(map))
+}
+
+/// The answers with typed text as the custom answer of the first question that takes one and
+/// has no answer yet, or of the first question that takes one when every question has one.
+pub fn answers_with_text(
+    questions: &[Question],
+    drafts: &HashMap<String, Draft>,
+    typed: &str,
+) -> Option<Value> {
+    let typed = typed.trim();
+    if typed.is_empty() {
+        return answers(questions, drafts);
+    }
+    let target = questions
+        .iter()
+        .find(|q| q.allow_custom && answer(q, drafts.get(&q.id)).is_none())
+        .or_else(|| questions.iter().find(|q| q.allow_custom))?;
+    let mut drafts = drafts.clone();
+    drafts.entry(target.id.clone()).or_default().custom = typed.to_string();
+    answers(questions, &drafts)
 }
 
 #[cfg(test)]
@@ -220,10 +425,14 @@ mod tests {
     use serde_json::json;
 
     fn state(items: Vec<Value>) -> ThreadState {
+        state_with(items, vec![])
+    }
+
+    fn state_with(items: Vec<Value>, requests: Vec<Value>) -> ThreadState {
         ThreadState::from_snapshot(&json!({
             "kind": "snapshot",
             "snapshotSequence": 1,
-            "projection": {"thread": {"id": "t1"}, "turnItems": items},
+            "projection": {"thread": {"id": "t1"}, "turnItems": items, "runtimeRequests": requests},
         }))
         .unwrap()
     }
@@ -295,14 +504,103 @@ mod tests {
     }
 
     #[test]
-    fn a_pending_approval_is_a_live_request_row() {
-        let s = state(vec![json!({
-            "id": "q", "ordinal": 1, "type": "approval_request", "status": "pending",
-            "prompt": "Run rm -rf build?"
-        })]);
+    fn a_pending_approval_is_a_card_with_the_default_options() {
+        let s = state_with(
+            vec![
+                json!({"id": "a", "ordinal": 1, "type": "approval_request", "requestId": "r1",
+                       "prompt": "Run rm -rf build?"}),
+                json!({"id": "b", "ordinal": 2, "type": "approval_request", "requestId": "r0",
+                       "prompt": "old"}),
+            ],
+            vec![
+                json!({"id": "r1", "status": "pending"}),
+                json!({"id": "r0", "status": "resolved"}),
+            ],
+        );
         let rows = rows(&s);
-        assert_eq!(rows[0].kind, RowKind::Request);
         assert!(rows[0].live);
         assert_eq!(rows[0].text, "Approval (waiting): Run rm -rf build?");
+        let Some(Pending::Approval { options, .. }) = &rows[0].pending else {
+            panic!("{:?}", rows[0].pending);
+        };
+        let decisions: Vec<&str> = options.iter().map(|o| o.decision.as_str()).collect();
+        assert_eq!(
+            decisions,
+            ["cancel", "decline", "acceptForSession", "accept"]
+        );
+        assert!(rows[1].pending.is_none());
+        assert!(!rows[1].live);
+    }
+
+    fn question_card() -> Vec<Question> {
+        let s = state_with(
+            vec![
+                json!({"id": "q", "ordinal": 1, "type": "user_input_request", "requestId": "r1",
+                "questions": [
+                    {"id": "one", "header": "Pick", "question": "Which?",
+                     "options": [{"label": "A", "description": ""}, {"label": "B", "value": "b-value", "description": ""}]},
+                    {"id": "many", "header": "Many", "question": "Which ones?", "multiSelect": true,
+                     "allowCustomAnswer": false,
+                     "options": [{"label": "X", "description": ""}, {"label": "Y", "description": ""}]},
+                ]}),
+            ],
+            vec![json!({"id": "r1", "status": "pending"})],
+        );
+        match rows(&s).remove(0).pending {
+            Some(Pending::Question { questions, .. }) => questions,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn answers_wait_for_every_question_and_take_the_option_value() {
+        let questions = question_card();
+        let mut drafts: HashMap<String, Draft> = HashMap::new();
+        drafts
+            .entry("one".into())
+            .or_default()
+            .toggle(&questions[0], "A");
+        drafts
+            .entry("one".into())
+            .or_default()
+            .toggle(&questions[0], "b-value");
+        assert_eq!(answers(&questions, &drafts), None);
+        let many = drafts.entry("many".into()).or_default();
+        many.toggle(&questions[1], "X");
+        many.toggle(&questions[1], "Y");
+        many.toggle(&questions[1], "X");
+        many.custom = "ignored".into();
+        assert_eq!(
+            answers(&questions, &drafts),
+            Some(json!({"one": "b-value", "many": ["Y"]}))
+        );
+        drafts.get_mut("one").unwrap().custom = "  typed  ".into();
+        assert_eq!(
+            answers(&questions, &drafts),
+            Some(json!({"one": "typed", "many": ["Y"]}))
+        );
+    }
+
+    #[test]
+    fn typed_text_answers_the_first_open_question_that_takes_text() {
+        let questions = question_card();
+        let mut drafts: HashMap<String, Draft> = HashMap::new();
+        assert_eq!(answers_with_text(&questions, &drafts, "  "), None);
+        drafts
+            .entry("many".into())
+            .or_default()
+            .toggle(&questions[1], "X");
+        assert_eq!(
+            answers_with_text(&questions, &drafts, "free text"),
+            Some(json!({"one": "free text", "many": ["X"]}))
+        );
+        drafts
+            .entry("one".into())
+            .or_default()
+            .toggle(&questions[0], "A");
+        assert_eq!(
+            answers_with_text(&questions, &drafts, "override"),
+            Some(json!({"one": "override", "many": ["X"]}))
+        );
     }
 }

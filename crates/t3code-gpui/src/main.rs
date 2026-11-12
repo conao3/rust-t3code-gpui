@@ -1,4 +1,6 @@
 mod app;
+mod projects;
+mod row_view;
 mod sidebar;
 mod timeline;
 
