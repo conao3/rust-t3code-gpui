@@ -15,6 +15,7 @@ pub enum RowKind {
     Error,
     Notice,
     Plan,
+    Subagent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +66,7 @@ pub struct Row {
     pub live: bool,
     pub pending: Option<Pending>,
     pub detail: String,
+    pub link: Option<String>,
 }
 
 const DEFAULT_APPROVAL_OPTIONS: &[(&str, &str)] = &[
@@ -301,6 +303,16 @@ fn user_text(item: &Value) -> String {
     out
 }
 
+fn subagent_summary(item: &Value) -> String {
+    let status = text(item, "status");
+    let prompt = first_line(text(item, "prompt"), 160);
+    if status.is_empty() || status == "completed" {
+        format!("Subagent: {prompt}")
+    } else {
+        format!("Subagent ({status}): {prompt}")
+    }
+}
+
 const TOOL_TYPES: &[&str] = &[
     "command_execution",
     "file_change",
@@ -308,7 +320,6 @@ const TOOL_TYPES: &[&str] = &[
     "web_search",
     "dynamic_tool",
     "todo_list",
-    "subagent",
     "checkpoint",
     "compaction",
     "handoff",
@@ -334,6 +345,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: false,
                 pending: None,
                 detail: String::new(),
+                link: None,
             }),
             "assistant_message" | "proposed_plan" => {
                 let body = match text(item, "type") {
@@ -350,6 +362,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                         live: streaming && i == last,
                         pending: None,
                         detail: String::new(),
+                        link: None,
                     });
                 }
                 if text(item, "type") == "proposed_plan" && !streaming {
@@ -367,6 +380,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: streaming,
                 pending: None,
                 detail: text(item, "text").to_string(),
+                link: None,
             }),
             "approval_request" | "user_input_request" | "secret_request" | "link_request" => {
                 let label = match text(item, "type") {
@@ -401,6 +415,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     live: pending,
                     pending: card,
                     detail: String::new(),
+                    link: None,
                 });
             }
             "error" => rows.push(Row {
@@ -414,6 +429,27 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: false,
                 pending: None,
                 detail: String::new(),
+                link: None,
+            }),
+            "subagent" => rows.push(Row {
+                key: id.to_string(),
+                kind: RowKind::Subagent,
+                text: subagent_summary(item),
+                live: matches!(text(item, "status"), "running" | "pending" | "waiting"),
+                pending: None,
+                detail: [
+                    text(item, "prompt"),
+                    text(item, "progress"),
+                    text(item, "result"),
+                ]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+                link: item
+                    .get("childThreadId")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
             }),
             kind if TOOL_TYPES.contains(&kind) => rows.push(Row {
                 key: id.to_string(),
@@ -422,6 +458,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: false,
                 pending: None,
                 detail: tool_detail(item),
+                link: None,
             }),
             "system_notice" | "run_interrupt_request" | "run_interrupt_result" => rows.push(Row {
                 key: id.to_string(),
@@ -435,6 +472,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: false,
                 pending: None,
                 detail: String::new(),
+                link: None,
             }),
             _ => {}
         }
@@ -449,6 +487,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: true,
                 pending: Some(Pending::Plan { plan_id, markdown }),
                 detail: String::new(),
+                link: None,
             },
         );
     }
@@ -811,6 +850,7 @@ mod tests {
             live: false,
             pending: None,
             detail: String::new(),
+            link: None,
         };
         let rows = [
             row(RowKind::User),
@@ -859,6 +899,7 @@ mod tests {
             live: false,
             pending: None,
             detail: String::new(),
+            link: None,
         };
         let list = [
             row("Hello World"),
@@ -921,5 +962,18 @@ mod tests {
             user_text(&json!({"type": "user_message", "text": "plain"})),
             "plain"
         );
+    }
+
+    #[test]
+    fn subagent_rows_link_their_child_thread() {
+        let s = state(vec![
+            json!({"id": "s", "ordinal": 1, "type": "subagent", "status": "running",
+            "prompt": "Review the diff\nmore", "progress": "half way", "result": null, "childThreadId": "child-1"}),
+        ]);
+        let row = rows(&s).remove(0);
+        assert_eq!(row.kind, RowKind::Subagent);
+        assert_eq!(row.text, "Subagent (running): Review the diff");
+        assert_eq!(row.link.as_deref(), Some("child-1"));
+        assert_eq!(row.detail, "Review the diff\nmore\n\nhalf way");
     }
 }

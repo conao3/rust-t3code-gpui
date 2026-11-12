@@ -27,6 +27,9 @@ pub enum RowEvent {
         plan_id: String,
         markdown: String,
     },
+    OpenChild {
+        thread_id: String,
+    },
 }
 
 pub struct RowView {
@@ -281,7 +284,7 @@ impl Render for RowView {
                         .child(self.row.text.clone()),
                 )
                 .into_any_element(),
-            RowKind::Reasoning | RowKind::Tool => {
+            RowKind::Reasoning | RowKind::Tool | RowKind::Subagent => {
                 let summary = if self.row.kind == RowKind::Reasoning {
                     format!("Thinking: {}", self.row.text)
                 } else {
@@ -323,7 +326,24 @@ impl Render for RowView {
                             cx.notify();
                         }))
                     })
-                    .child(format!("{marker}{summary}"))
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(div().flex_1().min_w_0().child(format!("{marker}{summary}")))
+                            .when_some(self.row.link.clone(), |line, thread_id| {
+                                line.child(
+                                    Button::new("open-child")
+                                        .label("Open")
+                                        .compact()
+                                        .outline()
+                                        .on_click(cx.listener(move |_, _, _, cx| {
+                                            cx.emit(RowEvent::OpenChild {
+                                                thread_id: thread_id.clone(),
+                                            });
+                                        })),
+                                )
+                            }),
+                    )
                     .children(detail)
                     .into_any_element()
             }

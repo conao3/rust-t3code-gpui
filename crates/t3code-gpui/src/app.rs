@@ -776,7 +776,10 @@ impl Root {
                         let row = row.clone();
                         cx.new(|cx| RowView::new(row, cx))
                     };
-                    if matches!(row.kind, RowKind::Request | RowKind::Plan) {
+                    if matches!(
+                        row.kind,
+                        RowKind::Request | RowKind::Plan | RowKind::Subagent
+                    ) {
                         kept.insert(
                             row.key.clone(),
                             cx.subscribe_in(&view, window, Self::on_row_event),
@@ -818,6 +821,11 @@ impl Root {
             } => self.respond(view.clone(), request_id.clone(), decision.clone(), cx),
             RowEvent::Submit { request_id } => {
                 self.submit_answers(view.clone(), request_id.clone(), window, cx)
+            }
+            RowEvent::OpenChild { thread_id } => {
+                if let Some((environment, _)) = self.current() {
+                    self.open_thread(environment, thread_id.clone(), cx);
+                }
             }
             RowEvent::Implement { plan_id, markdown } => {
                 let (plan_id, markdown) = (plan_id.clone(), markdown.clone());
