@@ -374,6 +374,25 @@ impl Connection {
             })
     }
 
+    /// The entries T3 lists under a directory of the project (`""` is the root), with the
+    /// deeper entries it may include.
+    pub async fn list_entries(&self, cwd: &str, directory: &str) -> Result<Value> {
+        self.rpc()
+            .await?
+            .call(
+                "projects.listEntries",
+                json!({"cwd": cwd, "directoryPath": directory}),
+                DISPATCH_TIMEOUT,
+            )
+            .await
+            .map_err(|e| match e {
+                RpcError::Failed { message, .. } => {
+                    anyhow!("T3 could not list the folder: {message}")
+                }
+                other => other.into(),
+            })
+    }
+
     /// Uploads a file for a message and returns the attachment the message refers to it by.
     pub async fn upload_attachment(
         &self,

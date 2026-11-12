@@ -3,6 +3,7 @@ mod attachments;
 mod client_settings;
 mod completion;
 mod drafts;
+mod explorer;
 mod keymap;
 mod models;
 mod projects;

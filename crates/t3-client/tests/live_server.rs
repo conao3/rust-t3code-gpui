@@ -231,6 +231,18 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
             .any(|e| e["path"] == "README.md"),
         "{found}"
     );
+    let listed = connection
+        .list_entries(&workspace_root, "")
+        .await
+        .expect("projects.listEntries");
+    assert!(
+        listed["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["path"] == "README.md" && e["kind"] == "file"),
+        "{listed}"
+    );
 
     let thread_id = uuid::Uuid::new_v4().to_string();
     connection

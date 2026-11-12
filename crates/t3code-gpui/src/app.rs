@@ -25,6 +25,7 @@ use crate::attachments;
 use crate::client_settings::{self, ClientSettings};
 use crate::completion;
 use crate::drafts::{self, Drafts};
+use crate::explorer;
 use crate::keymap;
 use crate::models;
 use crate::projects::{self, ProjectGroup};
@@ -54,6 +55,7 @@ actions!(
         TogglePalette,
         ToggleFilePicker,
         ToggleDiff,
+        ToggleExplorer,
         ManageHosts,
         OpenSettings,
         CloseFilePanel,
@@ -175,6 +177,14 @@ enum PanelBody {
 
 type FindHits = Rc<Vec<(usize, std::ops::Range<usize>)>>;
 
+struct Explorer {
+    environment: String,
+    cwd: String,
+    directories: HashMap<String, Vec<explorer::Entry>>,
+    expanded: HashSet<String>,
+    error: Option<String>,
+}
+
 struct FilePanel {
     path: String,
     body: PanelBody,
@@ -265,6 +275,7 @@ pub struct Root {
     file_picker_open: bool,
     file_hits: Vec<String>,
     file_panel: Option<FilePanel>,
+    explorer: Option<Explorer>,
     file_find_input: Entity<InputState>,
     file_find_open: bool,
     panel_focus: FocusHandle,
@@ -412,6 +423,7 @@ impl Root {
             file_picker_open: false,
             file_hits: Vec::new(),
             file_panel: None,
+            explorer: None,
             file_find_input,
             file_find_open: false,
             panel_focus: cx.focus_handle(),
@@ -1650,6 +1662,193 @@ impl Root {
             .into_any_element()
     }
 
+    fn toggle_explorer(&mut self, cx: &mut Context<Self>) {
+        if self.explorer.take().is_some() {
+            cx.notify();
+            return;
+        }
+        let Some((environment, cwd)) = self.composer_cwd() else {
+            self.message = Some("Open a thread or a new thread first.".into());
+            cx.notify();
+            return;
+        };
+        self.start_explorer(environment, cwd, cx);
+    }
+
+    fn start_explorer(&mut self, environment: String, cwd: String, cx: &mut Context<Self>) {
+        self.explorer = Some(Explorer {
+            environment,
+            cwd,
+            directories: HashMap::new(),
+            expanded: HashSet::new(),
+            error: None,
+        });
+        self.load_directory(String::new(), cx);
+        cx.notify();
+    }
+
+    /// Keeps the open explorer on the checkout of the thread or new thread in front.
+    fn follow_explorer(&mut self, cx: &mut Context<Self>) {
+        let Some(open) = &self.explorer else { return };
+        let Some((environment, cwd)) = self.composer_cwd() else {
+            return;
+        };
+        if open.environment != environment || open.cwd != cwd {
+            self.start_explorer(environment, cwd, cx);
+        }
+    }
+
+    fn load_directory(&mut self, directory: String, cx: &mut Context<Self>) {
+        let Some(open) = &self.explorer else { return };
+        let Some(connection) = self.connection(&open.environment) else {
+            return;
+        };
+        let (environment, cwd) = (open.environment.clone(), open.cwd.clone());
+        let runtime = self.runtime.clone();
+        cx.spawn(async move |this, cx| {
+            let listed = on_runtime(&runtime, {
+                let (cwd, directory) = (cwd.clone(), directory.clone());
+                async move { connection.list_entries(&cwd, &directory).await }
+            })
+            .await;
+            let _ = this.update(cx, |root, cx| {
+                let Some(open) = root.explorer.as_mut() else {
+                    return;
+                };
+                if open.environment != environment || open.cwd != cwd {
+                    return;
+                }
+                match listed {
+                    Ok(result) => {
+                        let entries = explorer::children(&result, &directory);
+                        open.directories.insert(directory, entries);
+                        open.error = None;
+                    }
+                    Err(error) => {
+                        open.expanded.remove(&directory);
+                        open.error = Some(format!("{error:#}"));
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn click_entry(&mut self, entry: explorer::Entry, cx: &mut Context<Self>) {
+        if !entry.directory {
+            self.open_file(entry.path, cx);
+            return;
+        }
+        let Some(open) = self.explorer.as_mut() else {
+            return;
+        };
+        if !open.expanded.remove(&entry.path) {
+            open.expanded.insert(entry.path.clone());
+            if !open.directories.contains_key(&entry.path) {
+                self.load_directory(entry.path, cx);
+            }
+        }
+        cx.notify();
+    }
+
+    fn render_explorer(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        let open = self.explorer.as_ref()?;
+        let theme = cx.theme();
+        let lines = Rc::new(explorer::lines(&open.directories, &open.expanded));
+        let current = self.file_panel.as_ref().map(|p| p.path.clone());
+        let (muted, selected) = (theme.muted_foreground, theme.muted);
+        let weak = cx.entity().downgrade();
+        let loading_root = !open.directories.contains_key("");
+        Some(
+            v_flex()
+                .w(px(260.))
+                .h_full()
+                .flex_none()
+                .border_l_1()
+                .border_color(theme.border)
+                .child(
+                    h_flex()
+                        .px_3()
+                        .py_2()
+                        .gap_2()
+                        .border_b_1()
+                        .border_color(theme.border)
+                        .child(div().flex_1().text_sm().child("Files"))
+                        .child(
+                            Button::new("close-explorer")
+                                .label("Close")
+                                .compact()
+                                .outline()
+                                .on_click(cx.listener(|root, _, _, cx| {
+                                    root.explorer = None;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .children(open.error.clone().map(|error| {
+                    div()
+                        .px_3()
+                        .py_1()
+                        .text_xs()
+                        .text_color(theme.danger)
+                        .child(error)
+                }))
+                .when(loading_root, |pane| {
+                    pane.child(
+                        div()
+                            .px_3()
+                            .py_2()
+                            .text_xs()
+                            .text_color(muted)
+                            .child("Loading…"),
+                    )
+                })
+                .child(
+                    uniform_list("explorer-lines", lines.len(), move |range, _, _| {
+                        range
+                            .map(|i| {
+                                let line = &lines[i];
+                                let mark = match (line.entry.directory, line.expanded) {
+                                    (true, true) => "▾ ",
+                                    (true, false) => "▸ ",
+                                    _ => "  ",
+                                };
+                                let label = format!(
+                                    "{mark}{}{}",
+                                    line.entry.name(),
+                                    if line.loading { "  …" } else { "" }
+                                );
+                                let entry = line.entry.clone();
+                                let weak = weak.clone();
+                                div()
+                                    .id(SharedString::from(format!("explorer-{}", line.entry.path)))
+                                    .pl(px(12. + 14. * line.depth as f32))
+                                    .pr_2()
+                                    .text_sm()
+                                    .whitespace_nowrap()
+                                    .overflow_hidden()
+                                    .cursor_pointer()
+                                    .when(current.as_deref() == Some(&line.entry.path), |d| {
+                                        d.bg(selected)
+                                    })
+                                    .hover(move |d| d.bg(selected))
+                                    .on_click(move |_, _, cx| {
+                                        let _ = weak.update(cx, |root, cx| {
+                                            root.click_entry(entry.clone(), cx)
+                                        });
+                                    })
+                                    .child(label)
+                                    .into_any_element()
+                            })
+                            .collect()
+                    })
+                    .flex_1(),
+                )
+                .into_any_element(),
+        )
+    }
+
     fn render_file_panel(&self, cx: &Context<Self>) -> Option<AnyElement> {
         let panel = self.file_panel.as_ref()?;
         let theme = cx.theme();
@@ -2012,12 +2211,13 @@ impl Root {
 
     fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 10] = [
+        let commands: [(&str, Box<dyn Action>); 11] = [
             ("New thread", Box::new(NewThread)),
             ("Next Done or waiting thread", Box::new(NextDone)),
             ("Settle the thread", Box::new(Settle)),
             ("Pin or unpin the thread", Box::new(TogglePin)),
             ("Find in thread", Box::new(Find)),
+            ("Toggle the file explorer", Box::new(ToggleExplorer)),
             ("Pick a model", Box::new(ToggleModelPicker)),
             ("Cycle the runtime mode", Box::new(CycleRuntimeMode)),
             ("Toggle the sidebar", Box::new(ToggleSidebar)),
@@ -3412,6 +3612,14 @@ impl Root {
                     .on_click(cx.listener(|root, _, _, cx| root.settle(cx))),
             )
             .child(
+                Button::new("files")
+                    .label("Files")
+                    .outline()
+                    .compact()
+                    .selected(self.explorer.is_some())
+                    .on_click(cx.listener(|root, _, _, cx| root.toggle_explorer(cx))),
+            )
+            .child(
                 Button::new("diff")
                     .label("Changes")
                     .outline()
@@ -3529,6 +3737,7 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.follow_explorer(cx);
         if let Some(text) = self.pending_composer.take() {
             self.composer
                 .update(cx, |state, cx| state.set_value(text, window, cx));
@@ -3572,6 +3781,7 @@ impl Render for Root {
                 root.toggle_file_picker(window, cx)
             }))
             .on_action(cx.listener(|root, _: &ToggleDiff, _, cx| root.toggle_diff(cx)))
+            .on_action(cx.listener(|root, _: &ToggleExplorer, _, cx| root.toggle_explorer(cx)))
             .on_action(
                 cx.listener(|root, _: &ManageHosts, window, cx| root.toggle_hosts(window, cx)),
             )
@@ -3639,6 +3849,7 @@ impl Render for Root {
                 root.child(self.render_sidebar(cx))
             })
             .child(pane)
+            .children(self.render_explorer(cx))
             .children(self.render_file_panel(cx))
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))
