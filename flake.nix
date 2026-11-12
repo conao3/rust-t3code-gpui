@@ -91,6 +91,7 @@
             nixfmt.enable = true;
             rustfmt.enable = true;
           };
+          treefmt.settings.global.excludes = [ "vendor/**" ];
         };
     };
 }

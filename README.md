@@ -2,7 +2,7 @@
 
 A native desktop frontend for [T3 Code](https://github.com/pingdotgg/t3code), built with GPUI through [gpui-kit](https://github.com/longbridge/gpui-kit). It talks to unmodified `t3 serve` servers over T3's WebSocket protocol (orchestration protocol 2) and renders the sidebar, a thread's timeline and a composer.
 
-Redraws are batched: stream updates land in the client state as they arrive, and the window repaints at most every 250 ms. A streaming assistant message is split into blocks at blank lines, so only its last block is re-laid out.
+Redraws are batched: stream updates land in the client state as they arrive, and the window repaints at most every 250 ms. A streaming assistant message is split into blocks at blank lines, so only its last block is re-laid out. On X11 the window presents frames without waiting for vblank, so a frame never holds up key input (see `THIRD_PARTY_NOTICES.md` for the patched `gpui-pre-linux`).
 
 ## Layout
 

@@ -25,3 +25,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+`vendor/gpui-pre-linux/` is `gpui-pre-linux` 0.3.12 from [Zed](https://github.com/zed-industries/zed), used under the Apache License 2.0 (`vendor/gpui-pre-linux/LICENSE-APACHE`). It is patched in through `[patch.crates-io]` with one change: X11 windows ask wgpu for the `Immediate` present mode (`src/linux/x11/window.rs`), as Wayland windows already ask for `Mailbox`. With the default `Fifo`, presenting a frame blocks the main thread until the next vblank, so key events wait behind it; on an X server whose vblank is slow (no monitor connected, about 1 Hz), typing through XIM falls seconds behind. GPUI paces frames with its own timer at the screen's refresh rate, so `Immediate` does not render more often.
