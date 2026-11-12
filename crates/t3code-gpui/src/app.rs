@@ -6,7 +6,7 @@ use gpui_kit::component::{
     ActiveTheme as _, Selectable as _, Theme,
     button::{Button, ButtonVariants as _},
     h_flex,
-    input::{Textarea, TextareaState},
+    input::{InputEvent, Textarea, TextareaState},
     menu::ContextMenuExt as _,
     v_flex,
 };
@@ -18,6 +18,7 @@ use t3_client::session::{Change, Connection, ConnectionStatus, Delivery, Launch,
 use tokio::runtime::{Handle, Runtime};
 
 use crate::client_settings::ClientSettings;
+use crate::drafts::{self, Drafts};
 use crate::keymap;
 use crate::models;
 use crate::projects::{self, ProjectGroup};
@@ -38,6 +39,7 @@ actions!(
         NextDone,
         PreviousDone,
         ToggleSidebar,
+        TogglePin,
         CycleRuntimeMode,
         NextUserMessage,
         PreviousUserMessage,
@@ -64,6 +66,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "modelPicker.toggle" => Box::new(ToggleModelPicker),
         "composer.mode" => Box::new(CycleRuntimeMode),
         "sidebar.toggle" => Box::new(ToggleSidebar),
+        "thread.pin" => Box::new(TogglePin),
         _ => return None,
     })
 }
@@ -127,6 +130,10 @@ pub struct Root {
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
+    drafts: Drafts,
+    drafts_path: std::path::PathBuf,
+    drafts_save_scheduled: bool,
+    pending_composer: Option<String>,
     key_rules: Vec<keymap::Rule>,
     settings: ClientSettings,
     sidebar_hidden: bool,
@@ -146,6 +153,7 @@ impl Root {
     fn new(
         config: Config,
         settings: ClientSettings,
+        (drafts, drafts_path): (Drafts, std::path::PathBuf),
         runtime: Handle,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -193,6 +201,11 @@ impl Root {
             cx.observe_window_activation(window, |root, window, _| {
                 root.window_active = window.is_window_active();
             }),
+            cx.subscribe(&composer, |root, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) && root.pending_composer.is_none() {
+                    root.stash_composer(cx);
+                }
+            }),
         ];
         let list_state = ListState::new(0, ListAlignment::Bottom, px(800.));
         list_state.set_follow_mode(FollowMode::Tail);
@@ -212,6 +225,10 @@ impl Root {
             composer,
             message: None,
             picker_open: false,
+            drafts,
+            drafts_path,
+            drafts_save_scheduled: false,
+            pending_composer: None,
             key_rules: Vec::new(),
             settings,
             sidebar_hidden: false,
@@ -623,6 +640,7 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
+        self.stash_composer(cx);
         let watch = connection.watch_thread(&self.runtime, &thread_id);
         self.open = Some(OpenThread { environment, watch });
         self.draft = None;
@@ -639,7 +657,55 @@ impl Root {
                 let _ = connection.visit_thread(&thread_id, &now_iso()).await;
             }
         });
+        self.load_composer();
         cx.notify();
+    }
+
+    fn composer_key(&self) -> Option<String> {
+        if self.draft.is_some() {
+            return Some(drafts::NEW_THREAD.to_string());
+        }
+        self.current()
+            .map(|(environment, thread_id)| drafts::thread_key(&environment, &thread_id))
+    }
+
+    /// Keeps the composer text as the draft of what the composer is for now. Call before the
+    /// composer changes what it is for.
+    fn stash_composer(&mut self, cx: &mut Context<Self>) {
+        let Some(key) = self.composer_key() else {
+            return;
+        };
+        let text = self.composer.read(cx).value().to_string();
+        if self.drafts.set(&key, &text) {
+            self.schedule_drafts_save(cx);
+        }
+    }
+
+    /// Puts the draft of what the composer is for now into it, at the next render.
+    fn load_composer(&mut self) {
+        let text = self
+            .composer_key()
+            .and_then(|key| self.drafts.get(&key).map(str::to_string))
+            .unwrap_or_default();
+        self.pending_composer = Some(text);
+    }
+
+    fn schedule_drafts_save(&mut self, cx: &mut Context<Self>) {
+        if self.drafts_save_scheduled {
+            return;
+        }
+        self.drafts_save_scheduled = true;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(1)).await;
+            let _ = this.update(cx, |root, cx| {
+                root.drafts_save_scheduled = false;
+                if let Err(error) = root.drafts.save(&root.drafts_path) {
+                    root.message = Some(format!("Saving drafts failed: {error:#}"));
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     fn close_thread(&mut self, cx: &mut Context<Self>) {
@@ -755,7 +821,11 @@ impl Root {
             .map(ThreadEntry::key);
             match next {
                 Some((environment, thread_id)) => self.open_thread(environment, thread_id, cx),
-                None => self.close_thread(cx),
+                None => {
+                    self.stash_composer(cx);
+                    self.close_thread(cx);
+                    self.load_composer();
+                }
             }
         }
         let runtime = self.runtime.clone();
@@ -839,7 +909,12 @@ impl Root {
             &visible,
             current.as_ref().map(|(e, t)| (e.as_str(), t.as_str())),
             forward,
-            |e| sidebar::needs_attention(e.status),
+            |e| {
+                sidebar::needs_attention(e.status)
+                    || self
+                        .drafts
+                        .has(&drafts::thread_key(&e.environment, &e.thread_id))
+            },
         )
         .map(ThreadEntry::key);
         if let Some((environment, thread_id)) = next {
@@ -951,6 +1026,7 @@ impl Root {
     }
 
     fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.stash_composer(cx);
         let groups = self.project_groups();
         let from_open = self.open_entry().and_then(|entry| {
             groups
@@ -973,6 +1049,7 @@ impl Root {
         self.message = None;
         self.picker_open = false;
         self.close_thread(cx);
+        self.load_composer();
         self.composer
             .update(cx, |state, cx| state.focus(window, cx));
     }
@@ -983,7 +1060,10 @@ impl Root {
             cx.notify();
             return;
         }
-        if self.draft.take().is_some() {
+        if self.draft.is_some() {
+            self.stash_composer(cx);
+            self.draft = None;
+            self.load_composer();
             self.message = None;
             cx.notify();
         }
@@ -1681,6 +1761,10 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(text) = self.pending_composer.take() {
+            self.composer
+                .update(cx, |state, cx| state.set_value(text, window, cx));
+        }
         if !self.focus.contains_focused(window, cx) && self.open.is_none() && self.draft.is_none() {
             self.focus.focus(window, cx);
         }
@@ -1697,6 +1781,23 @@ impl Render for Root {
             .on_action(
                 cx.listener(|root, menu: &ThreadMenu, _, cx| root.thread_op(menu.clone(), cx)),
             )
+            .on_action(cx.listener(|root, _: &TogglePin, _, cx| {
+                if let Some(entry) = root.open_entry().cloned() {
+                    let op = if entry.pin_order.is_some() {
+                        ThreadOp::Unpin
+                    } else {
+                        ThreadOp::Pin
+                    };
+                    root.thread_op(
+                        ThreadMenu {
+                            environment: entry.environment,
+                            thread_id: entry.thread_id,
+                            op,
+                        },
+                        cx,
+                    );
+                }
+            }))
             .on_action(cx.listener(|root, _: &ToggleSidebar, _, cx| {
                 root.sidebar_hidden = !root.sidebar_hidden;
                 cx.notify();
@@ -1733,6 +1834,8 @@ impl Render for Root {
 }
 
 pub fn run(config: Config, settings: ClientSettings) -> anyhow::Result<()> {
+    let drafts_path = drafts::default_path()?;
+    let drafts = Drafts::load(&drafts_path)?;
     let runtime = Runtime::new()?;
     let handle = runtime.handle().clone();
     gpui_kit::application().run(move |cx| {
@@ -1752,7 +1855,7 @@ pub fn run(config: Config, settings: ClientSettings) -> anyhow::Result<()> {
             ..Default::default()
         };
         gpui_kit::open_window(options, cx, |window, cx| {
-            cx.new(|cx| Root::new(config, settings, handle, window, cx))
+            cx.new(|cx| Root::new(config, settings, (drafts, drafts_path), handle, window, cx))
         })
         .expect("open the window");
     });

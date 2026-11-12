@@ -1,5 +1,6 @@
 mod app;
 mod client_settings;
+mod drafts;
 mod keymap;
 mod models;
 mod projects;
