@@ -468,6 +468,19 @@ pub fn user_message_jump(rows: &[Row], from: usize, inside: bool, forward: bool)
     }
 }
 
+/// The rows whose text contains the query, ignoring case. A blank query finds nothing.
+pub fn find_rows(rows: &[Row], query: &str) -> Vec<usize> {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return Vec::new();
+    }
+    rows.iter()
+        .enumerate()
+        .filter(|(_, row)| row.text.to_lowercase().contains(&query))
+        .map(|(i, _)| i)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -724,5 +737,25 @@ mod tests {
             json!({"id": "u2", "ordinal": 3, "type": "user_message", "text": "go"}),
         ]);
         assert!(rows(&answered).iter().all(|r| r.kind != RowKind::Plan));
+    }
+
+    #[test]
+    fn find_matches_rows_ignoring_case() {
+        let row = |text: &str| Row {
+            key: String::new(),
+            kind: RowKind::Assistant,
+            text: text.into(),
+            live: false,
+            pending: None,
+        };
+        let list = [
+            row("Hello World"),
+            row("nothing"),
+            row("say HELLO"),
+            row("日本語のテキスト"),
+        ];
+        assert_eq!(find_rows(&list, "hello"), [0, 2]);
+        assert_eq!(find_rows(&list, "テキスト"), [3]);
+        assert!(find_rows(&list, "  ").is_empty());
     }
 }

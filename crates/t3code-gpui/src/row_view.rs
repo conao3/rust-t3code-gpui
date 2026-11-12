@@ -30,6 +30,7 @@ pub enum RowEvent {
 pub struct RowView {
     row: Row,
     markdown: Option<Entity<TextViewState>>,
+    found: bool,
     drafts: HashMap<String, Draft>,
     responding: bool,
 }
@@ -43,6 +44,7 @@ impl RowView {
         Self {
             row,
             markdown,
+            found: false,
             drafts: HashMap::new(),
             responding: false,
         }
@@ -63,6 +65,13 @@ impl RowView {
         }
         self.row = row;
         cx.notify();
+    }
+
+    pub fn set_found(&mut self, found: bool, cx: &mut Context<Self>) {
+        if self.found != found {
+            self.found = found;
+            cx.notify();
+        }
     }
 
     pub fn drafts(&self) -> &HashMap<String, Draft> {
@@ -241,7 +250,15 @@ impl RowView {
 impl Render for RowView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let base = div().w_full().px_4();
+        let base = div()
+            .w_full()
+            .px_4()
+            .border_l_2()
+            .border_color(if self.found {
+                theme.warning
+            } else {
+                gpui::transparent_black()
+            });
         match self.row.kind {
             RowKind::Assistant => match &self.markdown {
                 Some(state) => base

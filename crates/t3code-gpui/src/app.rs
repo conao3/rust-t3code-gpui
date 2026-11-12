@@ -6,7 +6,7 @@ use gpui_kit::component::{
     ActiveTheme as _, Selectable as _, Theme,
     button::{Button, ButtonVariants as _},
     h_flex,
-    input::{InputEvent, Textarea, TextareaState},
+    input::{Input, InputEvent, InputState, Textarea, TextareaState},
     menu::ContextMenuExt as _,
     v_flex,
 };
@@ -40,6 +40,7 @@ actions!(
         PreviousDone,
         ToggleSidebar,
         TogglePin,
+        Find,
         CycleRuntimeMode,
         NextUserMessage,
         PreviousUserMessage,
@@ -67,6 +68,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "composer.mode" => Box::new(CycleRuntimeMode),
         "sidebar.toggle" => Box::new(ToggleSidebar),
         "thread.pin" => Box::new(TogglePin),
+        "chat.find" => Box::new(Find),
         _ => return None,
     })
 }
@@ -130,6 +132,10 @@ pub struct Root {
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
+    find_input: Entity<InputState>,
+    find_open: bool,
+    find_hits: Vec<usize>,
+    find_at: usize,
     drafts: Drafts,
     drafts_path: std::path::PathBuf,
     drafts_save_scheduled: bool,
@@ -188,6 +194,7 @@ impl Root {
             state.set_auto_grow(2, 12, cx);
             state
         });
+        let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
         let weak = cx.entity().downgrade();
         let subscriptions = vec![
             cx.intercept_keystrokes(move |event, window, cx| {
@@ -200,6 +207,11 @@ impl Root {
             }),
             cx.observe_window_activation(window, |root, window, _| {
                 root.window_active = window.is_window_active();
+            }),
+            cx.subscribe(&find_input, |root, _, event: &InputEvent, cx| match event {
+                InputEvent::Change => root.find_again(true, cx),
+                InputEvent::PressEnter { shift, .. } => root.step_find(!*shift, cx),
+                _ => {}
             }),
             cx.subscribe(&composer, |root, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) && root.pending_composer.is_none() {
@@ -225,6 +237,10 @@ impl Root {
             composer,
             message: None,
             picker_open: false,
+            find_input,
+            find_open: false,
+            find_hits: Vec::new(),
+            find_at: 0,
             drafts,
             drafts_path,
             drafts_save_scheduled: false,
@@ -267,6 +283,13 @@ impl Root {
                 .and_then(action_for)
         {
             window.dispatch_action(action, cx);
+            return true;
+        }
+        if keystroke.key == "escape"
+            && self.find_open
+            && self.find_input.read(cx).focus_handle(cx).is_focused(window)
+        {
+            self.close_find(window, cx);
             return true;
         }
         if keystroke.key != "enter" || modifiers.alt || modifiers.shift || modifiers.platform {
@@ -521,6 +544,7 @@ impl Root {
         self.rows = rows;
         self.row_views = views;
         self.row_subscriptions = kept;
+        self.find_again(false, cx);
         cx.notify();
     }
 
@@ -644,6 +668,7 @@ impl Root {
         view.update(cx, |view, cx| view.set_responding(true, cx));
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
+        self.stash_composer(cx);
         let runtime = self.runtime.clone();
         cx.spawn_in(window, async move |this, cx| {
             let result = on_runtime(&runtime, async move {
@@ -656,6 +681,7 @@ impl Root {
                     root.message = Some(format!("Answer failed: {error:#}"));
                     root.composer
                         .update(cx, |state, cx| state.set_value(typed, window, cx));
+                    root.stash_composer(cx);
                     cx.notify();
                 });
             }
@@ -686,6 +712,74 @@ impl Root {
         });
         self.load_composer();
         cx.notify();
+    }
+
+    fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.open.is_none() {
+            return;
+        }
+        self.find_open = true;
+        self.find_input
+            .update(cx, |state, cx| state.focus(window, cx));
+        self.find_again(true, cx);
+    }
+
+    fn close_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.find_open = false;
+        self.find_hits.clear();
+        self.mark_found(cx);
+        self.composer
+            .update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
+    }
+
+    /// Finds the query in the rows again, and with `jump` scrolls to the first hit.
+    fn find_again(&mut self, jump: bool, cx: &mut Context<Self>) {
+        if !self.find_open {
+            return;
+        }
+        let query = self.find_input.read(cx).value().to_string();
+        self.find_hits = timeline::find_rows(&self.rows, &query);
+        if jump {
+            self.find_at = 0;
+        }
+        self.find_at = self.find_at.min(self.find_hits.len().saturating_sub(1));
+        if jump {
+            self.reveal_find();
+        }
+        self.mark_found(cx);
+        cx.notify();
+    }
+
+    fn step_find(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let n = self.find_hits.len();
+        if n == 0 {
+            return;
+        }
+        self.find_at = if forward {
+            (self.find_at + 1) % n
+        } else {
+            (self.find_at + n - 1) % n
+        };
+        self.reveal_find();
+        self.mark_found(cx);
+        cx.notify();
+    }
+
+    fn reveal_find(&self) {
+        if let Some(&item_ix) = self.find_hits.get(self.find_at) {
+            self.list_state.scroll_to(ListOffset {
+                item_ix,
+                offset_in_item: px(0.),
+            });
+        }
+    }
+
+    fn mark_found(&self, cx: &mut Context<Self>) {
+        let current = self.find_hits.get(self.find_at).copied();
+        for (i, view) in self.row_views.iter().enumerate() {
+            view.update(cx, |view, cx| view.set_found(Some(i) == current, cx));
+        }
     }
 
     fn composer_key(&self) -> Option<String> {
@@ -789,6 +883,7 @@ impl Root {
         let runtime = self.runtime.clone();
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
+        self.stash_composer(cx);
         cx.spawn_in(window, async move |this, cx| {
             let sent = on_runtime(&runtime, {
                 let text = text.clone();
@@ -800,6 +895,7 @@ impl Root {
                 if sent.is_err() {
                     root.composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
+                    root.stash_composer(cx);
                 }
                 cx.notify();
             });
@@ -1123,6 +1219,7 @@ impl Root {
         let title = projects::title_seed(&text);
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
+        self.stash_composer(cx);
         let runtime = self.runtime.clone();
         cx.spawn_in(window, async move |this, cx| {
             let launched = on_runtime(&runtime, {
@@ -1148,6 +1245,7 @@ impl Root {
                     root.message = Some(format!("New thread failed: {error:#}"));
                     root.composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
+                    root.stash_composer(cx);
                     cx.notify();
                 }
             });
@@ -1765,6 +1863,51 @@ impl Root {
             .h_full()
             .min_w_0()
             .child(header)
+            .when(self.find_open, |pane| {
+                let count = if self.find_hits.is_empty() {
+                    "No results".to_string()
+                } else {
+                    format!("{} / {}", self.find_at + 1, self.find_hits.len())
+                };
+                pane.child(
+                    h_flex()
+                        .px_4()
+                        .py_1()
+                        .gap_2()
+                        .border_b_1()
+                        .border_color(theme.border)
+                        .child(div().flex_1().child(Input::new(&self.find_input)))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(theme.muted_foreground)
+                                .child(count),
+                        )
+                        .child(
+                            Button::new("find-previous")
+                                .label("Previous")
+                                .compact()
+                                .outline()
+                                .on_click(cx.listener(|root, _, _, cx| root.step_find(false, cx))),
+                        )
+                        .child(
+                            Button::new("find-next")
+                                .label("Next")
+                                .compact()
+                                .outline()
+                                .on_click(cx.listener(|root, _, _, cx| root.step_find(true, cx))),
+                        )
+                        .child(
+                            Button::new("find-close")
+                                .label("Close")
+                                .compact()
+                                .outline()
+                                .on_click(
+                                    cx.listener(|root, _, window, cx| root.close_find(window, cx)),
+                                ),
+                        ),
+                )
+            })
             .child(
                 list(self.list_state.clone(), move |ix, _, _| {
                     views
@@ -1808,6 +1951,7 @@ impl Render for Root {
             .on_action(
                 cx.listener(|root, menu: &ThreadMenu, _, cx| root.thread_op(menu.clone(), cx)),
             )
+            .on_action(cx.listener(|root, _: &Find, window, cx| root.open_find(window, cx)))
             .on_action(cx.listener(|root, _: &TogglePin, _, cx| {
                 if let Some(entry) = root.open_entry().cloned() {
                     let op = if entry.pin_order.is_some() {
