@@ -54,6 +54,7 @@ pub struct Launch<'a> {
     pub model: Value,
     pub runtime_mode: &'a str,
     pub interaction_mode: &'a str,
+    pub attachments: Vec<Value>,
     pub text: &'a str,
 }
 
@@ -193,7 +194,7 @@ impl Connection {
             "initialMessage": {
                 "messageId": uuid::Uuid::new_v4().to_string(),
                 "text": launch.text,
-                "attachments": [],
+                "attachments": launch.attachments,
             },
         });
         let result = self
@@ -218,6 +219,7 @@ impl Connection {
         &self,
         thread_id: &str,
         text: &str,
+        attachments: Vec<Value>,
         delivery: Delivery,
     ) -> Result<u64> {
         let mut command = json!({
@@ -225,7 +227,7 @@ impl Connection {
             "threadId": thread_id,
             "messageId": uuid::Uuid::new_v4().to_string(),
             "text": text,
-            "attachments": [],
+            "attachments": attachments,
             "createdBy": "user",
             "creationSource": "web",
         });
@@ -338,6 +340,46 @@ impl Connection {
                 }
                 other => other.into(),
             })
+    }
+
+    /// Uploads a file for a message and returns the attachment the message refers to it by.
+    pub async fn upload_attachment(
+        &self,
+        name: &str,
+        mime_type: &str,
+        bytes: Vec<u8>,
+    ) -> Result<Value> {
+        let kind = if mime_type.starts_with("image/") {
+            "image"
+        } else {
+            "file"
+        };
+        let size = bytes.len();
+        let issued = self
+            .rpc()
+            .await?
+            .call(
+                "attachments.createUploadUrl",
+                json!({"type": kind, "name": name, "mimeType": mime_type, "sizeBytes": size}),
+                DISPATCH_TIMEOUT,
+            )
+            .await
+            .map_err(|e| match e {
+                RpcError::Failed { message, .. } => {
+                    anyhow!("T3 refused the attachment {name}: {message}")
+                }
+                other => other.into(),
+            })?;
+        let id = issued
+            .get("attachmentId")
+            .and_then(Value::as_str)
+            .context("T3 returned no attachment id")?;
+        let url = issued
+            .get("relativeUrl")
+            .and_then(Value::as_str)
+            .context("T3 returned no upload URL")?;
+        self.api.post_bytes(url, mime_type, bytes).await?;
+        Ok(json!({"type": kind, "id": id, "name": name, "mimeType": mime_type, "sizeBytes": size}))
     }
 
     pub async fn archive_thread(&self, thread_id: &str) -> Result<u64> {

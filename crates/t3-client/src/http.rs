@@ -128,6 +128,38 @@ impl Api {
         self.request(reqwest::Method::POST, path, body).await
     }
 
+    /// Posts raw bytes, as an attachment upload sends a file to the URL T3 issued for it.
+    pub async fn post_bytes(&self, path: &str, content_type: &str, bytes: Vec<u8>) -> Result<()> {
+        let response = self
+            .http
+            .post(format!("{}{}", self.origin, path))
+            .bearer_auth(&self.token)
+            .header(reqwest::header::CONTENT_TYPE, content_type)
+            .body(bytes)
+            .timeout(Duration::from_secs(120))
+            .send()
+            .await
+            .map_err(|e| {
+                err_exit(
+                    "T3_REQUEST_FAILED",
+                    exit::UNAVAILABLE,
+                    format!("POST {path} failed: {e}"),
+                )
+            })?;
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(err(
+                "T3_API_ERROR",
+                format!(
+                    "T3 returned HTTP {status} for the upload: {}",
+                    text.chars().take(200).collect::<String>()
+                ),
+            ));
+        }
+        Ok(())
+    }
+
     /// A single-use ticket that authenticates one WebSocket connection.
     pub async fn websocket_ticket(&self) -> Result<String> {
         let issued = self.post("/api/auth/websocket-ticket", None).await?;

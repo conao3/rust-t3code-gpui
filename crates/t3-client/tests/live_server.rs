@@ -171,6 +171,15 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
         .as_str()
         .unwrap()
         .to_string();
+    let png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
+    let attachment = connection
+        .upload_attachment("shot.png", "image/png", png)
+        .await
+        .expect("attachments.createUploadUrl and the upload");
+    assert_eq!(attachment["type"], "image");
+    assert_eq!(attachment["sizeBytes"], 12);
+    assert!(attachment["id"].as_str().is_some_and(|id| !id.is_empty()));
+
     let workspace_root = shell.lock().unwrap().projects[0]["workspaceRoot"]
         .as_str()
         .unwrap()
@@ -268,6 +277,7 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
             model: json!({"instanceId": "integration-missing", "model": "none"}),
             runtime_mode: "full-access",
             interaction_mode: "default",
+            attachments: Vec::new(),
             text: "hello",
         })
         .await

@@ -18,6 +18,7 @@ use t3_client::config::Config;
 use t3_client::session::{Change, Connection, ConnectionStatus, Delivery, Launch, ThreadWatch};
 use tokio::runtime::{Handle, Runtime};
 
+use crate::attachments;
 use crate::client_settings::ClientSettings;
 use crate::completion;
 use crate::drafts::{self, Drafts};
@@ -109,6 +110,22 @@ fn now_iso() -> String {
     humantime::format_rfc3339_millis(SystemTime::now()).to_string()
 }
 
+/// Uploads the composer's attachments in order and returns what a message refers to them by.
+async fn upload_all(
+    connection: &Connection,
+    pending: &[attachments::Pending],
+) -> anyhow::Result<Vec<Value>> {
+    let mut uploaded = Vec::with_capacity(pending.len());
+    for file in pending {
+        uploaded.push(
+            connection
+                .upload_attachment(&file.name, &file.mime_type, file.bytes.as_ref().clone())
+                .await?,
+        );
+    }
+    Ok(uploaded)
+}
+
 async fn on_runtime<T: std::marker::Send + 'static>(
     runtime: &Handle,
     future: impl std::future::Future<Output = anyhow::Result<T>> + std::marker::Send + 'static,
@@ -151,6 +168,7 @@ pub struct Root {
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
+    attachments: Vec<attachments::Pending>,
     queued: Vec<timeline::Queued>,
     completion: Option<Completion>,
     completion_seq: u64,
@@ -263,6 +281,7 @@ impl Root {
             composer,
             message: None,
             picker_open: false,
+            attachments: Vec::new(),
             queued: Vec::new(),
             completion: None,
             completion_seq: 0,
@@ -312,6 +331,39 @@ impl Root {
         let project = self.project_value(&environment, project_id)?;
         let root = project.get("workspaceRoot")?.as_str()?.to_string();
         Some((environment, root))
+    }
+
+    /// Attaches an image on the clipboard. Returns whether there was one, so text pastes as usual.
+    fn paste_image(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(item) = cx.read_from_clipboard() else {
+            return false;
+        };
+        let image = item.into_entries().find_map(|entry| match entry {
+            ClipboardEntry::Image(image) => Some(image),
+            _ => None,
+        });
+        let Some(image) = image else {
+            return false;
+        };
+        let mime = image.format.mime_type().to_string();
+        let extension = mime.rsplit('/').next().unwrap_or("png").to_string();
+        let name = format!("pasted-{}.{extension}", self.attachments.len() + 1);
+        match attachments::Pending::new(name, mime, image.bytes) {
+            Ok(pending) => self.attachments.push(pending),
+            Err(error) => self.message = Some(format!("{error:#}")),
+        }
+        cx.notify();
+        true
+    }
+
+    fn attach_paths(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
+        for path in paths.paths() {
+            match attachments::Pending::from_path(path) {
+                Ok(pending) => self.attachments.push(pending),
+                Err(error) => self.message = Some(format!("{error:#}")),
+            }
+        }
+        cx.notify();
     }
 
     fn update_completion(&mut self, cx: &mut Context<Self>) {
@@ -435,6 +487,14 @@ impl Root {
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
         if self.completion_key(keystroke, window, cx) {
+            return true;
+        }
+        if keystroke.key == "v"
+            && keystroke.modifiers.control
+            && !keystroke.modifiers.alt
+            && self.composer.read(cx).focus_handle(cx).is_focused(window)
+            && self.paste_image(cx)
+        {
             return true;
         }
         let typed = keymap::Chord {
@@ -1105,7 +1165,7 @@ impl Root {
             return;
         };
         let text = self.composer.read(cx).value().trim().to_string();
-        if text.is_empty() {
+        if text.is_empty() && self.attachments.is_empty() {
             return;
         }
         let Some(connection) = self.connection(&environment) else {
@@ -1119,13 +1179,20 @@ impl Root {
             _ => Delivery::Start,
         };
         let runtime = self.runtime.clone();
+        let pending = std::mem::take(&mut self.attachments);
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
         self.stash_composer(cx);
         cx.spawn_in(window, async move |this, cx| {
             let sent = on_runtime(&runtime, {
                 let text = text.clone();
-                async move { connection.send_message(&thread_id, &text, delivery).await }
+                let pending = pending.clone();
+                async move {
+                    let attachments = upload_all(&connection, &pending).await?;
+                    connection
+                        .send_message(&thread_id, &text, attachments, delivery)
+                        .await
+                }
             })
             .await;
             let _ = this.update_in(cx, |root, window, cx| {
@@ -1134,6 +1201,7 @@ impl Root {
                     root.composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
                     root.stash_composer(cx);
+                    root.attachments = pending;
                 }
                 cx.notify();
             });
@@ -1459,10 +1527,13 @@ impl Root {
             .update(cx, |state, cx| state.set_value("", window, cx));
         self.stash_composer(cx);
         let runtime = self.runtime.clone();
+        let pending = std::mem::take(&mut self.attachments);
         cx.spawn_in(window, async move |this, cx| {
             let launched = on_runtime(&runtime, {
                 let text = text.clone();
+                let pending = pending.clone();
                 async move {
+                    let attachments = upload_all(&connection, &pending).await?;
                     connection
                         .launch_thread(Launch {
                             thread_id: &thread_id,
@@ -1471,6 +1542,7 @@ impl Root {
                             model,
                             runtime_mode: &runtime_mode,
                             interaction_mode: &interaction_mode,
+                            attachments,
                             text: &text,
                         })
                         .await
@@ -1484,6 +1556,7 @@ impl Root {
                     root.composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
                     root.stash_composer(cx);
+                    root.attachments = pending;
                     cx.notify();
                 }
             });
@@ -2051,10 +2124,29 @@ impl Root {
                             )
                     }))
             });
+        let chips = (!self.attachments.is_empty()).then(|| {
+            h_flex().px_3().pt_2().gap_1().flex_wrap().children(
+                self.attachments.iter().enumerate().map(|(i, file)| {
+                    Button::new(("attachment", i))
+                        .label(format!("{} ×", file.name))
+                        .compact()
+                        .outline()
+                        .tooltip("Remove")
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            if i < root.attachments.len() {
+                                root.attachments.remove(i);
+                            }
+                            cx.notify();
+                        }))
+                }),
+            )
+        });
         v_flex()
+            .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
             .children(picker)
             .children(suggestions)
             .children(toolbar)
+            .children(chips)
             .child(
                 h_flex()
                     .p_3()

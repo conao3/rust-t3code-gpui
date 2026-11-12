@@ -285,6 +285,22 @@ fn tool_detail(item: &Value) -> String {
     }
 }
 
+/// A user message's text with a line naming each attached file.
+fn user_text(item: &Value) -> String {
+    let mut out = text(item, "text").to_string();
+    for attachment in array(item, "attachments") {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&format!(
+            "[{}] {}",
+            text(attachment, "type"),
+            text(attachment, "name")
+        ));
+    }
+    out
+}
+
 const TOOL_TYPES: &[&str] = &[
     "command_execution",
     "file_change",
@@ -314,7 +330,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
             "user_message" => rows.push(Row {
                 key: id.to_string(),
                 kind: RowKind::User,
-                text: text(item, "text").to_string(),
+                text: user_text(item),
                 live: false,
                 pending: None,
                 detail: String::new(),
@@ -893,6 +909,17 @@ mod tests {
                 ("r1".into(), "first".into()),
                 ("r2".into(), "second".into())
             ]
+        );
+    }
+
+    #[test]
+    fn user_rows_name_their_attachments() {
+        let item = json!({"type": "user_message", "text": "look",
+                          "attachments": [{"type": "image", "name": "shot.png"}, {"type": "file", "name": "a.md"}]});
+        assert_eq!(user_text(&item), "look\n[image] shot.png\n[file] a.md");
+        assert_eq!(
+            user_text(&json!({"type": "user_message", "text": "plain"})),
+            "plain"
         );
     }
 }
