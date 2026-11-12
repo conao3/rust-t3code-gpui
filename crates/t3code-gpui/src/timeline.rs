@@ -120,7 +120,7 @@ fn questions(item: &Value) -> Vec<Question> {
         .collect()
 }
 
-fn pending_of(state: &ThreadState, item: &Value) -> Option<Pending> {
+fn pending_of(state: &ThreadState, item: &Value, prompt: &str) -> Option<Pending> {
     let request_id = text(item, "requestId");
     let pending = state
         .pending_requests()
@@ -135,6 +135,7 @@ fn pending_of(state: &ThreadState, item: &Value) -> Option<Pending> {
             subject: state
                 .request_subject(request_id)
                 .map(tool_summary)
+                .filter(|subject| prompt.is_empty() || !subject.contains(prompt))
                 .unwrap_or_default(),
             options: approval_options(item),
         }),
@@ -282,8 +283,6 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 pending: None,
             }),
             "approval_request" | "user_input_request" | "secret_request" | "link_request" => {
-                let card = pending_of(state, item);
-                let pending = card.is_some();
                 let label = match text(item, "type") {
                     "approval_request" => "Approval",
                     "user_input_request" => "Question",
@@ -297,15 +296,22 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                             .and_then(Value::as_str)
                     })
                     .unwrap_or(text(item, "title"));
+                let prompt = first_line(prompt, 200);
+                let card = pending_of(state, item, &prompt);
+                let pending = card.is_some();
                 let state_label = if pending {
                     "waiting"
                 } else {
                     text(item, "status")
                 };
+                let text = match &card {
+                    Some(Pending::Question { .. }) => format!("{label} ({state_label})"),
+                    _ => format!("{label} ({state_label}): {prompt}"),
+                };
                 rows.push(Row {
                     key: id.to_string(),
                     kind: RowKind::Request,
-                    text: format!("{label} ({state_label}): {}", first_line(prompt, 200)),
+                    text,
                     live: pending,
                     pending: card,
                 });
@@ -417,6 +423,21 @@ pub fn answers_with_text(
     let mut drafts = drafts.clone();
     drafts.entry(target.id.clone()).or_default().custom = typed.to_string();
     answers(questions, &drafts)
+}
+
+/// The user message to jump to from row `from`, the row at the top of the view. `inside` means
+/// the view starts partway into that row, so jumping back lands on its start.
+pub fn user_message_jump(rows: &[Row], from: usize, inside: bool, forward: bool) -> Option<usize> {
+    let mut users = rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.kind == RowKind::User)
+        .map(|(i, _)| i);
+    if forward {
+        users.find(|i| *i > from)
+    } else {
+        users.rev().find(|i| *i < from || (*i == from && inside))
+    }
 }
 
 #[cfg(test)]
@@ -546,7 +567,9 @@ mod tests {
             ],
             vec![json!({"id": "r1", "status": "pending"})],
         );
-        match rows(&s).remove(0).pending {
+        let row = rows(&s).remove(0);
+        assert_eq!(row.text, "Question (waiting)");
+        match row.pending {
             Some(Pending::Question { questions, .. }) => questions,
             other => panic!("{other:?}"),
         }
@@ -602,5 +625,52 @@ mod tests {
             answers_with_text(&questions, &drafts, "override"),
             Some(json!({"one": "override", "many": ["X"]}))
         );
+    }
+
+    #[test]
+    fn an_approval_names_the_gated_command_only_when_the_prompt_does_not() {
+        let card = |prompt: &str| {
+            let s = state_with(
+                vec![
+                    json!({"id": "c", "ordinal": 1, "type": "command_execution", "nodeId": "n-tool",
+                           "status": "running", "input": {"command": "touch approved.txt"}}),
+                    json!({"id": "a", "ordinal": 2, "type": "approval_request", "requestId": "r1",
+                           "prompt": prompt}),
+                ],
+                vec![json!({"id": "r1", "status": "pending", "nodeId": "n-request"})],
+            );
+            let mut s = s;
+            s.apply(&json!({"kind": "event", "sequence": 2, "event": {
+                "type": "node.updated", "payload": {"id": "n-request", "parentNodeId": "n-tool"}}}));
+            match rows(&s).remove(1).pending {
+                Some(Pending::Approval { subject, .. }) => subject,
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(card("touch approved.txt"), "");
+        assert_eq!(card("Allow Bash?"), "$ touch approved.txt (running)");
+    }
+
+    #[test]
+    fn user_message_jumps_step_over_the_rows_between() {
+        let row = |kind: RowKind| Row {
+            key: String::new(),
+            kind,
+            text: String::new(),
+            live: false,
+            pending: None,
+        };
+        let rows = [
+            row(RowKind::User),
+            row(RowKind::Assistant),
+            row(RowKind::User),
+            row(RowKind::Tool),
+        ];
+        assert_eq!(user_message_jump(&rows, 4, false, false), Some(2));
+        assert_eq!(user_message_jump(&rows, 2, false, false), Some(0));
+        assert_eq!(user_message_jump(&rows, 2, true, false), Some(2));
+        assert_eq!(user_message_jump(&rows, 0, false, false), None);
+        assert_eq!(user_message_jump(&rows, 0, false, true), Some(2));
+        assert_eq!(user_message_jump(&rows, 2, false, true), None);
     }
 }

@@ -70,6 +70,7 @@ pub struct Root {
     row_views: Vec<Entity<RowView>>,
     row_subscriptions: HashMap<String, Subscription>,
     list_state: ListState,
+    user_cursor: Option<usize>,
     composer: Entity<TextareaState>,
     message: Option<String>,
     window_active: bool,
@@ -141,6 +142,7 @@ impl Root {
             row_views: Vec::new(),
             row_subscriptions: HashMap::new(),
             list_state,
+            user_cursor: None,
             composer,
             message: None,
             window_active: window.is_window_active(),
@@ -316,6 +318,7 @@ impl Root {
         if appended {
             let old = old_keys.len();
             if rows.len() > old {
+                self.user_cursor = None;
                 self.list_state.splice(old..old, rows.len() - old);
             }
         } else {
@@ -450,6 +453,7 @@ impl Root {
         self.row_views.clear();
         self.row_subscriptions.clear();
         self.list_state.reset(0);
+        self.user_cursor = None;
         self.list_state.set_follow_mode(FollowMode::Tail);
         self.message = None;
         self.runtime.spawn({
@@ -467,6 +471,7 @@ impl Root {
         self.row_views.clear();
         self.row_subscriptions.clear();
         self.list_state.reset(0);
+        self.user_cursor = None;
         cx.notify();
     }
 
@@ -626,19 +631,13 @@ impl Root {
 
     fn jump_user_message(&mut self, forward: bool, cx: &mut Context<Self>) {
         let top = self.list_state.logical_scroll_top();
-        let users = self
-            .rows
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| r.kind == RowKind::User)
-            .map(|(i, _)| i);
-        let target = if forward {
-            users.into_iter().find(|i| *i > top.item_ix)
+        let (from, inside) = if top.item_ix < self.rows.len() {
+            (top.item_ix, top.offset_in_item > px(0.))
         } else {
-            users
-                .rev()
-                .find(|i| *i < top.item_ix || (*i == top.item_ix && top.offset_in_item > px(0.)))
+            (self.user_cursor.unwrap_or(self.rows.len()), false)
         };
+        let target = timeline::user_message_jump(&self.rows, from, inside, forward);
+        self.user_cursor = target;
         match target {
             Some(item_ix) => self.list_state.scroll_to(ListOffset {
                 item_ix,
@@ -1122,8 +1121,6 @@ pub fn run(config: Config) -> anyhow::Result<()> {
             KeyBinding::new("alt-p", PreviousUserMessage, root),
             KeyBinding::new("ctrl-shift-]", NextThread, root),
             KeyBinding::new("ctrl-shift-[", PreviousThread, root),
-            KeyBinding::new("ctrl-}", NextThread, root),
-            KeyBinding::new("ctrl-{", PreviousThread, root),
             KeyBinding::new("ctrl-shift-s", Settle, root),
             KeyBinding::new("alt-s", Settle, root),
             KeyBinding::new("ctrl-n", NewThread, root),

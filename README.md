@@ -36,12 +36,19 @@ t3code-gpui environment list-environments
 t3code-gpui environment check-environment --label eos
 ```
 
+The first environment is the primary host. A new thread in a project that several hosts share starts on the first host that has it. It takes the project's default model, or else the model of the project's latest thread, and the runtime mode of the latest thread (full access when the project has none).
+
 | Key | Action |
 |---|---|
-| Ctrl+Enter | Send the composer text (queued while the thread is working) |
+| Ctrl+Enter | Send the composer text (queued while the thread is working), answer the open question, or start the new thread |
 | Alt+O | Open the next thread that is Done or waiting for input |
+| Alt+P / Alt+N | Jump to the previous / next user message |
+| Ctrl+Shift+] / Ctrl+Shift+[ | Open the next / previous thread in the sidebar |
+| Ctrl+Shift+S, Alt+S | Settle the thread and open the next unsettled one (unsettle a settled thread) |
+| Ctrl+Shift+O | Start a new thread (Ctrl+N too, outside the composer) |
+| Escape | Leave the new-thread pane |
 
-"Open in browser" opens the same thread in the server's web UI.
+Approval and question cards in the timeline take a click. Text in the composer answers the first open question that takes free text. The host chips above the thread list show one host's threads. A thread that becomes Done or starts waiting for input raises a desktop notification, unless it is the thread open in the focused window. "Open in browser" opens the same thread in the server's web UI.
 
 ## Development
 

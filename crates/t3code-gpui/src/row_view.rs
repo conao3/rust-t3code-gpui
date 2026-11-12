@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Selectable as _,
+    ActiveTheme as _, Disableable as _,
     button::{Button, ButtonVariants as _},
     h_flex,
     text::{TextView, TextViewState},
@@ -85,8 +85,8 @@ impl RowView {
             Button::new(SharedString::from(format!("option-{qi}-{oi}")))
                 .label(option.label.clone())
                 .compact()
-                .outline()
-                .selected(selected)
+                .when(selected, |b| b.primary())
+                .when(!selected, |b| b.outline())
                 .disabled(self.responding)
                 .when(!option.description.is_empty(), |b| {
                     b.tooltip(option.description.clone())
