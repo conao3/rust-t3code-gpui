@@ -1,0 +1,137 @@
+mod app;
+mod sidebar;
+mod timeline;
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use clap::{Parser, Subcommand};
+use serde_json::{Value, json};
+use t3_client::config::Config;
+use t3_client::session::Connection;
+
+const EXIT_USAGE: u8 = 252;
+const EXIT_TARGET: u8 = 254;
+const EXIT_OTHER: u8 = 255;
+
+#[derive(Parser)]
+#[command(version, about = "Native GPUI frontend for T3 Code")]
+struct Cli {
+    #[arg(long, global = true)]
+    config: Option<PathBuf>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    Desktop {
+        #[command(subcommand)]
+        command: DesktopCommand,
+    },
+    Environment {
+        #[command(subcommand)]
+        command: EnvironmentCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum DesktopCommand {
+    StartApp,
+}
+
+#[derive(Subcommand)]
+enum EnvironmentCommand {
+    ListEnvironments,
+    CheckEnvironment {
+        #[arg(long)]
+        label: String,
+    },
+}
+
+enum Failure {
+    Target(anyhow::Error),
+    Other(anyhow::Error),
+}
+
+fn load(path: Option<PathBuf>) -> Result<Config, Failure> {
+    let path = match path {
+        Some(path) => path,
+        None => Config::default_path().map_err(Failure::Other)?,
+    };
+    Config::load(&path).map_err(Failure::Other)
+}
+
+fn list_environments(config: &Config) -> Value {
+    json!({
+        "Environments": config.environments.iter().map(|e| json!({
+            "Label": e.label,
+            "HttpBaseUrl": e.http_base_url,
+        })).collect::<Vec<_>>()
+    })
+}
+
+fn check_environment(config: &Config, label: &str) -> Result<Value, Failure> {
+    let environment = config
+        .find(label)
+        .ok_or_else(|| Failure::Other(anyhow::anyhow!("no environment is labeled {label}")))?;
+    let runtime = tokio::runtime::Runtime::new().map_err(|e| Failure::Other(e.into()))?;
+    let (sender, _receiver) = async_channel::unbounded();
+    let connection = Connection::new(environment, sender);
+    runtime.block_on(async {
+        let descriptor = connection.describe().await.map_err(Failure::Target)?;
+        let session = connection.auth_session().await.map_err(Failure::Target)?;
+        Ok(json!({
+            "Label": environment.label,
+            "EnvironmentId": descriptor.get("environmentId"),
+            "ServerVersion": descriptor.get("serverVersion"),
+            "OrchestrationProtocolVersion": descriptor.get("orchestrationProtocolVersion"),
+            "Authenticated": session.get("authenticated"),
+        }))
+    })
+}
+
+fn run(cli: Cli) -> Result<(), Failure> {
+    match cli.command {
+        None
+        | Some(Command::Desktop {
+            command: DesktopCommand::StartApp,
+        }) => app::run(load(cli.config)?).map_err(Failure::Other),
+        Some(Command::Environment { command }) => {
+            let config = load(cli.config)?;
+            let output = match command {
+                EnvironmentCommand::ListEnvironments => list_environments(&config),
+                EnvironmentCommand::CheckEnvironment { label } => {
+                    check_environment(&config, &label)?
+                }
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).expect("JSON output")
+            );
+            Ok(())
+        }
+    }
+}
+
+fn main() -> ExitCode {
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            let code = if error.use_stderr() { EXIT_USAGE } else { 0 };
+            let _ = error.print();
+            return ExitCode::from(code);
+        }
+    };
+    match run(cli) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(Failure::Target(error)) => {
+            eprintln!("{error:#}");
+            ExitCode::from(EXIT_TARGET)
+        }
+        Err(Failure::Other(error)) => {
+            eprintln!("{error:#}");
+            ExitCode::from(EXIT_OTHER)
+        }
+    }
+}
