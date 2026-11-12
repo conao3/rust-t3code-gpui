@@ -1,4 +1,5 @@
 mod app;
+mod keymap;
 mod models;
 mod projects;
 mod row_view;

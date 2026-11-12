@@ -161,9 +161,12 @@ pub fn adjacent<'a>(
 pub fn next_with<'a>(
     entries: &'a [ThreadEntry],
     current: Option<(&str, &str)>,
+    forward: bool,
     wanted: impl Fn(&ThreadEntry) -> bool,
 ) -> Option<&'a ThreadEntry> {
-    ring(entries, current, true).into_iter().find(|e| wanted(e))
+    ring(entries, current, forward)
+        .into_iter()
+        .find(|e| wanted(e))
 }
 
 pub fn needs_attention(status: ThreadStatus) -> bool {
@@ -313,10 +316,13 @@ mod tests {
         assert_eq!(id(adjacent(&list, None, false)), Some("c".into()));
         let open = |e: &ThreadEntry| e.status != ThreadStatus::Settled;
         assert_eq!(
-            id(next_with(&list, Some(("eos", "b")), open)),
+            id(next_with(&list, Some(("eos", "b")), true, open)),
             Some("a".into())
         );
-        assert_eq!(id(next_with(&list[..1], Some(("eos", "a")), open)), None);
+        assert_eq!(
+            id(next_with(&list[..1], Some(("eos", "a")), true, open)),
+            None
+        );
     }
 
     #[test]

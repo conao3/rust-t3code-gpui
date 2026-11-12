@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -16,6 +17,7 @@ use t3_client::config::Config;
 use t3_client::session::{Change, Connection, ConnectionStatus, Launch, ThreadWatch};
 use tokio::runtime::{Handle, Runtime};
 
+use crate::keymap;
 use crate::models;
 use crate::projects::{self, ProjectGroup};
 use crate::row_view::{RowEvent, RowView};
@@ -33,6 +35,9 @@ actions!(
     [
         Send,
         NextDone,
+        PreviousDone,
+        ToggleSidebar,
+        CycleRuntimeMode,
         NextUserMessage,
         PreviousUserMessage,
         NextThread,
@@ -43,6 +48,29 @@ actions!(
         ToggleModelPicker,
     ]
 );
+
+#[derive(Default)]
+struct KeyRules(Rc<Vec<keymap::Rule>>);
+
+impl Global for KeyRules {}
+
+/// The action of a T3 keybinding command this app implements.
+fn action_for(command: &str) -> Option<Box<dyn Action>> {
+    Some(match command {
+        "thread.nextDone" => Box::new(NextDone),
+        "thread.previousDone" => Box::new(PreviousDone),
+        "chat.nextUserMessage" => Box::new(NextUserMessage),
+        "chat.previousUserMessage" => Box::new(PreviousUserMessage),
+        "thread.next" => Box::new(NextThread),
+        "thread.previous" => Box::new(PreviousThread),
+        "thread.settle" => Box::new(Settle),
+        "chat.new" | "chat.newLocal" => Box::new(NewThread),
+        "modelPicker.toggle" => Box::new(ToggleModelPicker),
+        "composer.mode" => Box::new(CycleRuntimeMode),
+        "sidebar.toggle" => Box::new(ToggleSidebar),
+        _ => return None,
+    })
+}
 
 fn now_iso() -> String {
     humantime::format_rfc3339_millis(SystemTime::now()).to_string()
@@ -84,6 +112,7 @@ pub struct Root {
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
+    sidebar_hidden: bool,
     window_active: bool,
     shell_dirty: bool,
     thread_dirty: bool,
@@ -162,6 +191,7 @@ impl Root {
             composer,
             message: None,
             picker_open: false,
+            sidebar_hidden: false,
             window_active: window.is_window_active(),
             shell_dirty: false,
             thread_dirty: false,
@@ -230,11 +260,29 @@ impl Root {
         if std::mem::take(&mut self.shell_dirty) {
             self.rebuild_entries();
             self.notify_attention();
+            self.rebuild_key_rules(cx);
             self.visit_if_done();
             cx.notify();
         }
         if std::mem::take(&mut self.thread_dirty) {
             self.rebuild_rows(window, cx);
+        }
+    }
+
+    /// The keybindings of the primary host that has sent its configuration, as T3 uses the primary
+    /// server's keybindings.
+    fn rebuild_key_rules(&self, cx: &mut Context<Self>) {
+        let rules = self.connections.iter().find_map(|c| {
+            c.config()
+                .lock()
+                .expect("config lock")
+                .as_ref()
+                .map(keymap::rules)
+        });
+        if let Some(rules) = rules
+            && *cx.global::<KeyRules>().0 != rules
+        {
+            cx.set_global(KeyRules(Rc::new(rules)));
         }
     }
 
@@ -579,6 +627,7 @@ impl Root {
             let next = sidebar::next_with(
                 &visible,
                 Some((&entry.environment, &entry.thread_id)),
+                true,
                 |e| e.status != ThreadStatus::Settled,
             )
             .map(ThreadEntry::key);
@@ -620,12 +669,13 @@ impl Root {
         }
     }
 
-    fn next_done(&mut self, cx: &mut Context<Self>) {
+    fn next_done(&mut self, forward: bool, cx: &mut Context<Self>) {
         let current = self.current();
         let visible = self.visible_entries();
         let next = sidebar::next_with(
             &visible,
             current.as_ref().map(|(e, t)| (e.as_str(), t.as_str())),
+            forward,
             |e| sidebar::needs_attention(e.status),
         )
         .map(ThreadEntry::key);
@@ -1401,7 +1451,13 @@ impl Render for Root {
             .size_full()
             .track_focus(&self.focus)
             .key_context("Root")
-            .on_action(cx.listener(|root, _: &NextDone, _, cx| root.next_done(cx)))
+            .on_action(cx.listener(|root, _: &NextDone, _, cx| root.next_done(true, cx)))
+            .on_action(cx.listener(|root, _: &PreviousDone, _, cx| root.next_done(false, cx)))
+            .on_action(cx.listener(|root, _: &ToggleSidebar, _, cx| {
+                root.sidebar_hidden = !root.sidebar_hidden;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|root, _: &CycleRuntimeMode, _, cx| root.cycle_runtime_mode(cx)))
             .on_action(cx.listener(|root, _: &Send, window, cx| root.send(window, cx)))
             .on_action(
                 cx.listener(|root, _: &NextUserMessage, _, cx| root.jump_user_message(true, cx)),
@@ -1425,7 +1481,9 @@ impl Render for Root {
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
             .font_family(UI_FONT)
-            .child(self.render_sidebar(cx))
+            .when(!self.sidebar_hidden, |root| {
+                root.child(self.render_sidebar(cx))
+            })
             .child(pane)
     }
 }
@@ -1438,19 +1496,28 @@ pub fn run(config: Config) -> anyhow::Result<()> {
         Theme::global_mut(cx).font_family = UI_FONT.into();
         let root = Some("Root");
         cx.bind_keys([
-            KeyBinding::new("alt-o", NextDone, root),
-            KeyBinding::new("alt-n", NextUserMessage, root),
-            KeyBinding::new("alt-p", PreviousUserMessage, root),
-            KeyBinding::new("ctrl-shift-]", NextThread, root),
-            KeyBinding::new("ctrl-shift-[", PreviousThread, root),
-            KeyBinding::new("ctrl-shift-s", Settle, root),
-            KeyBinding::new("alt-s", Settle, root),
-            KeyBinding::new("ctrl-n", NewThread, root),
-            KeyBinding::new("ctrl-shift-o", NewThread, root),
             KeyBinding::new("escape", Cancel, root),
-            KeyBinding::new("ctrl-shift-m", ToggleModelPicker, root),
             KeyBinding::new("ctrl-enter", Send, root),
         ]);
+        cx.set_global(KeyRules::default());
+        cx.intercept_keystrokes(|event, window, cx| {
+            let keystroke = &event.keystroke;
+            let typed = keymap::Chord {
+                control: keystroke.modifiers.control,
+                alt: keystroke.modifiers.alt,
+                shift: keystroke.modifiers.shift,
+                platform: keystroke.modifiers.platform,
+                key: keystroke.key.clone(),
+            };
+            let rules = cx.global::<KeyRules>().0.clone();
+            let action = keymap::command_for(&rules, &typed, |c| action_for(c).is_some())
+                .and_then(action_for);
+            if let Some(action) = action {
+                window.dispatch_action(action, cx);
+                cx.stop_propagation();
+            }
+        })
+        .detach();
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(1400.), px(900.)), cx)),
             titlebar: Some(TitlebarOptions {
