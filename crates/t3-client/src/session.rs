@@ -44,7 +44,7 @@ pub enum Change {
 pub enum Delivery {
     Start,
     Queue,
-    Steer { run_id: String },
+    Steer,
 }
 
 pub struct Launch<'a> {
@@ -220,12 +220,7 @@ impl Connection {
         text: &str,
         delivery: Delivery,
     ) -> Result<u64> {
-        let dispatch_mode = match delivery {
-            Delivery::Start => json!({"type": "start_immediately"}),
-            Delivery::Queue => json!({"type": "queue_after_active"}),
-            Delivery::Steer { run_id } => json!({"type": "steer_active", "targetRunId": run_id}),
-        };
-        self.dispatch(json!({
+        let mut command = json!({
             "type": "message.dispatch",
             "threadId": thread_id,
             "messageId": uuid::Uuid::new_v4().to_string(),
@@ -233,10 +228,19 @@ impl Connection {
             "attachments": [],
             "createdBy": "user",
             "creationSource": "web",
-            "deliveryIntent": "auto",
-            "dispatchMode": dispatch_mode,
-        }))
-        .await
+        });
+        match delivery {
+            Delivery::Start => {
+                command["deliveryIntent"] = json!("auto");
+                command["dispatchMode"] = json!({"type": "start_immediately"});
+            }
+            Delivery::Steer => {
+                command["deliveryIntent"] = json!("steer");
+                command["dispatchMode"] = json!({"type": "start_immediately"});
+            }
+            Delivery::Queue => command["dispatchMode"] = json!({"type": "queue_after_active"}),
+        }
+        self.dispatch(command).await
     }
 
     pub async fn implement_plan(
@@ -257,6 +261,26 @@ impl Connection {
             "deliveryIntent": "auto",
             "dispatchMode": {"type": "start_immediately"},
             "sourcePlanRef": {"threadId": thread_id, "planId": plan_id},
+        }))
+        .await
+    }
+
+    pub async fn cancel_queued(&self, thread_id: &str, run_id: &str) -> Result<u64> {
+        self.dispatch(json!({"type": "queued-run.cancel", "threadId": thread_id, "runId": run_id}))
+            .await
+    }
+
+    pub async fn steer_queued(
+        &self,
+        thread_id: &str,
+        queued_run_id: &str,
+        target_run_id: &str,
+    ) -> Result<u64> {
+        self.dispatch(json!({
+            "type": "queued-message.promote-to-steer",
+            "threadId": thread_id,
+            "queuedRunId": queued_run_id,
+            "targetRunId": target_run_id,
         }))
         .await
     }

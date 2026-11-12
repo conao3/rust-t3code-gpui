@@ -527,6 +527,41 @@ pub fn user_message_jump(rows: &[Row], from: usize, inside: bool, forward: bool)
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Queued {
+    pub run_id: String,
+    pub text: String,
+}
+
+/// The runs waiting in the thread's queue, in queue order, with the text of their messages.
+pub fn queued(state: &ThreadState) -> Vec<Queued> {
+    let mut runs: Vec<&Value> = state
+        .list("runs")
+        .iter()
+        .filter(|r| text(r, "status") == "queued")
+        .collect();
+    runs.sort_by_key(|r| {
+        r.get("queuePosition")
+            .and_then(Value::as_i64)
+            .unwrap_or(i64::MAX)
+    });
+    runs.into_iter()
+        .map(|run| {
+            let message_id = text(run, "userMessageId");
+            let body = state
+                .list("messages")
+                .iter()
+                .find(|m| text(m, "id") == message_id)
+                .map(|m| text(m, "text").to_string())
+                .unwrap_or_default();
+            Queued {
+                run_id: text(run, "id").to_string(),
+                text: body,
+            }
+        })
+        .collect()
+}
+
 /// The rows whose text contains the query, ignoring case. A blank query finds nothing.
 pub fn find_rows(rows: &[Row], query: &str) -> Vec<usize> {
     let query = query.trim().to_lowercase();
@@ -831,5 +866,33 @@ mod tests {
         assert_eq!(tool_detail(&change), "@@ -1 +1 @@\n-a\n+b");
         let tool = json!({"type": "dynamic_tool", "input": {"q": 1}, "output": "done"});
         assert_eq!(tool_detail(&tool), "{\n  \"q\": 1\n}\n\ndone");
+    }
+
+    #[test]
+    fn queued_runs_come_in_queue_order_with_their_text() {
+        let s = ThreadState::from_snapshot(&json!({
+            "kind": "snapshot",
+            "snapshotSequence": 1,
+            "projection": {
+                "thread": {"id": "t1"},
+                "turnItems": [],
+                "runs": [
+                    {"id": "r2", "status": "queued", "queuePosition": 2, "userMessageId": "m2"},
+                    {"id": "r0", "status": "running", "userMessageId": "m0"},
+                    {"id": "r1", "status": "queued", "queuePosition": 1, "userMessageId": "m1"},
+                ],
+                "messages": [{"id": "m1", "text": "first"}, {"id": "m2", "text": "second"}],
+            },
+        }))
+        .unwrap();
+        let ids: Vec<(String, String)> =
+            queued(&s).into_iter().map(|q| (q.run_id, q.text)).collect();
+        assert_eq!(
+            ids,
+            [
+                ("r1".into(), "first".into()),
+                ("r2".into(), "second".into())
+            ]
+        );
     }
 }

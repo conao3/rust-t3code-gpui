@@ -151,6 +151,7 @@ pub struct Root {
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
+    queued: Vec<timeline::Queued>,
     completion: Option<Completion>,
     completion_seq: u64,
     find_input: Entity<InputState>,
@@ -262,6 +263,7 @@ impl Root {
             composer,
             message: None,
             picker_open: false,
+            queued: Vec::new(),
             completion: None,
             completion_seq: 0,
             find_input,
@@ -655,11 +657,12 @@ impl Root {
 
     fn rebuild_rows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &self.open else { return };
-        let rows = {
+        let (rows, queued) = {
             let state = open.watch.state();
             let state = state.lock().expect("thread lock");
-            timeline::rows(&state)
+            (timeline::rows(&state), timeline::queued(&state))
         };
+        self.queued = queued;
         let mut existing: HashMap<String, Entity<RowView>> = self
             .rows
             .iter()
@@ -1108,17 +1111,9 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
-        let status = self.open_entry().map(|e| e.status);
-        let active_run = self.thread_value(&environment, &thread_id).and_then(|t| {
-            t.get("activeRunId")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        });
-        let delivery = match (status, active_run) {
-            (Some(ThreadStatus::Working), Some(run_id)) if self.settings.steer_follow_ups => {
-                Delivery::Steer { run_id }
-            }
-            (Some(ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval), _) => {
+        let delivery = match self.open_entry().map(|e| e.status) {
+            Some(ThreadStatus::Working) if self.settings.steer_follow_ups => Delivery::Steer,
+            Some(ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval) => {
                 Delivery::Queue
             }
             _ => Delivery::Start,
@@ -1835,6 +1830,87 @@ impl Root {
             )
     }
 
+    fn render_queue(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        if self.queued.is_empty() {
+            return None;
+        }
+        let theme = cx.theme();
+        let rows = self.queued.iter().enumerate().map(|(i, queued)| {
+            let steer_run = queued.run_id.clone();
+            let cancel_run = queued.run_id.clone();
+            h_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child("Queued"),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_sm()
+                        .child(queued.text.clone()),
+                )
+                .child(
+                    Button::new(("queue-steer", i))
+                        .label("Steer now")
+                        .compact()
+                        .outline()
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            root.steer_queued(steer_run.clone(), cx)
+                        })),
+                )
+                .child(
+                    Button::new(("queue-cancel", i))
+                        .label("Cancel")
+                        .compact()
+                        .outline()
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            root.cancel_queued(cancel_run.clone(), cx)
+                        })),
+                )
+        });
+        Some(
+            v_flex()
+                .px_3()
+                .pt_2()
+                .gap_1()
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn steer_queued(&mut self, run_id: String, cx: &mut Context<Self>) {
+        let Some((environment, thread_id)) = self.current() else {
+            return;
+        };
+        let Some(active) = self.thread_value(&environment, &thread_id).and_then(|t| {
+            t.get("activeRunId")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        }) else {
+            self.message = Some("No run is active to steer.".into());
+            cx.notify();
+            return;
+        };
+        self.dispatch_on_open("Steering", cx, move |connection, thread_id| {
+            Box::pin(async move { connection.steer_queued(&thread_id, &run_id, &active).await })
+        });
+    }
+
+    fn cancel_queued(&mut self, run_id: String, cx: &mut Context<Self>) {
+        self.dispatch_on_open(
+            "Cancelling the queued message",
+            cx,
+            move |connection, thread_id| {
+                Box::pin(async move { connection.cancel_queued(&thread_id, &run_id).await })
+            },
+        );
+    }
+
     fn render_message(&self, cx: &App) -> Option<Div> {
         self.message.clone().map(|message| {
             div()
@@ -2198,6 +2274,7 @@ impl Root {
                 div()
                     .border_t_1()
                     .border_color(theme.border)
+                    .children(self.render_queue(cx))
                     .child(self.render_composer(button, cx)),
             )
             .into_any_element()
