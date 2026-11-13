@@ -10,7 +10,8 @@ use gpui_kit::component::{
     diff::{Diff, DiffFile, DiffMode, DiffParseOptions, DiffState},
     h_flex,
     input::{CursorBlink, Input, InputEvent, InputState, Position, Textarea, TextareaState},
-    menu::{ContextMenuExt as _, DropdownMenu as _},
+    menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu},
+    popover::Popover,
     text::{TextView, TextViewState},
     v_flex,
 };
@@ -73,6 +74,7 @@ actions!(
         HistoryForward,
         Stop,
         CycleAppearance,
+        OpenPermissions,
     ]
 );
 
@@ -91,7 +93,8 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "navigation.back" => Box::new(HistoryBack),
         "navigation.forward" => Box::new(HistoryForward),
         "modelPicker.toggle" => Box::new(ToggleModelPicker),
-        "composer.mode" => Box::new(CycleRuntimeMode),
+        "composer.mode" => Box::new(OpenPermissions),
+        "composer.effort" => Box::new(ToggleModelPicker),
         "sidebar.toggle" => Box::new(ToggleSidebar),
         "thread.pin" => Box::new(TogglePin),
         "chat.find" => Box::new(Find),
@@ -103,6 +106,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "rightPanel.toggle" => Box::new(ToggleExplorer),
         "rightPanel.close" => Box::new(CloseFilePanel),
         "appearance.cycle" => Box::new(CycleAppearance),
+        "theme.select" => Box::new(OpenSettings),
         _ => return None,
     })
 }
@@ -345,6 +349,7 @@ struct ComposerControlsStamp {
     empty: bool,
     attachments: bool,
     picker: bool,
+    permissions: bool,
     picker_instance: Option<String>,
     catalog_revision: u64,
     light: bool,
@@ -390,6 +395,8 @@ pub struct Root {
     message: Option<String>,
     picker_open: bool,
     picker_instance: Option<String>,
+    permissions_menu: Option<Entity<PopupMenu>>,
+    permissions_subscription: Option<Subscription>,
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
     queued: Vec<timeline::Queued>,
@@ -566,6 +573,8 @@ impl Root {
             message: None,
             picker_open: false,
             picker_instance: None,
+            permissions_menu: None,
+            permissions_subscription: None,
             model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
             queued: Vec::new(),
@@ -876,8 +885,22 @@ impl Root {
             "isDesktop" => true,
             "modelPickerOpen" => self.picker_open,
             "rightPanelOpen" => self.file_panel.is_some() || self.explorer.is_some(),
-            "composerFocus" | "editableFocus" => {
-                self.composer.read(cx).focus_handle(cx).is_focused(window)
+            "composerFocus" => self.composer.read(cx).focus_handle(cx).is_focused(window),
+            "editableFocus" => {
+                [
+                    self.composer.read(cx).focus_handle(cx),
+                    self.find_input.read(cx).focus_handle(cx),
+                    self.file_find_input.read(cx).focus_handle(cx),
+                    self.palette.read(cx).focus_handle(cx),
+                    self.file_picker.read(cx).focus_handle(cx),
+                    self.model_picker.read(cx).focus_handle(cx),
+                ]
+                .iter()
+                .any(|handle| handle.contains_focused(window, cx))
+                    || self
+                        .host_inputs
+                        .iter()
+                        .any(|input| input.read(cx).focus_handle(cx).is_focused(window))
             }
             "draftThreadRoute" => self.draft.is_some(),
             "turnRunning" => self
@@ -3287,6 +3310,73 @@ impl Root {
         cx.notify();
     }
 
+    fn ensure_permissions_menu(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<PopupMenu>> {
+        if let Some(menu) = &self.permissions_menu {
+            return Some(menu.clone());
+        }
+        let (environment, model, current, _) = self.composer_target()?;
+        let instance_id = model.as_ref()?.get("instanceId")?.as_str()?;
+        let modes = self
+            .model_catalogs
+            .get(&environment)?
+            .1
+            .iter()
+            .find(|instance| instance.instance_id == instance_id)?
+            .runtime_modes
+            .clone();
+        let focus = self.model_picker.read(cx).focus_handle(cx);
+        let menu = PopupMenu::build(window, cx, move |mut menu, _, _| {
+            for mode in &modes {
+                let label = match mode.as_str() {
+                    "full-access" => "Full access",
+                    "approval-required" => "Supervised",
+                    "auto-accept-edits" => "Auto-accept edits",
+                    _ => "Auto",
+                };
+                menu = menu.menu_with_check(
+                    label,
+                    *mode == current,
+                    Box::new(SetRuntimeModeAction { mode: mode.clone() }),
+                );
+            }
+            menu.action_context(focus)
+        });
+        self.permissions_subscription =
+            Some(
+                cx.subscribe_in(&menu, window, |root, _, _: &DismissEvent, window, cx| {
+                    root.permissions_menu = None;
+                    root.permissions_subscription = None;
+                    root.model_picker
+                        .update(cx, |state, cx| state.focus(window, cx));
+                    cx.notify();
+                }),
+            );
+        self.permissions_menu = Some(menu.clone());
+        menu.focus_handle(cx).focus(window, cx);
+        Some(menu)
+    }
+
+    fn open_permissions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.composer_target().is_none() {
+            return;
+        }
+        if self.permissions_menu.take().is_some() {
+            self.permissions_subscription = None;
+            self.model_picker
+                .update(cx, |state, cx| state.focus(window, cx));
+        } else {
+            if !self.picker_open {
+                self.toggle_model_picker(window, cx);
+            }
+            self.ensure_permissions_menu(window, cx);
+        }
+        cx.notify();
+    }
+
     fn choose_attachments(&mut self, cx: &mut Context<Self>) {
         let selected = cx.prompt_for_paths(PathPromptOptions {
             files: true,
@@ -4114,10 +4204,8 @@ impl Root {
                 .as_ref()
                 .map(|(_, _, r, i)| (r.clone(), i.clone()))
                 .unwrap_or_default();
-            let modes = selected_instance
-                .map(|i| i.runtime_modes.clone())
-                .unwrap_or_default();
-            let current_mode = runtime_mode.clone();
+            let permissions_root = cx.entity().downgrade();
+            let permissions_content_root = permissions_root.clone();
             let runtime_label = match runtime_mode.as_str() {
                 "full-access" => "Full access",
                 "approval-required" => "Supervised",
@@ -4385,39 +4473,51 @@ impl Root {
                             },
                         )
                         .child(
-                            Button::new("permissions")
-                                .label(runtime_label)
-                                .icon(match runtime_mode.as_str() {
-                                    "full-access" => gpui_kit::assets::IconName::ShieldOff,
-                                    "approval-required" => gpui_kit::assets::IconName::Lock,
-                                    "auto-accept-edits" => gpui_kit::assets::IconName::PenLine,
-                                    _ => gpui_kit::assets::IconName::Sparkles,
-                                })
-                                .compact()
-                                .ghost()
-                                .text_size(px(12.))
-                                .text_color(theme.muted_foreground)
-                                .dropdown_menu_with_anchor(
-                                    Anchor::BottomRight,
-                                    move |mut menu, _, _| {
-                                        for mode in &modes {
-                                            let label = match mode.as_str() {
-                                                "full-access" => "Full access",
-                                                "approval-required" => "Supervised",
-                                                "auto-accept-edits" => "Auto-accept edits",
-                                                _ => "Auto",
-                                            };
-                                            menu = menu.menu_with_check(
-                                                label,
-                                                *mode == current_mode,
-                                                Box::new(SetRuntimeModeAction {
-                                                    mode: mode.clone(),
-                                                }),
-                                            );
+                            Popover::new("permissions-popover")
+                                .appearance(false)
+                                .overlay_closable(false)
+                                .anchor(Anchor::BottomRight)
+                                .open(self.permissions_menu.is_some())
+                                .trigger(
+                                    Button::new("permissions")
+                                        .label(runtime_label)
+                                        .icon(match runtime_mode.as_str() {
+                                            "full-access" => gpui_kit::assets::IconName::ShieldOff,
+                                            "approval-required" => gpui_kit::assets::IconName::Lock,
+                                            "auto-accept-edits" => {
+                                                gpui_kit::assets::IconName::PenLine
+                                            }
+                                            _ => gpui_kit::assets::IconName::Sparkles,
+                                        })
+                                        .compact()
+                                        .ghost()
+                                        .text_size(px(12.))
+                                        .text_color(theme.muted_foreground),
+                                )
+                                .on_open_change(move |open, window, cx| {
+                                    let _ = permissions_root.update(cx, |root, cx| {
+                                        let was_open = root.permissions_menu.is_some();
+                                        if *open {
+                                            root.ensure_permissions_menu(window, cx);
+                                        } else {
+                                            root.permissions_menu = None;
+                                            root.permissions_subscription = None;
                                         }
-                                        menu
-                                    },
-                                ),
+                                        if was_open != root.permissions_menu.is_some() {
+                                            cx.notify();
+                                        }
+                                    });
+                                })
+                                .content(move |_, window, cx| {
+                                    permissions_content_root
+                                        .update(cx, |root, cx| {
+                                            root.ensure_permissions_menu(window, cx)
+                                        })
+                                        .ok()
+                                        .flatten()
+                                        .map(|menu| menu.into_any_element())
+                                        .unwrap_or_else(|| div().into_any_element())
+                                }),
                         ),
                 )
         });
@@ -4775,6 +4875,10 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.picker_open {
+            self.permissions_menu = None;
+            self.permissions_subscription = None;
+        }
         self.settings.sidebar_width = self.settings.sidebar_width.clamp(
             208.,
             (f32::from(window.viewport_size().width) - 640.).max(208.),
@@ -4829,6 +4933,7 @@ impl Render for Root {
             empty: self.composer.read(cx).value().trim().is_empty(),
             attachments: !self.attachments.is_empty(),
             picker: self.picker_open,
+            permissions: self.permissions_menu.is_some(),
             picker_instance: self.picker_instance.clone(),
             catalog_revision: self.model_catalog_revision,
             light: self.settings.light_theme,
@@ -4944,6 +5049,9 @@ impl Render for Root {
                 }),
             )
             .on_action(cx.listener(|root, _: &Stop, _, cx| root.stop(cx)))
+            .on_action(cx.listener(|root, _: &OpenPermissions, window, cx| {
+                root.open_permissions(window, cx)
+            }))
             .on_action(cx.listener(|root, _: &CycleAppearance, _, cx| {
                 root.change_setting(
                     "gpuiAppearance",

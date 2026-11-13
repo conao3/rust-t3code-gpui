@@ -102,9 +102,23 @@ pub fn resolve<'a>(
     typed: &Chord,
     context: &impl Fn(&str) -> bool,
 ) -> Option<&'a str> {
+    let shifted = if typed.shift {
+        "!@#$%^&*()~_+{}|:\"<>?"
+            .chars()
+            .zip("1234567890`-=[]\\;',./".chars())
+            .find_map(|(from, to)| (typed.key == from.to_string()).then(|| to.to_string()))
+    } else {
+        None
+    };
+    let mut normalized = typed.clone();
+    if let Some(key) = shifted {
+        normalized.key = key;
+    }
     rules
         .iter()
-        .find(|r| r.chord == *typed && holds_in(r.when.as_ref(), context))
+        .find(|r| {
+            (r.chord == *typed || r.chord == normalized) && holds_in(r.when.as_ref(), context)
+        })
         .map(|r| r.command.as_str())
 }
 
@@ -166,6 +180,25 @@ mod tests {
     fn shortcut(key: &str, m: &str) -> Value {
         json!({"key": key, "metaKey": m.contains('M'), "ctrlKey": m.contains('C'), "shiftKey": m.contains('S'),
                "altKey": m.contains('A'), "modKey": m.contains('m')})
+    }
+
+    #[test]
+    fn shifted_punctuation_matches_physical_shortcuts_and_later_overrides() {
+        let rules = rules(&json!({"keybindings": [
+            {"command": "thread.next", "shortcut": shortcut("]", "CS")},
+            {"command": "thread.previous", "shortcut": shortcut("[", "CS")},
+            {"command": "custom", "shortcut": shortcut("+", "CS")}
+        ]}));
+        for (key, command) in [
+            ("}", "thread.next"),
+            ("{", "thread.previous"),
+            ("+", "custom"),
+        ] {
+            assert_eq!(
+                resolve(&rules, &chord(&shortcut(key, "CS")).unwrap(), &|_| false),
+                Some(command)
+            );
+        }
     }
 
     #[test]
