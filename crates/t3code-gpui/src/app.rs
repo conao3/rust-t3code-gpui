@@ -3520,6 +3520,7 @@ impl Root {
                     )
                     .child(
                         div()
+                            .ml_4()
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
                             .child("T3 Code"),
