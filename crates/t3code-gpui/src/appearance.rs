@@ -246,6 +246,38 @@ pub fn message(cx: &App) -> Hsla {
     .into()
 }
 
+pub struct Assets;
+impl AssetSource for Assets {
+    fn load(&self, path: &str) -> anyhow::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        match path {
+            "icons/t3-stop.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/stop.svg"
+            )))),
+            "icons/t3-openai.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/openai.svg"
+            )))),
+            "icons/t3-claude.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/claude.svg"
+            )))),
+            _ => gpui_kit::assets::AllAssets.load(path),
+        }
+    }
+    fn list(&self, path: &str) -> anyhow::Result<Vec<SharedString>> {
+        let mut paths = gpui_kit::assets::AllAssets.list(path)?;
+        paths.extend(
+            [
+                "icons/t3-openai.svg",
+                "icons/t3-claude.svg",
+                "icons/t3-stop.svg",
+            ]
+            .into_iter()
+            .filter(|p| p.starts_with(path))
+            .map(Into::into),
+        );
+        Ok(paths)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

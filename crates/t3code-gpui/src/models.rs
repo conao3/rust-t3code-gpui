@@ -12,6 +12,8 @@ pub const RUNTIME_MODES: &[&str] = &[
 pub struct Model {
     pub slug: String,
     pub name: String,
+    pub full_name: String,
+    pub option_descriptors: Vec<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,12 +86,17 @@ pub fn instances(config: &Value) -> Vec<Instance> {
                     .iter()
                     .map(|m| Model {
                         slug: text(m, "slug").to_string(),
-                        name: m
-                            .get("shortName")
-                            .or_else(|| m.get("name"))
+                        name: short_name(m, text(p, "driver")),
+                        full_name: m
+                            .get("name")
                             .and_then(Value::as_str)
                             .unwrap_or(text(m, "slug"))
                             .to_string(),
+                        option_descriptors: m
+                            .pointer("/capabilities/optionDescriptors")
+                            .and_then(Value::as_array)
+                            .cloned()
+                            .unwrap_or_default(),
                     })
                     .collect(),
                 default_model: default_model(p),
@@ -102,6 +109,100 @@ pub fn instances(config: &Value) -> Vec<Instance> {
             }
         })
         .collect()
+}
+
+// Match the native-family shortening used by provider-core/modelShortName.ts.
+fn short_name(model: &Value, driver: &str) -> String {
+    if let Some(short) = model
+        .get("shortName")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        return short.to_string();
+    }
+    let name = model
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or(text(model, "slug"));
+    let prefixes: &[&str] = match driver {
+        "codex" => &["GPT-", "GPT "],
+        "claudeAgent" => &["Claude "],
+        "antigravity" => &["Gemini "],
+        _ => &[],
+    };
+    for prefix in prefixes {
+        if let Some(rest) = name.strip_prefix(prefix) {
+            let rest = rest.trim();
+            // Keep the family when only a version remains (for example GPT-5.4).
+            if rest
+                .split([' ', '-'])
+                .any(|word| word.chars().any(char::is_alphabetic))
+            {
+                return if rest.contains(char::is_whitespace) {
+                    rest.to_string()
+                } else {
+                    rest.replace('-', " ")
+                };
+            }
+        }
+    }
+    name.to_string()
+}
+
+pub fn option_value(selection: &Value, descriptor: &Value) -> Option<Value> {
+    let id = descriptor.get("id")?;
+    selection
+        .get("options")
+        .and_then(Value::as_array)
+        .and_then(|options| options.iter().find(|o| o.get("id") == Some(id)))
+        .and_then(|o| o.get("value"))
+        .cloned()
+        .or_else(|| descriptor.get("currentValue").cloned())
+        .or_else(|| {
+            descriptor
+                .get("options")
+                .and_then(Value::as_array)
+                .and_then(|options| {
+                    options
+                        .iter()
+                        .find(|o| o.get("isDefault").and_then(Value::as_bool) == Some(true))
+                })
+                .and_then(|o| o.get("id"))
+                .cloned()
+        })
+}
+
+pub fn with_option(selection: &Value, id: &str, value: Value) -> Option<Value> {
+    let mut selection = selection.clone();
+    let object = selection.as_object_mut()?;
+    let options = object
+        .entry("options")
+        .or_insert_with(|| json!([]))
+        .as_array_mut()?;
+    if let Some(option) = options.iter_mut().find(|o| text(o, "id") == id) {
+        option.as_object_mut()?.insert("value".into(), value);
+    } else {
+        options.push(json!({"id": id, "value": value}));
+    }
+    Some(selection)
+}
+
+pub fn trigger_label(model: &Model, selection: &Value) -> String {
+    let reasoning = model
+        .option_descriptors
+        .iter()
+        .find(|d| text(d, "role") == "reasoning" || text(d, "id") == "reasoningEffort");
+    let suffix = reasoning.and_then(|d| {
+        let value = option_value(selection, d)?;
+        d.get("options")?
+            .as_array()?
+            .iter()
+            .find(|o| o.get("id") == Some(&value))?
+            .get("label")?
+            .as_str()
+            .map(str::to_string)
+    });
+    suffix.map_or_else(|| model.name.clone(), |s| format!("{} {s}", model.name))
 }
 
 pub fn selection(instance_id: &str, model: &str) -> Value {
@@ -177,14 +278,10 @@ pub fn usage(config: &Value, instance_id: &str) -> Vec<(String, f64)> {
 }
 
 /// "Instance · model" for a model selection, with the names the server reports.
-pub fn label(config: Option<&Value>, selection: &Value) -> String {
+pub fn label(catalog: &[Instance], selection: &Value) -> String {
     let instance_id = text(selection, "instanceId");
     let slug = text(selection, "model");
-    let instance = config.and_then(|c| {
-        instances(c)
-            .into_iter()
-            .find(|i| i.instance_id == instance_id)
-    });
+    let instance = catalog.iter().find(|i| i.instance_id == instance_id);
     match instance {
         Some(instance) => {
             let model = instance
@@ -217,6 +314,23 @@ mod tests {
             ],
             "settings": settings,
         })
+    }
+
+    #[test]
+    fn option_changes_preserve_other_options_and_use_model_defaults() {
+        let selected = json!({"instanceId":"i", "model":"m", "options":[{"id":"serviceTier","value":"fast"},{"id":"reasoningEffort","value":"low"}]});
+        let descriptor = json!({"id":"reasoningEffort", "currentValue":"medium"});
+        assert_eq!(option_value(&selected, &descriptor), Some(json!("low")));
+        let changed = with_option(&selected, "reasoningEffort", json!("high")).unwrap();
+        assert_eq!(changed["options"][0], selected["options"][0]);
+        assert_eq!(option_value(&changed, &descriptor), Some(json!("high")));
+        assert_eq!(option_value(&json!({}), &descriptor), Some(json!("medium")));
+        assert!(with_option(&json!({"options":{}}), "x", json!(true)).is_none());
+        assert_eq!(
+            short_name(&json!({"name":"GPT-6.1-Sol"}), "codex"),
+            "6.1 Sol"
+        );
+        assert_eq!(short_name(&json!({"name":"GPT-5.4"}), "codex"), "GPT-5.4");
     }
 
     #[test]
@@ -275,10 +389,13 @@ mod tests {
     fn labels_use_the_server_names() {
         let c = config(json!({}));
         assert_eq!(
-            label(Some(&c), &selection("claude_conao3", "claude-opus-5-5")),
+            label(
+                &instances(&c),
+                &selection("claude_conao3", "claude-opus-5-5")
+            ),
             "Claude conao3 · Opus 5.5"
         );
-        assert_eq!(label(Some(&c), &selection("other", "m")), "other · m");
+        assert_eq!(label(&instances(&c), &selection("other", "m")), "other · m");
     }
 
     #[test]

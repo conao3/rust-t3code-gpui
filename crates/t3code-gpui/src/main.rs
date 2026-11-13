@@ -7,6 +7,7 @@ mod drafts;
 mod explorer;
 mod keymap;
 mod models;
+mod navigation;
 mod projects;
 mod row_view;
 mod sidebar;

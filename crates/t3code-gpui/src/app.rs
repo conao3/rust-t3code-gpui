@@ -4,13 +4,13 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use gpui_kit::component::{
-    ActiveTheme as _, IconName, Selectable as _, Theme,
+    ActiveTheme as _, Disableable as _, Icon, IconName, Selectable as _, Theme,
     button::{Button, ButtonVariants as _},
-    command::{Command, CommandItem, CommandState},
+    command::{Command, CommandGroup, CommandItem, CommandState},
     diff::{Diff, DiffFile, DiffMode, DiffParseOptions, DiffState},
     h_flex,
     input::{CursorBlink, Input, InputEvent, InputState, Position, Textarea, TextareaState},
-    menu::ContextMenuExt as _,
+    menu::{ContextMenuExt as _, DropdownMenu as _},
     text::{TextView, TextViewState},
     v_flex,
 };
@@ -69,6 +69,8 @@ actions!(
         NewThread,
         Cancel,
         ToggleModelPicker,
+        HistoryBack,
+        HistoryForward,
     ]
 );
 
@@ -128,6 +130,26 @@ struct ThreadMenu {
     environment: String,
     thread_id: String,
     op: ThreadOp,
+}
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = t3code_gpui, no_json)]
+struct PickModelAction {
+    instance_id: String,
+    slug: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = t3code_gpui, no_json)]
+struct SetRuntimeModeAction {
+    mode: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = t3code_gpui, no_json)]
+struct SetModelOptionAction {
+    id: String,
+    value: Value,
 }
 
 fn now_iso() -> String {
@@ -280,6 +302,7 @@ impl Render for TimelinePane {
 
 #[derive(PartialEq)]
 struct SidebarStamp {
+    history_available: (bool, bool),
     entries_revision: u64,
     open: Option<(String, String)>,
     filter: Option<String>,
@@ -304,12 +327,45 @@ impl Render for SidebarPane {
     }
 }
 
+#[derive(PartialEq)]
+struct ComposerControlsStamp {
+    target: Option<(String, Option<Value>, String, String)>,
+    current: Option<(String, String)>,
+    draft: bool,
+    status: Option<ThreadStatus>,
+    question: bool,
+    empty: bool,
+    attachments: bool,
+    picker: bool,
+    picker_instance: Option<String>,
+    catalog_revision: u64,
+    light: bool,
+    font_size: f32,
+    plan_enabled: bool,
+}
+
+struct ComposerControlsPane {
+    root: WeakEntity<Root>,
+}
+impl Render for ComposerControlsPane {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.root
+            .update(cx, |root, cx| root.render_composer_controls(cx))
+            .expect("composer root is alive")
+    }
+}
+
 pub struct Root {
     sidebar_resizing: bool,
+    history: crate::navigation::History,
     sidebar_pane: Entity<SidebarPane>,
     sidebar_stamp: Option<SidebarStamp>,
     runtime: Handle,
     connections: Vec<Arc<Connection>>,
+    model_catalogs: HashMap<String, (Value, Vec<models::Instance>)>,
+    model_catalog_revision: u64,
+    composer_controls: Entity<ComposerControlsPane>,
+    composer_controls_stamp: Option<ComposerControlsStamp>,
     entries: Vec<ThreadEntry>,
     entries_revision: u64,
     statuses: HashMap<(String, String), ThreadStatus>,
@@ -325,6 +381,8 @@ pub struct Root {
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
+    picker_instance: Option<String>,
+    model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
     queued: Vec<timeline::Queued>,
     thread_loading: bool,
@@ -461,10 +519,17 @@ impl Root {
         let sidebar_root = cx.entity().downgrade();
         Self {
             sidebar_resizing: false,
-            sidebar_pane: cx.new(|_| SidebarPane { root: sidebar_root }),
+            history: crate::navigation::History::default(),
+            sidebar_pane: cx.new(|_| SidebarPane {
+                root: sidebar_root.clone(),
+            }),
             sidebar_stamp: None,
             runtime,
             connections,
+            model_catalogs: HashMap::new(),
+            model_catalog_revision: 0,
+            composer_controls: cx.new(|_| ComposerControlsPane { root: sidebar_root }),
+            composer_controls_stamp: None,
             entries: Vec::new(),
             entries_revision: 0,
             statuses: HashMap::new(),
@@ -483,6 +548,8 @@ impl Root {
             composer,
             message: None,
             picker_open: false,
+            picker_instance: None,
+            model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
             queued: Vec::new(),
             thread_loading: false,
@@ -789,9 +856,17 @@ impl Root {
 
     fn on_change(&mut self, change: Change, window: &mut Window, cx: &mut Context<Self>) {
         match change {
-            Change::Status { .. } | Change::Shell { .. } | Change::Config { .. } => {
-                self.shell_dirty = true
+            Change::Config { environment } => {
+                self.model_catalog_revision = self.model_catalog_revision.wrapping_add(1);
+                if let Some(config) = self.config_of(&environment) {
+                    let instances = models::instances(&config);
+                    self.model_catalogs.insert(environment, (config, instances));
+                } else {
+                    self.model_catalogs.remove(&environment);
+                }
+                self.shell_dirty = true;
             }
+            Change::Status { .. } | Change::Shell { .. } => self.shell_dirty = true,
             Change::Thread {
                 environment,
                 thread_id,
@@ -1168,6 +1243,7 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
+        self.history.visit((environment.clone(), thread_id.clone()));
         self.stash_composer(cx);
         let watch = connection.watch_thread(&self.runtime, &thread_id);
         self.open = Some(OpenThread { environment, watch });
@@ -2996,6 +3072,86 @@ impl Root {
         .detach();
     }
 
+    fn toggle_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.picker_open = !self.picker_open;
+        if self.picker_open {
+            self.picker_instance =
+                self.composer_target()
+                    .and_then(|(_, m, _, _)| m)
+                    .and_then(|m| {
+                        m.get("instanceId")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                    });
+            self.model_picker.update(cx, |state, cx| {
+                state.set_query("", window, cx);
+                state.focus(window, cx);
+            });
+        } else {
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    fn choose_attachments(&mut self, cx: &mut Context<Self>) {
+        let selected = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some("Attach files".into()),
+        });
+        cx.spawn(async move |this, cx| {
+            let result = selected.await;
+            let _ = this.update(cx, |root, cx| {
+                match result {
+                    Ok(Ok(Some(paths))) => {
+                        root.attach_paths(&ExternalPaths(paths.into_iter().collect()), cx)
+                    }
+                    Ok(Ok(None)) => {}
+                    Ok(Err(error)) => {
+                        root.message = Some(format!("Choosing attachments failed: {error:#}"))
+                    }
+                    Err(error) => {
+                        root.message = Some(format!("Choosing attachments failed: {error}"))
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn set_runtime_mode(&mut self, mode: String, cx: &mut Context<Self>) {
+        if let Some(draft) = self.draft.as_mut() {
+            draft.runtime_mode = Some(mode);
+            cx.notify();
+        } else {
+            self.dispatch_on_open("Runtime mode change", cx, move |connection, thread_id| {
+                Box::pin(async move { connection.set_runtime_mode(&thread_id, &mode).await })
+            });
+        }
+    }
+
+    fn set_model_option(&mut self, id: &str, value: Value, cx: &mut Context<Self>) {
+        let Some((_, Some(current), _, _)) = self.composer_target() else {
+            return;
+        };
+        let Some(chosen) = models::with_option(&current, id, value) else {
+            self.message = Some("The model's option selection is malformed".into());
+            cx.notify();
+            return;
+        };
+        if let Some(draft) = self.draft.as_mut() {
+            draft.model = Some(chosen);
+            cx.notify();
+        } else {
+            self.dispatch_on_open("Model option change", cx, move |connection, thread_id| {
+                Box::pin(async move { connection.set_model(&thread_id, chosen, false).await })
+            });
+        }
+    }
+
     fn pick_model(&mut self, instance_id: String, slug: String, cx: &mut Context<Self>) {
         self.picker_open = false;
         let chosen = models::selection(&instance_id, &slug);
@@ -3346,13 +3502,52 @@ impl Root {
             .border_color(theme.border)
             .bg(theme.sidebar)
             .child(
-                div()
+                h_flex()
                     .h(px(40.))
-                    .px_4()
-                    .flex()
-                    .items_center()
-                    .text_sm()
-                    .child("T3 Code"),
+                    .px_2()
+                    .gap_1()
+                    .child(
+                        Button::new("collapse-sidebar")
+                            .icon(gpui_kit::assets::IconName::PanelLeftClose)
+                            .ghost()
+                            .size(px(24.))
+                            .tooltip("Toggle sidebar")
+                            .accessibility_label("Toggle sidebar")
+                            .on_click(cx.listener(|root, _, _, cx| {
+                                root.sidebar_hidden = true;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("T3 Code"),
+                    )
+                    .child(
+                        Button::new("history-back")
+                            .icon(IconName::ArrowLeft)
+                            .ghost()
+                            .size(px(24.))
+                            .disabled(!self.history.can_back())
+                            .tooltip("Back")
+                            .accessibility_label("Back")
+                            .on_click(cx.listener(|_, _, window, cx| {
+                                window.dispatch_action(Box::new(HistoryBack), cx)
+                            })),
+                    )
+                    .child(
+                        Button::new("history-forward")
+                            .icon(IconName::ArrowRight)
+                            .ghost()
+                            .size(px(24.))
+                            .disabled(!self.history.can_forward())
+                            .tooltip("Forward")
+                            .accessibility_label("Forward")
+                            .on_click(cx.listener(|_, _, window, cx| {
+                                window.dispatch_action(Box::new(HistoryForward), cx)
+                            })),
+                    ),
             )
             .child(
                 h_flex()
@@ -3379,7 +3574,9 @@ impl Root {
                     )
                     .child(
                         Button::new("sidebar-new")
-                            .icon(IconName::Plus)
+                            .icon(gpui_kit::assets::IconName::SquarePen)
+                            .ghost()
+                            .size(px(24.))
                             .tooltip("New thread")
                             .accessibility_label("New thread")
                             .on_click(
@@ -3520,11 +3717,66 @@ impl Root {
         })
     }
 
-    fn render_composer(&self, button: Button, cx: &Context<Self>) -> AnyElement {
+    fn composer_button(&self, cx: &Context<Self>) -> Button {
+        if self.draft.is_some() {
+            return Button::new("launch")
+                .icon(IconName::ArrowUp)
+                .size(px(32.))
+                .rounded(px(16.))
+                .disabled(
+                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                )
+                .tooltip("Send")
+                .accessibility_label("Send")
+                .primary()
+                .on_click(cx.listener(|root, _, window, cx| root.launch(window, cx)));
+        }
+        let working = self.open_entry().is_some_and(|entry| {
+            matches!(
+                entry.status,
+                ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval
+            )
+        });
+        if self.pending_question().is_some() {
+            Button::new("answer")
+                .label("Answer")
+                .primary()
+                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
+        } else if working {
+            Button::new("stop")
+                .icon(Icon::empty().path("icons/t3-stop.svg"))
+                .tooltip("Interrupt")
+                .accessibility_label("Stop")
+                .size(px(32.))
+                .rounded(px(16.))
+                .danger()
+                .on_click(cx.listener(|root, _, _, cx| root.stop(cx)))
+        } else {
+            Button::new("send")
+                .icon(IconName::ArrowUp)
+                .disabled(
+                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                )
+                .tooltip("Send")
+                .accessibility_label("Send")
+                .size(px(32.))
+                .rounded(px(16.))
+                .primary()
+                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
+        }
+    }
+
+    fn render_composer_controls(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let target = self.composer_target();
-        let config = target.as_ref().and_then(|(env, ..)| self.config_of(env));
-        let instances = config.as_ref().map(models::instances).unwrap_or_default();
+        // Provider catalogs change on config events, not on each keystroke.
+        let catalog = target
+            .as_ref()
+            .and_then(|(env, ..)| self.model_catalogs.get(env));
+        let config = catalog.map(|(config, _)| config);
+        let instances = catalog
+            .map(|(_, instances)| instances.as_slice())
+            .unwrap_or_default();
         let current = target.as_ref().and_then(|(_, model, ..)| model.clone());
         let current_instance = current
             .as_ref()
@@ -3536,109 +3788,377 @@ impl Root {
             .and_then(|m| m.get("model").and_then(Value::as_str))
             .unwrap_or_default()
             .to_string();
-        let toolbar = target
-            .as_ref()
-            .map(|(_, model, runtime_mode, interaction_mode)| {
-                let label = model
-                    .as_ref()
-                    .map(|m| models::label(config.as_ref(), m))
-                    .unwrap_or_else(|| "Pick a model".into());
-                let plan = self.settings.plan_mode_enabled
-                    && instances
-                        .iter()
-                        .any(|i| i.instance_id == current_instance && i.interaction_mode_toggle);
-                h_flex()
-                    .px_3()
-                    .pt_2()
-                    .pb_2()
-                    .justify_end()
-                    .gap_2()
-                    .flex_wrap()
-                    .overflow_hidden()
-                    .child(
-                        Button::new("model")
-                            .label(label)
-                            .compact()
-                            .ghost()
-                            .selected(self.picker_open)
-                            .on_click(cx.listener(|root, _, _, cx| {
-                                root.picker_open = !root.picker_open;
-                                cx.notify();
-                            })),
+        let selected_instance = instances.iter().find(|i| i.instance_id == current_instance);
+        let selected_model = selected_instance.and_then(|instance| {
+            instance
+                .models
+                .iter()
+                .find(|model| model.slug == current_slug)
+        });
+        let label = selected_model
+            .zip(current.as_ref())
+            .map(|(model, selection)| models::trigger_label(model, selection))
+            .unwrap_or_else(|| "Pick a model".into());
+        let toolbar = h_flex()
+            .px_2()
+            .pb_2()
+            .gap_1()
+            .w_full()
+            .child(
+                Button::new("attach-files")
+                    .icon(gpui_kit::assets::IconName::Paperclip)
+                    .ghost()
+                    .size(px(32.))
+                    .tooltip("Attach files")
+                    .accessibility_label("Attach files")
+                    .on_click(cx.listener(|root, _, _, cx| root.choose_attachments(cx))),
+            )
+            .child(div().flex_1())
+            .child(
+                Button::new("model")
+                    .label(label)
+                    .icon(
+                        Icon::empty().path(match selected_instance.map(|i| i.driver.as_str()) {
+                            Some("codex") => "icons/t3-openai.svg",
+                            Some("claudeAgent") => "icons/t3-claude.svg",
+                            _ => "icons/bot.svg",
+                        }),
                     )
-                    .child(
-                        Button::new("runtime-mode")
-                            .label(runtime_mode.clone())
-                            .compact()
-                            .ghost()
-                            .on_click(cx.listener(|root, _, _, cx| root.cycle_runtime_mode(cx))),
-                    )
-                    .when(plan, |row| {
-                        row.child(
-                            Button::new("plan")
-                                .label("Plan")
-                                .compact()
-                                .ghost()
-                                .selected(interaction_mode == "plan")
-                                .on_click(cx.listener(|root, _, _, cx| root.toggle_plan(cx))),
-                        )
-                    })
-                    .children(
-                        config
+                    .compact()
+                    .ghost()
+                    .h(px(28.))
+                    .text_sm()
+                    .tooltip(
+                        current
                             .as_ref()
-                            .map(|c| models::usage(c, &current_instance))
-                            .unwrap_or_default()
+                            .map(|selection| {
+                                let mut label = models::label(instances, selection);
+                                if let Some(config) = &config {
+                                    for (window, percent) in
+                                        models::usage(config, &current_instance)
+                                    {
+                                        label.push_str(&format!("\n{window}: {percent:.0}% used"));
+                                    }
+                                }
+                                label
+                            })
+                            .unwrap_or_else(|| "Choose model and permissions".into()),
+                    )
+                    .selected(self.picker_open)
+                    .on_click(
+                        cx.listener(|root, _, window, cx| root.toggle_model_picker(window, cx)),
+                    ),
+            );
+        let picker = self.picker_open.then(|| {
+            let shown = instances
+                .iter()
+                .find(|i| Some(&i.instance_id) == self.picker_instance.as_ref())
+                .or(selected_instance);
+            let group = CommandGroup::new().items(shown.into_iter().flat_map(|instance| {
+                instance.models.iter().map(|model| {
+                    CommandItem::new()
+                        .label(model.full_name.clone())
+                        .checked(
+                            instance.instance_id == current_instance && model.slug == current_slug,
+                        )
+                        .action(Box::new(PickModelAction {
+                            instance_id: instance.instance_id.clone(),
+                            slug: model.slug.clone(),
+                        }))
+                })
+            }));
+            let (runtime_mode, interaction_mode) = target
+                .as_ref()
+                .map(|(_, _, r, i)| (r.clone(), i.clone()))
+                .unwrap_or_default();
+            let modes = selected_instance
+                .map(|i| i.runtime_modes.clone())
+                .unwrap_or_default();
+            let current_mode = runtime_mode.clone();
+            let runtime_label = match runtime_mode.as_str() {
+                "full-access" => "Full access",
+                "approval-required" => "Supervised",
+                "auto-accept-edits" => "Auto-accept edits",
+                _ => "Auto",
+            };
+            let weak = cx.entity().downgrade();
+            let close = move |window: &mut Window, cx: &mut App| {
+                let _ = weak.update(cx, |root, cx| {
+                    root.picker_open = false;
+                    root.composer
+                        .update(cx, |state, cx| state.focus(window, cx));
+                    cx.notify();
+                });
+            };
+            let cancel = close.clone();
+            let reasoning = selected_model.and_then(|model| {
+                model.option_descriptors.iter().find(|d| {
+                    d.get("role").and_then(Value::as_str) == Some("reasoning")
+                        || d.get("id").and_then(Value::as_str) == Some("reasoningEffort")
+                })
+            });
+            let reasoning_column = reasoning.map(|descriptor| {
+                let id = descriptor
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let selected = current
+                    .as_ref()
+                    .and_then(|selection| models::option_value(selection, descriptor));
+                v_flex()
+                    .w(px(192.))
+                    .h_full()
+                    .border_l_1()
+                    .border_color(theme.border)
+                    .p_2()
+                    .child(
+                        div()
+                            .h(px(34.))
+                            .px_1()
+                            .text_sm()
+                            .text_color(theme.muted_foreground)
+                            .child("Reasoning"),
+                    )
+                    .children(
+                        descriptor
+                            .get("options")
+                            .and_then(Value::as_array)
                             .into_iter()
-                            .map(|(label, percent)| {
-                                div()
-                                    .text_xs()
-                                    .text_color(if percent >= 80. {
-                                        theme.warning
-                                    } else {
-                                        theme.muted_foreground
+                            .flatten()
+                            .map(|option| {
+                                let value = option.get("id").cloned().unwrap_or(Value::Null);
+                                let checked = Some(&value) == selected.as_ref();
+                                let id = id.clone();
+                                h_flex()
+                                    .id(SharedString::from(format!("reasoning-{value}")))
+                                    .w_full()
+                                    .h(px(34.))
+                                    .px_2()
+                                    .rounded_sm()
+                                    .text_sm()
+                                    .cursor_pointer()
+                                    .hover(|row| row.bg(theme.list_hover))
+                                    .child(
+                                        option
+                                            .get("label")
+                                            .and_then(Value::as_str)
+                                            .unwrap_or_default()
+                                            .to_string(),
+                                    )
+                                    .child(div().flex_1())
+                                    .when(checked, |row| {
+                                        row.child(Icon::new(IconName::Check).size(px(14.)))
                                     })
-                                    .child(format!("{label} {percent:.0}%"))
+                                    .on_click(cx.listener(move |root, _, _, cx| {
+                                        root.set_model_option(&id, value.clone(), cx)
+                                    }))
                             }),
                     )
             });
-        let picker = self.picker_open.then(|| {
-            let groups = instances.iter().enumerate().map(|(gi, instance)| {
-                let buttons = instance.models.iter().enumerate().map(|(mi, model)| {
-                    let chosen =
-                        instance.instance_id == current_instance && model.slug == current_slug;
-                    let instance_id = instance.instance_id.clone();
-                    let slug = model.slug.clone();
-                    Button::new(SharedString::from(format!("pick-{gi}-{mi}")))
-                        .label(model.name.clone())
-                        .compact()
-                        .when(chosen, |b| b.primary())
-                        .when(!chosen, |b| b.outline())
-                        .on_click(cx.listener(move |root, _, _, cx| {
-                            root.pick_model(instance_id.clone(), slug.clone(), cx)
-                        }))
-                });
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(instance.name.clone()),
-                    )
-                    .child(h_flex().gap_1().flex_wrap().children(buttons))
-            });
-            div()
+            v_flex()
                 .id("model-picker")
-                .mx_3()
-                .mt_2()
-                .p_2()
-                .max_h(px(320.))
-                .overflow_y_scroll()
+                .absolute()
+                .bottom(px(40.))
+                .right(px(48.))
+                .mb_1()
+                .w(px(if reasoning.is_some() { 554. } else { 362. }))
+                .h(px(392.))
                 .rounded_md()
                 .border_1()
                 .border_color(theme.border)
-                .child(v_flex().gap_2().children(groups))
+                .bg(theme.popover)
+                .shadow_lg()
+                .occlude()
+                .child(
+                    h_flex()
+                        .flex_1()
+                        .min_h_0()
+                        .items_start()
+                        .child(
+                            v_flex()
+                                .w(px(44.))
+                                .h_full()
+                                .border_r_1()
+                                .border_color(theme.border)
+                                .py_2()
+                                .gap_1()
+                                .children(instances.iter().map(|instance| {
+                                    let id = instance.instance_id.clone();
+                                    Button::new(SharedString::from(format!("picker-provider-{id}")))
+                                        .icon(Icon::empty().path(match instance.driver.as_str() {
+                                            "codex" => "icons/t3-openai.svg",
+                                            "claudeAgent" => "icons/t3-claude.svg",
+                                            _ => "icons/bot.svg",
+                                        }))
+                                        .ghost()
+                                        .size(px(36.))
+                                        .tooltip(instance.name.clone())
+                                        .selected(shown.is_some_and(|i| i.instance_id == id))
+                                        .on_click(cx.listener(move |root, _, window, cx| {
+                                            root.picker_instance = Some(id.clone());
+                                            root.model_picker.update(cx, |state, cx| {
+                                                state.set_query("", window, cx);
+                                                state.focus(window, cx);
+                                            });
+                                            cx.notify();
+                                        }))
+                                })),
+                        )
+                        .child(
+                            div().flex_1().min_w_0().h_full().child(
+                                Command::new(&self.model_picker)
+                                    .placeholder("Search models...")
+                                    .max_h(px(300.))
+                                    .group(group)
+                                    .on_confirm(move |_, window, cx| close(window, cx))
+                                    .on_cancel(move |window, cx| cancel(window, cx)),
+                            ),
+                        )
+                        .children(reasoning_column),
+                )
+                .child(
+                    h_flex()
+                        .h(px(44.))
+                        .px_2()
+                        .gap_1()
+                        .border_t_1()
+                        .border_color(theme.border)
+                        .children(
+                            selected_model
+                                .into_iter()
+                                .flat_map(|model| &model.option_descriptors)
+                                .filter(|d| {
+                                    d.get("role").and_then(Value::as_str) != Some("reasoning")
+                                        && d.get("id").and_then(Value::as_str)
+                                            != Some("reasoningEffort")
+                                })
+                                .filter_map(|descriptor| {
+                                    let id = descriptor.get("id")?.as_str()?.to_string();
+                                    let selected = current.as_ref().and_then(|selection| {
+                                        models::option_value(selection, descriptor)
+                                    });
+                                    if descriptor.get("type").and_then(Value::as_str)
+                                        == Some("boolean")
+                                    {
+                                        let checked =
+                                            selected.and_then(|v| v.as_bool()).unwrap_or(false);
+                                        return Some(
+                                            h_flex().child(
+                                                Button::new(SharedString::from(format!(
+                                                    "option-{id}"
+                                                )))
+                                                .label(
+                                                    descriptor.get("label")?.as_str()?.to_string(),
+                                                )
+                                                .ghost()
+                                                .compact()
+                                                .selected(checked)
+                                                .on_click(cx.listener(move |root, _, _, cx| {
+                                                    root.set_model_option(
+                                                        &id,
+                                                        Value::Bool(!checked),
+                                                        cx,
+                                                    )
+                                                })),
+                                            ),
+                                        );
+                                    }
+                                    Some(h_flex().gap_0p5().children(
+                                        descriptor.get("options")?.as_array()?.iter().map(
+                                            |option| {
+                                                let id = id.clone();
+                                                let value = option
+                                                    .get("id")
+                                                    .cloned()
+                                                    .unwrap_or(Value::Null);
+                                                Button::new(SharedString::from(format!(
+                                                    "option-{id}-{value}"
+                                                )))
+                                                .label(
+                                                    option
+                                                        .get("label")
+                                                        .and_then(Value::as_str)
+                                                        .unwrap_or_default()
+                                                        .to_string(),
+                                                )
+                                                .compact()
+                                                .ghost()
+                                                .selected(Some(&value) == selected.as_ref())
+                                                .on_click(cx.listener(move |root, _, _, cx| {
+                                                    root.set_model_option(&id, value.clone(), cx)
+                                                }))
+                                            },
+                                        ),
+                                    ))
+                                }),
+                        )
+                        .child(div().flex_1())
+                        .when(
+                            self.settings.plan_mode_enabled
+                                && selected_instance.is_some_and(|i| i.interaction_mode_toggle),
+                            |row| {
+                                row.child(
+                                    Button::new("plan")
+                                        .label(if interaction_mode == "plan" {
+                                            "Plan"
+                                        } else {
+                                            "Build"
+                                        })
+                                        .compact()
+                                        .ghost()
+                                        .selected(interaction_mode == "plan")
+                                        .on_click(
+                                            cx.listener(|root, _, _, cx| root.toggle_plan(cx)),
+                                        ),
+                                )
+                            },
+                        )
+                        .child(
+                            Button::new("permissions")
+                                .label(runtime_label)
+                                .icon(match runtime_mode.as_str() {
+                                    "full-access" => gpui_kit::assets::IconName::ShieldOff,
+                                    "approval-required" => gpui_kit::assets::IconName::Lock,
+                                    "auto-accept-edits" => gpui_kit::assets::IconName::PenLine,
+                                    _ => gpui_kit::assets::IconName::Sparkles,
+                                })
+                                .compact()
+                                .ghost()
+                                .dropdown_menu_with_anchor(
+                                    Anchor::BottomRight,
+                                    move |mut menu, _, _| {
+                                        for mode in &modes {
+                                            let label = match mode.as_str() {
+                                                "full-access" => "Full access",
+                                                "approval-required" => "Supervised",
+                                                "auto-accept-edits" => "Auto-accept edits",
+                                                _ => "Auto",
+                                            };
+                                            menu = menu.menu_with_check(
+                                                label,
+                                                *mode == current_mode,
+                                                Box::new(SetRuntimeModeAction {
+                                                    mode: mode.clone(),
+                                                }),
+                                            );
+                                        }
+                                        menu
+                                    },
+                                ),
+                        ),
+                )
         });
+        div()
+            .relative()
+            .w_full()
+            .child(toolbar.child(self.composer_button(cx)))
+            .children(picker)
+            .into_any_element()
+    }
+
+    fn render_composer(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
         let suggestions = self
             .completion
             .as_ref()
@@ -3688,6 +4208,7 @@ impl Root {
             )
         });
         let content = v_flex()
+            .relative()
             .w_full()
             .max_w(px(736.))
             .mb_5()
@@ -3696,7 +4217,6 @@ impl Root {
             .border_color(theme.border)
             .bg(crate::appearance::composer(cx))
             .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
-            .children(picker)
             .children(suggestions)
             .children(chips)
             .child(
@@ -3711,7 +4231,14 @@ impl Root {
                         ),
                 ),
             )
-            .children(toolbar.map(|row| row.child(button)))
+            .child(if self.picker_open {
+                self.composer_controls.clone().into_any_element()
+            } else {
+                self.composer_controls
+                    .clone()
+                    .cached(StyleRefinement::default().w_full().h(px(40.)))
+                    .into_any_element()
+            })
             .into_any_element();
         h_flex()
             .w_full()
@@ -3778,15 +4305,10 @@ impl Root {
             )
             .children(message)
             .child(
-                div().border_t_1().border_color(theme.border).child(
-                    self.render_composer(
-                        Button::new("launch")
-                            .label("Start")
-                            .primary()
-                            .on_click(cx.listener(|root, _, window, cx| root.launch(window, cx))),
-                        cx,
-                    ),
-                ),
+                div()
+                    .border_t_1()
+                    .border_color(theme.border)
+                    .child(self.render_composer(cx)),
             )
             .into_any_element()
     }
@@ -3808,10 +4330,7 @@ impl Root {
         let project_title = entry.map(|e| e.project_title.clone()).unwrap_or_default();
         let title = entry.map(|e| e.title.clone()).unwrap_or_default();
         let status = entry.map(|e| e.status).unwrap_or(ThreadStatus::Idle);
-        let working = matches!(
-            status,
-            ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval
-        );
+        let menu_root = cx.entity().downgrade();
         let header = h_flex()
             .h(px(40.))
             .flex_none()
@@ -3819,6 +4338,20 @@ impl Root {
             .gap_2()
             .border_b_1()
             .border_color(theme.border)
+            .when(self.sidebar_hidden, |header| {
+                header.child(
+                    Button::new("show-sidebar")
+                        .icon(gpui_kit::assets::IconName::PanelLeftOpen)
+                        .ghost()
+                        .size(px(24.))
+                        .tooltip("Show sidebar")
+                        .accessibility_label("Show sidebar")
+                        .on_click(cx.listener(|root, _, _, cx| {
+                            root.sidebar_hidden = false;
+                            cx.notify();
+                        })),
+                )
+            })
             .child(
                 h_flex()
                     .flex_1()
@@ -3840,17 +4373,9 @@ impl Root {
                     .child(status.label()),
             )
             .child(
-                Button::new("settle")
-                    .icon(IconName::Check)
-                    .tooltip("Settle or unsettle")
-                    .accessibility_label("Settle or unsettle")
-                    .ghost()
-                    .compact()
-                    .on_click(cx.listener(|root, _, _, cx| root.settle(cx))),
-            )
-            .child(
                 Button::new("files")
-                    .icon(IconName::FolderOpen)
+                    .icon(gpui_kit::assets::IconName::FolderOpen)
+                    .size(px(24.))
                     .tooltip("Files")
                     .accessibility_label("Files")
                     .ghost()
@@ -3860,7 +4385,8 @@ impl Root {
             )
             .child(
                 Button::new("diff")
-                    .icon(IconName::FileText)
+                    .icon(gpui_kit::assets::IconName::PanelRight)
+                    .size(px(24.))
                     .tooltip("Changes")
                     .accessibility_label("Changes")
                     .ghost()
@@ -3868,36 +4394,33 @@ impl Root {
                     .on_click(cx.listener(|root, _, _, cx| root.toggle_diff(cx))),
             )
             .child(
-                Button::new("browser")
-                    .icon(IconName::ExternalLink)
-                    .tooltip("Open in browser")
-                    .accessibility_label("Open in browser")
+                Button::new("thread-actions")
+                    .icon(gpui_kit::assets::IconName::Ellipsis)
                     .ghost()
-                    .compact()
-                    .on_click(cx.listener(|root, _, _, cx| root.open_in_browser(cx))),
+                    .size(px(24.))
+                    .tooltip("Thread actions")
+                    .accessibility_label("Thread actions")
+                    .dropdown_menu(move |menu, _, _| {
+                        menu.menu(
+                            if status == ThreadStatus::Settled {
+                                "Unsettle"
+                            } else {
+                                "Settle"
+                            },
+                            Box::new(Settle),
+                        )
+                        .item(
+                            gpui_kit::component::menu::PopupMenuItem::new("Open in browser")
+                                .on_click({
+                                    let root = menu_root.clone();
+                                    move |_, _, cx| {
+                                        let _ =
+                                            root.update(cx, |root, cx| root.open_in_browser(cx));
+                                    }
+                                }),
+                        )
+                    }),
             );
-        let button = if self.pending_question().is_some() {
-            Button::new("answer")
-                .label("Answer")
-                .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
-        } else if working {
-            Button::new("stop")
-                .icon(IconName::Square)
-                .tooltip("Stop")
-                .accessibility_label("Stop")
-                .rounded(px(16.))
-                .danger()
-                .on_click(cx.listener(|root, _, _, cx| root.stop(cx)))
-        } else {
-            Button::new("send")
-                .icon(IconName::ArrowUp)
-                .tooltip("Send")
-                .accessibility_label("Send")
-                .rounded(px(16.))
-                .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
-        };
         v_flex()
             .flex_1()
             .h_full()
@@ -3972,7 +4495,7 @@ impl Root {
                 div()
                     .pt_9()
                     .children(self.render_queue(cx))
-                    .child(self.render_composer(button, cx)),
+                    .child(self.render_composer(cx)),
             )
             .into_any_element()
     }
@@ -3985,6 +4508,7 @@ impl Render for Root {
             (f32::from(window.viewport_size().width) - 640.).max(208.),
         );
         let sidebar_stamp = SidebarStamp {
+            history_available: (self.history.can_back(), self.history.can_forward()),
             entries_revision: self.entries_revision,
             open: self.current(),
             filter: self.host_filter.clone(),
@@ -4018,6 +4542,25 @@ impl Render for Root {
         if let Some(text) = self.pending_composer.take() {
             self.composer
                 .update(cx, |state, cx| state.set_value(text, window, cx));
+        }
+        let controls_stamp = ComposerControlsStamp {
+            target: self.composer_target(),
+            current: self.current(),
+            draft: self.draft.is_some(),
+            status: self.open_entry().map(|entry| entry.status),
+            question: self.pending_question().is_some(),
+            empty: self.composer.read(cx).value().trim().is_empty(),
+            attachments: !self.attachments.is_empty(),
+            picker: self.picker_open,
+            picker_instance: self.picker_instance.clone(),
+            catalog_revision: self.model_catalog_revision,
+            light: self.settings.light_theme,
+            font_size: self.settings.font_size_interface,
+            plan_enabled: self.settings.plan_mode_enabled,
+        };
+        if self.composer_controls_stamp.as_ref() != Some(&controls_stamp) {
+            self.composer_controls_stamp = Some(controls_stamp);
+            self.composer_controls.update(cx, |_, cx| cx.notify());
         }
         if !self.focus.contains_focused(window, cx)
             && self.open.is_none()
@@ -4094,6 +4637,16 @@ impl Render for Root {
                     );
                 }
             }))
+            .on_action(cx.listener(|root, _: &HistoryBack, _, cx| {
+                if let Some((environment, thread_id)) = root.history.step(false) {
+                    root.open_thread(environment, thread_id, cx);
+                }
+            }))
+            .on_action(cx.listener(|root, _: &HistoryForward, _, cx| {
+                if let Some((environment, thread_id)) = root.history.step(true) {
+                    root.open_thread(environment, thread_id, cx);
+                }
+            }))
             .on_action(cx.listener(|root, _: &ToggleSidebar, _, cx| {
                 root.sidebar_hidden = !root.sidebar_hidden;
                 cx.notify();
@@ -4115,9 +4668,17 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &Settle, _, cx| root.settle(cx)))
             .on_action(cx.listener(|root, _: &NewThread, window, cx| root.new_thread(window, cx)))
             .on_action(cx.listener(|root, _: &Cancel, _, cx| root.cancel(cx)))
-            .on_action(cx.listener(|root, _: &ToggleModelPicker, _, cx| {
-                root.picker_open = !root.picker_open;
-                cx.notify();
+            .on_action(cx.listener(|root, _: &ToggleModelPicker, window, cx| {
+                root.toggle_model_picker(window, cx)
+            }))
+            .on_action(cx.listener(|root, action: &PickModelAction, _, cx| {
+                root.pick_model(action.instance_id.clone(), action.slug.clone(), cx)
+            }))
+            .on_action(cx.listener(|root, action: &SetModelOptionAction, _, cx| {
+                root.set_model_option(&action.id, action.value.clone(), cx)
+            }))
+            .on_action(cx.listener(|root, action: &SetRuntimeModeAction, _, cx| {
+                root.set_runtime_mode(action.mode.clone(), cx)
             }))
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
@@ -4200,7 +4761,7 @@ pub fn run(
     let runtime = Runtime::new()?;
     let handle = runtime.handle().clone();
     gpui_kit::application()
-        .with_assets(gpui_kit::assets::AllAssets)
+        .with_assets(crate::appearance::Assets)
         .run(move |cx| {
             gpui_kit::init(cx);
             crate::appearance::apply(settings.light_theme, cx);
