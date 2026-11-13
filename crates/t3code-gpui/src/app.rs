@@ -269,6 +269,7 @@ impl Render for TimelinePane {
 }
 
 pub struct Root {
+    sidebar_resizing: bool,
     runtime: Handle,
     connections: Vec<Arc<Connection>>,
     entries: Vec<ThreadEntry>,
@@ -418,6 +419,7 @@ impl Root {
         let list_state = ListState::new(0, ListAlignment::Bottom, px(800.));
         list_state.set_follow_mode(FollowMode::Tail);
         Self {
+            sidebar_resizing: false,
             runtime,
             connections,
             entries: Vec::new(),
@@ -1192,6 +1194,9 @@ impl Root {
             Ok(settings) => {
                 let (interface, code) = (settings.font_size_interface, settings.font_size_code);
                 self.settings = settings;
+                if key == "gpuiAppearance" {
+                    crate::appearance::apply(self.settings.light_theme, cx);
+                }
                 Theme::update(cx, |theme| {
                     theme.font_size = px(interface);
                     theme.mono_font_size = px(code);
@@ -1275,6 +1280,14 @@ impl Root {
                                 })),
                         ),
                     )
+                    .child(row(
+                        "Appearance",
+                        "gpuiAppearance",
+                        vec![
+                            ("Dark".into(), Value::from("dark"), !s.light_theme),
+                            ("Light".into(), Value::from("light"), s.light_theme),
+                        ],
+                    ))
                     .child(row(
                         "Send with",
                         "sendShortcut",
@@ -3221,14 +3234,49 @@ impl Root {
             }
         }
         v_flex()
-            .w(px(320.))
+            .w(px(self.settings.sidebar_width))
             .h_full()
             .flex_none()
             .border_r_1()
             .border_color(theme.border)
             .bg(theme.sidebar)
-            .child(statuses)
+            .child(
+                div()
+                    .h(px(52.))
+                    .px_4()
+                    .flex()
+                    .items_center()
+                    .child("T3 Code"),
+            )
+            .child(
+                h_flex()
+                    .px_2()
+                    .gap_2()
+                    .child(
+                        Button::new("sidebar-search")
+                            .label("Search")
+                            .compact()
+                            .flex_1()
+                            .on_click(
+                                cx.listener(|root, _, window, cx| root.toggle_palette(window, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("sidebar-new").label("+").compact().on_click(
+                            cx.listener(|root, _, window, cx| root.new_thread(window, cx)),
+                        ),
+                    ),
+            )
             .children(filters)
+            .child(
+                div()
+                    .id("threads")
+                    .flex_1()
+                    .overflow_y_scroll()
+                    .p_1()
+                    .children(rows),
+            )
+            .child(statuses)
             .child(
                 h_flex()
                     .px_2()
@@ -3255,24 +3303,6 @@ impl Root {
                                 cx.notify();
                             })),
                     ),
-            )
-            .child(
-                div().px_2().pt_2().child(
-                    Button::new("new-thread")
-                        .label("New thread")
-                        .outline()
-                        .compact()
-                        .w_full()
-                        .on_click(cx.listener(|root, _, window, cx| root.new_thread(window, cx))),
-                ),
-            )
-            .child(
-                div()
-                    .id("threads")
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .p_1()
-                    .children(rows),
             )
     }
 
@@ -3539,7 +3569,7 @@ impl Root {
             .rounded(px(16.))
             .border_1()
             .border_color(theme.border)
-            .bg(rgb(crate::appearance::MESSAGE))
+            .bg(crate::appearance::message(cx))
             .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
             .children(picker)
             .children(suggestions)
@@ -3796,6 +3826,10 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.settings.sidebar_width = self.settings.sidebar_width.clamp(
+            208.,
+            (f32::from(window.viewport_size().width) - 640.).max(208.),
+        );
         self.follow_explorer(cx);
         if let Some(text) = self.pending_composer.take() {
             self.composer
@@ -3904,8 +3938,46 @@ impl Render for Root {
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
             .font_family(UI_FONT)
+            .on_mouse_move(cx.listener(|root, event: &MouseMoveEvent, window, cx| {
+                if root.sidebar_resizing && event.pressed_button == Some(MouseButton::Left) {
+                    let max = (f32::from(window.viewport_size().width) - 640.).max(208.);
+                    root.settings.sidebar_width = f32::from(event.position.x).clamp(208., max);
+                    cx.notify();
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|root, _, _, cx| {
+                    if root.sidebar_resizing {
+                        root.sidebar_resizing = false;
+                        if let Err(error) = client_settings::update(
+                            &root.settings_path,
+                            &[(
+                                "gpuiSidebarWidth",
+                                serde_json::json!(root.settings.sidebar_width),
+                            )],
+                        ) {
+                            root.message = Some(format!("Cannot save sidebar width: {error:#}"));
+                        }
+                        cx.notify();
+                    }
+                }),
+            )
             .when(!self.sidebar_hidden, |root| {
-                root.child(self.render_sidebar(cx))
+                root.child(self.render_sidebar(cx)).child(
+                    div()
+                        .w(px(4.))
+                        .h_full()
+                        .flex_none()
+                        .cursor_col_resize()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|root, _, _, cx| {
+                                root.sidebar_resizing = true;
+                                cx.notify();
+                            }),
+                        ),
+                )
             })
             .child(pane)
             .children(self.render_explorer(cx))
@@ -3936,7 +4008,7 @@ pub fn run(
     let handle = runtime.handle().clone();
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
-        crate::appearance::apply(cx);
+        crate::appearance::apply(settings.light_theme, cx);
         Theme::update(cx, |theme| {
             theme.font_family = UI_FONT.into();
             theme.font_size = px(settings.font_size_interface);

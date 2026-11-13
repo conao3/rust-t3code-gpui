@@ -282,7 +282,7 @@ impl Render for RowView {
                     div()
                         .p_3()
                         .rounded_md()
-                        .bg(rgb(crate::appearance::MESSAGE))
+                        .bg(crate::appearance::message(cx))
                         .child(self.row.text.clone()),
                 )
                 .into_any_element(),
@@ -309,7 +309,7 @@ impl Render for RowView {
                         .mt_1()
                         .p_2()
                         .rounded_md()
-                        .bg(rgb(crate::appearance::MESSAGE))
+                        .bg(crate::appearance::message(cx))
                         .font_family(theme.mono_font_family.clone())
                         .text_xs()
                         .whitespace_normal()
