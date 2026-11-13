@@ -3726,6 +3726,14 @@ impl Root {
                 .disabled(
                     self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
                 )
+                .when(
+                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                    |button| {
+                        button
+                            .bg(cx.theme().foreground.opacity(0.12))
+                            .text_color(cx.theme().muted_foreground)
+                    },
+                )
                 .tooltip("Send")
                 .accessibility_label("Send")
                 .primary()
@@ -3756,6 +3764,14 @@ impl Root {
                 .icon(IconName::ArrowUp)
                 .disabled(
                     self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                )
+                .when(
+                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                    |button| {
+                        button
+                            .bg(cx.theme().foreground.opacity(0.12))
+                            .text_color(cx.theme().muted_foreground)
+                    },
                 )
                 .tooltip("Send")
                 .accessibility_label("Send")
@@ -3806,7 +3822,10 @@ impl Root {
             .w_full()
             .child(
                 Button::new("attach-files")
-                    .icon(gpui_kit::assets::IconName::Paperclip)
+                    .icon(
+                        Icon::new(gpui_kit::assets::IconName::Paperclip)
+                            .text_color(theme.muted_foreground),
+                    )
                     .ghost()
                     .size(px(32.))
                     .tooltip("Attach files")
@@ -3817,12 +3836,15 @@ impl Root {
             .child(
                 Button::new("model")
                     .label(label)
+                    .text_color(theme.foreground.opacity(0.8))
                     .icon(
-                        Icon::empty().path(match selected_instance.map(|i| i.driver.as_str()) {
-                            Some("codex") => "icons/t3-openai.svg",
-                            Some("claudeAgent") => "icons/t3-claude.svg",
-                            _ => "icons/bot.svg",
-                        }),
+                        Icon::empty()
+                            .path(match selected_instance.map(|i| i.driver.as_str()) {
+                                Some("codex") => "icons/t3-openai.svg",
+                                Some("claudeAgent") => "icons/t3-claude.svg",
+                                _ => "icons/bot.svg",
+                            })
+                            .text_color(theme.muted_foreground),
                     )
                     .compact()
                     .ghost()
@@ -4220,7 +4242,7 @@ impl Root {
             .children(suggestions)
             .children(chips)
             .child(
-                h_flex().px_1p5().py_3().gap_2().items_end().child(
+                h_flex().px_1p5().pt_3().pb_5().gap_2().items_end().child(
                     div()
                         .flex_1()
                         .text_size(px(self.settings.font_size_prompt))
