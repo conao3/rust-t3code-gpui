@@ -10,6 +10,7 @@ async-channel.workspace = true
 clap.workspace = true
 gpui-kit = { version = "=0.9.1", features = ["syntect"] }
 humantime = "2.3"
+markdown = "1.0.0"
 serde_json.workspace = true
 t3-client = { path = "../t3-client" }
 notify-rust = "4.19"

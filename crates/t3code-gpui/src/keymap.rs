@@ -13,6 +13,7 @@ pub struct Chord {
 pub struct Rule {
     pub chord: Chord,
     pub command: String,
+    pub when: Option<Value>,
 }
 
 fn flag(shortcut: &Value, key: &str) -> bool {
@@ -47,23 +48,26 @@ pub fn chord(shortcut: &Value) -> Option<Chord> {
     })
 }
 
-/// Evaluates a `when` clause against the conditions this app has: no terminal, preview or right
-/// panel is focused or open yet, so `!terminalFocus` holds and every other condition does not.
+/// Evaluates a `when` clause with no focused panes for the parser tests.
+#[cfg(test)]
 pub fn holds(when: Option<&Value>) -> bool {
+    holds_in(when, &|_| false)
+}
+
+pub fn holds_in(when: Option<&Value>, context: &impl Fn(&str) -> bool) -> bool {
     let Some(node) = when.filter(|w| !w.is_null()) else {
         return true;
     };
     match node.get("type").and_then(Value::as_str) {
-        Some("identifier") => false,
-        Some("not") => !holds(node.get("node")),
-        Some("and") => holds(node.get("left")) && holds(node.get("right")),
-        Some("or") => holds(node.get("left")) || holds(node.get("right")),
+        Some("identifier") => context(node.get("name").and_then(Value::as_str).unwrap_or_default()),
+        Some("not") => !holds_in(node.get("node"), context),
+        Some("and") => holds_in(node.get("left"), context) && holds_in(node.get("right"), context),
+        Some("or") => holds_in(node.get("left"), context) || holds_in(node.get("right"), context),
         _ => false,
     }
 }
 
-/// The rules of a server config that apply here, later rules first, as T3 lets a later rule
-/// override an earlier one for the same chord.
+/// Retains conditional server rules, later rules first, for evaluation at dispatch time.
 pub fn rules(config: &Value) -> Vec<Rule> {
     let mut rules: Vec<Rule> = config
         .get("keybindings")
@@ -71,11 +75,11 @@ pub fn rules(config: &Value) -> Vec<Rule> {
         .map(Vec::as_slice)
         .unwrap_or_default()
         .iter()
-        .filter(|r| holds(r.get("whenAst")))
         .filter_map(|r| {
             Some(Rule {
                 chord: chord(r.get("shortcut")?)?,
                 command: r.get("command")?.as_str()?.to_string(),
+                when: r.get("whenAst").cloned(),
             })
         })
         .collect();
@@ -84,16 +88,74 @@ pub fn rules(config: &Value) -> Vec<Rule> {
 }
 
 /// The command a typed chord runs: the first rule for the chord whose command this app knows.
+#[cfg(test)]
 pub fn command_for<'a>(
     rules: &'a [Rule],
     typed: &Chord,
     known: impl Fn(&str) -> bool,
 ) -> Option<&'a str> {
+    resolve(rules, typed, &|_| false).filter(|c| known(c))
+}
+
+pub fn resolve<'a>(
+    rules: &'a [Rule],
+    typed: &Chord,
+    context: &impl Fn(&str) -> bool,
+) -> Option<&'a str> {
     rules
         .iter()
-        .find(|r| r.chord == *typed)
+        .find(|r| r.chord == *typed && holds_in(r.when.as_ref(), context))
         .map(|r| r.command.as_str())
-        .filter(|c| known(c))
+}
+
+pub fn jump_index(command: &str) -> Option<usize> {
+    let digit = command
+        .strip_prefix("thread.jump.")?
+        .parse::<usize>()
+        .ok()?;
+    (1..=9).contains(&digit).then(|| digit - 1)
+}
+
+pub fn jump_labels(rules: &[Rule], context: &impl Fn(&str) -> bool) -> Vec<Option<String>> {
+    (1..=9)
+        .map(|index| {
+            let command = format!("thread.jump.{index}");
+            let rule = rules.iter().find(|rule| {
+                rule.command == command
+                    && holds_in(rule.when.as_ref(), context)
+                    && resolve(rules, &rule.chord, context) == Some(command.as_str())
+            })?;
+            let chord = &rule.chord;
+            let mut parts = Vec::new();
+            if chord.control {
+                parts.push("Ctrl");
+            }
+            if chord.alt {
+                parts.push("Alt");
+            }
+            if chord.shift {
+                parts.push("Shift");
+            }
+            if chord.platform {
+                parts.push("Super");
+            }
+            let key = chord.key.to_uppercase();
+            parts.push(&key);
+            Some(parts.join("+"))
+        })
+        .collect()
+}
+
+pub fn jump_hints_held(rules: &[Rule], modifiers: &Chord, context: &impl Fn(&str) -> bool) -> bool {
+    !context("terminalFocus")
+        && rules.iter().any(|rule| {
+            jump_index(&rule.command).is_some()
+                && rule.chord.control == modifiers.control
+                && rule.chord.alt == modifiers.alt
+                && rule.chord.shift == modifiers.shift
+                && rule.chord.platform == modifiers.platform
+                && resolve(rules, &rule.chord, context) == Some(rule.command.as_str())
+        })
 }
 
 #[cfg(test)]
@@ -104,6 +166,44 @@ mod tests {
     fn shortcut(key: &str, m: &str) -> Value {
         json!({"key": key, "metaKey": m.contains('M'), "ctrlKey": m.contains('C'), "shiftKey": m.contains('S'),
                "altKey": m.contains('A'), "modKey": m.contains('m')})
+    }
+
+    #[test]
+    fn desktop_jump_rules_and_overrides_follow_the_current_context() {
+        let id = |name| json!({"type": "identifier", "name": name});
+        let rules = rules(&json!({"keybindings": [
+            {"command": "thread.jump.1", "shortcut": shortcut("1", "m"), "whenAst": id("isDesktop")},
+            {"command": "modelPicker.jump.1", "shortcut": shortcut("1", "m"), "whenAst": id("modelPickerOpen")},
+            {"command": "thread.jump.2", "shortcut": shortcut("8", "CA")},
+            {"command": "chat.new", "shortcut": shortcut("8", "CA"), "whenAst": id("composerFocus")}
+        ]}));
+        let desktop = |name: &str| name == "isDesktop";
+        let picker = |name: &str| matches!(name, "isDesktop" | "modelPickerOpen");
+        let typed = chord(&shortcut("1", "m")).unwrap();
+        assert_eq!(resolve(&rules, &typed, &desktop), Some("thread.jump.1"));
+        assert_eq!(resolve(&rules, &typed, &picker), Some("modelPicker.jump.1"));
+        assert_eq!(jump_labels(&rules, &desktop)[0].as_deref(), Some("Ctrl+1"));
+        assert_eq!(
+            jump_labels(&rules, &desktop)[1].as_deref(),
+            Some("Ctrl+Alt+8")
+        );
+        assert!(jump_labels(&rules, &picker)[0].is_none());
+        assert!(
+            jump_labels(&rules, &|name| matches!(
+                name,
+                "isDesktop" | "composerFocus"
+            ))[1]
+                .is_none()
+        );
+        assert!(jump_hints_held(&rules, &typed, &desktop));
+        assert!(!jump_hints_held(&rules, &typed, &picker));
+        assert!(!jump_hints_held(&rules, &typed, &|name| matches!(
+            name,
+            "isDesktop" | "terminalFocus"
+        )));
+        assert_eq!(jump_index("thread.jump.9"), Some(8));
+        assert_eq!(jump_index("thread.jump.0"), None);
+        assert_eq!(jump_index("thread.jump.10"), None);
     }
 
     #[test]
@@ -141,7 +241,7 @@ mod tests {
             {"command": "thread.settle", "shortcut": shortcut("o", "A")},
         ]});
         let rules = rules(&config);
-        assert_eq!(rules.len(), 3);
+        assert_eq!(rules.len(), 4);
         let alt_o = chord(&shortcut("o", "A")).unwrap();
         assert_eq!(command_for(&rules, &alt_o, |_| true), Some("thread.settle"));
         let ctrl_n = chord(&shortcut("n", "m")).unwrap();

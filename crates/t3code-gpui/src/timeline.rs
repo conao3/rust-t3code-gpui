@@ -16,6 +16,8 @@ pub enum RowKind {
     Notice,
     Plan,
     Subagent,
+    Working,
+    Worked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +69,7 @@ pub struct Row {
     pub pending: Option<Pending>,
     pub detail: String,
     pub link: Option<String>,
+    pub children: Vec<Row>,
 }
 
 const DEFAULT_APPROVAL_OPTIONS: &[(&str, &str)] = &[
@@ -142,7 +145,7 @@ fn pending_of(state: &ThreadState, item: &Value, prompt: &str) -> Option<Pending
             request_id: request_id.to_string(),
             subject: state
                 .request_subject(request_id)
-                .map(tool_summary)
+                .map(|item| first_line(&tool_detail(item), 160))
                 .filter(|subject| prompt.is_empty() || !subject.contains(prompt))
                 .unwrap_or_default(),
             options: approval_options(item),
@@ -195,6 +198,228 @@ fn first_line(value: &str, limit: usize) -> String {
     }
 }
 
+pub fn thought_preview(value: &str) -> String {
+    let line = value
+        .lines()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or_default()
+        .trim();
+    let plain = markdown::to_mdast(line, &markdown::ParseOptions::gfm())
+        .map(|node| node.to_string())
+        .unwrap_or_else(|_| line.to_string());
+    plain.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn present_activity(mut rows: Vec<Row>, state: &ThreadState) -> Vec<Row> {
+    rows = fold_completed_turns(rows, state);
+    let Some(run) = state.active_run() else {
+        return compact_history(rows);
+    };
+    let tail = rows
+        .iter()
+        .rposition(|row| !matches!(row.kind, RowKind::Reasoning | RowKind::Tool))
+        .map_or(0, |at| at + 1);
+    let activity = rows.split_off(tail);
+    rows = compact_history(rows);
+    let tail = rows.len();
+    rows.extend(activity);
+    if rows.len().saturating_sub(tail) > 2 {
+        let mut activity = rows.split_off(tail);
+        let last_tool = activity
+            .iter()
+            .rposition(|row| row.kind == RowKind::Tool)
+            .map(|at| activity.remove(at));
+        if !activity.is_empty() {
+            let latest = activity
+                .iter()
+                .rfind(|row| row.kind == RowKind::Reasoning)
+                .unwrap_or_else(|| activity.last().unwrap());
+            let mut group = latest.clone();
+            group.key = activity[0].key.clone();
+            group.children = activity;
+            rows.push(group);
+        }
+        rows.extend(last_tool);
+    }
+    let boundary = rows
+        .iter()
+        .rposition(|row| row.kind == RowKind::User)
+        .map_or(0, |at| at + 1);
+    rows.insert(
+        boundary.min(rows.len()),
+        Row {
+            key: format!("working:{}", text(run, "id")),
+            kind: RowKind::Working,
+            text: "Working".into(),
+            live: true,
+            pending: None,
+            detail: run
+                .get("startedAt")
+                .and_then(Value::as_str)
+                .unwrap_or(text(run, "createdAt"))
+                .into(),
+            link: None,
+            children: Vec::new(),
+        },
+    );
+    rows
+}
+
+fn fold_completed_turns(rows: Vec<Row>, state: &ThreadState) -> Vec<Row> {
+    let items = state.items();
+    let by_id: HashMap<_, _> = items.iter().map(|item| (text(item, "id"), *item)).collect();
+    let terminal_by_run: HashMap<_, _> = items
+        .iter()
+        .filter(|item| text(item, "type") == "assistant_message")
+        .map(|item| (text(item, "runId"), text(item, "id")))
+        .collect();
+    let mut by_run: HashMap<&str, Vec<(usize, &str)>> = HashMap::new();
+    for (index, row) in rows.iter().enumerate() {
+        if !matches!(
+            row.kind,
+            RowKind::Assistant | RowKind::Reasoning | RowKind::Tool
+        ) {
+            continue;
+        }
+        let source = by_id.get(row.key.as_str()).copied().or_else(|| {
+            row.key
+                .rsplit_once('#')
+                .and_then(|(key, _)| by_id.get(key).copied())
+        });
+        if let Some(item) = source {
+            by_run
+                .entry(text(item, "runId"))
+                .or_default()
+                .push((index, text(item, "id")));
+        }
+    }
+    let mut folds = HashMap::new();
+    for run in state
+        .list("runs")
+        .iter()
+        .filter(|run| text(run, "status") == "completed")
+    {
+        let run_id = text(run, "id");
+        let Some(terminal) = terminal_by_run.get(run_id) else {
+            continue;
+        };
+        let candidates: Vec<usize> = by_run
+            .get(run_id)
+            .into_iter()
+            .flatten()
+            .filter(|(_, id)| id != terminal)
+            .map(|(index, _)| *index)
+            .collect();
+        if candidates.is_empty() || candidates.iter().any(|index| rows[*index].live) {
+            continue;
+        }
+        let elapsed = humantime::parse_rfc3339(text(run, "startedAt"))
+            .ok()
+            .zip(humantime::parse_rfc3339(text(run, "completedAt")).ok())
+            .and_then(|(start, end)| end.duration_since(start).ok());
+        let label = elapsed
+            .map(|duration| {
+                format!(
+                    "Worked for {}",
+                    humantime::format_duration(std::time::Duration::from_secs(duration.as_secs()))
+                )
+            })
+            .unwrap_or_else(|| "Worked".into());
+        folds.insert(
+            candidates[0],
+            (
+                Row {
+                    key: format!("worked:{run_id}"),
+                    kind: RowKind::Worked,
+                    text: label,
+                    live: false,
+                    pending: None,
+                    detail: String::new(),
+                    link: None,
+                    children: Vec::new(),
+                },
+                candidates,
+            ),
+        );
+    }
+    let mut slots: Vec<_> = rows.into_iter().map(Some).collect();
+    for (fold, indices) in folds.values_mut() {
+        fold.children = indices
+            .iter()
+            .map(|index| slots[*index].take().expect("one fold per item"))
+            .collect();
+    }
+    let mut out = Vec::new();
+    for (index, row) in slots.into_iter().enumerate() {
+        if let Some((fold, _)) = folds.remove(&index) {
+            out.push(fold);
+        }
+        if let Some(row) = row {
+            out.push(row);
+        }
+    }
+    out
+}
+
+fn compact_history(rows: Vec<Row>) -> Vec<Row> {
+    fn append(out: &mut Vec<Row>, group: &mut Vec<Row>) {
+        let children = std::mem::take(group);
+        if children.len() < 2 {
+            out.extend(children);
+            return;
+        }
+        let tools: Vec<_> = children
+            .iter()
+            .filter(|row| row.kind == RowKind::Tool)
+            .collect();
+        let mut row = tools
+            .first()
+            .copied()
+            .unwrap_or_else(|| children.last().unwrap())
+            .clone();
+        row.key = children[0].key.clone();
+        if !tools.is_empty() {
+            let commands = tools.iter().all(|row| {
+                ["Ran ", "Running ", "Failed ", "Stopped ", "Declined "]
+                    .iter()
+                    .any(|verb| row.text.starts_with(verb))
+            });
+            row.text = if commands {
+                format!(
+                    "Ran {} {}",
+                    tools.len(),
+                    if tools.len() == 1 {
+                        "command"
+                    } else {
+                        "commands"
+                    }
+                )
+            } else {
+                tools
+                    .iter()
+                    .take(2)
+                    .map(|row| row.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" and ")
+            };
+        }
+        row.children = children;
+        out.push(row);
+    }
+    let mut out = Vec::new();
+    let mut group = Vec::new();
+    for row in rows {
+        if matches!(row.kind, RowKind::Reasoning | RowKind::Tool) {
+            group.push(row);
+        } else {
+            append(&mut out, &mut group);
+            out.push(row);
+        }
+    }
+    append(&mut out, &mut group);
+    out
+}
+
 fn tool_summary(item: &Value) -> String {
     let status = text(item, "status");
     let title = text(item, "title");
@@ -206,7 +431,35 @@ fn tool_summary(item: &Value) -> String {
                 .and_then(Value::as_str)
                 .or_else(|| input.as_str())
                 .unwrap_or_default();
-            format!("$ {}", first_line(command, 160))
+            let command = command.trim();
+            let executable = command
+                .split_whitespace()
+                .next()
+                .unwrap_or("command")
+                .rsplit('/')
+                .next()
+                .unwrap_or("command");
+            let executable = if matches!(executable, "sh" | "bash" | "zsh") {
+                command
+                    .split_once(" -lc ")
+                    .or_else(|| command.split_once(" -c "))
+                    .and_then(|(_, body)| {
+                        body.trim_start_matches(['\'', '"'])
+                            .split_whitespace()
+                            .next()
+                    })
+                    .unwrap_or(executable)
+            } else {
+                executable
+            };
+            let verb = match status {
+                "running" | "inProgress" | "pending" => "Running",
+                "failed" => "Failed",
+                "declined" => "Declined",
+                "cancelled" | "interrupted" | "stopped" => "Stopped",
+                _ => "Ran",
+            };
+            return format!("{verb} {executable}");
         }
         "file_change" => {
             let name = text(item, "fileName");
@@ -230,7 +483,7 @@ fn tool_summary(item: &Value) -> String {
             }
         }
     };
-    if status.is_empty() || status == "completed" {
+    if status.is_empty() || matches!(status, "completed" | "running" | "inProgress" | "pending") {
         detail
     } else {
         format!("{detail} ({status})")
@@ -343,7 +596,12 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 text: user_text(item),
                 live: false,
                 pending: None,
-                detail: String::new(),
+                detail: if text(item, "createdBy") == "agent" {
+                    "agent".into()
+                } else {
+                    String::new()
+                },
+                children: Vec::new(),
                 link: None,
             }),
             "assistant_message" | "proposed_plan" => {
@@ -361,6 +619,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                         live: streaming && i == last,
                         pending: None,
                         detail: String::new(),
+                        children: Vec::new(),
                         link: None,
                     });
                 }
@@ -372,13 +631,14 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     ));
                 }
             }
-            "reasoning" => rows.push(Row {
+            "reasoning" if !text(item, "text").trim().is_empty() => rows.push(Row {
                 key: id.to_string(),
                 kind: RowKind::Reasoning,
                 text: first_line(text(item, "text"), 200),
                 live: streaming,
                 pending: None,
                 detail: text(item, "text").to_string(),
+                children: Vec::new(),
                 link: None,
             }),
             "approval_request" | "user_input_request" | "secret_request" | "link_request" => {
@@ -414,6 +674,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     live: pending,
                     pending: card,
                     detail: String::new(),
+                    children: Vec::new(),
                     link: None,
                 });
             }
@@ -428,6 +689,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: false,
                 pending: None,
                 detail: String::new(),
+                children: Vec::new(),
                 link: None,
             }),
             "subagent" => rows.push(Row {
@@ -445,6 +707,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 .filter(|s| !s.is_empty())
                 .collect::<Vec<_>>()
                 .join("\n\n"),
+                children: Vec::new(),
                 link: item
                     .get("childThreadId")
                     .and_then(Value::as_str)
@@ -454,9 +717,10 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 key: id.to_string(),
                 kind: RowKind::Tool,
                 text: tool_summary(item),
-                live: false,
+                live: matches!(text(item, "status"), "running" | "inProgress" | "pending"),
                 pending: None,
                 detail: tool_detail(item),
+                children: Vec::new(),
                 link: None,
             }),
             "system_notice" | "run_interrupt_result" => rows.push(Row {
@@ -471,6 +735,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: false,
                 pending: None,
                 detail: text(item, "type").to_string(),
+                children: Vec::new(),
                 link: None,
             }),
             _ => {}
@@ -486,11 +751,12 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 live: true,
                 pending: Some(Pending::Plan { plan_id, markdown }),
                 detail: String::new(),
+                children: Vec::new(),
                 link: None,
             },
         );
     }
-    rows
+    present_activity(rows, state)
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -618,13 +884,18 @@ pub fn queued(state: &ThreadState) -> Vec<Queued> {
 
 /// The rows whose text contains the query, ignoring case. A blank query finds nothing.
 pub fn find_rows(rows: &[Row], query: &str) -> Vec<usize> {
+    fn contains(row: &Row, query: &str) -> bool {
+        row.text.to_lowercase().contains(query)
+            || row.detail.to_lowercase().contains(query)
+            || row.children.iter().any(|row| contains(row, query))
+    }
     let query = query.trim().to_lowercase();
     if query.is_empty() {
         return Vec::new();
     }
     rows.iter()
         .enumerate()
-        .filter(|(_, row)| row.text.to_lowercase().contains(&query))
+        .filter(|(_, row)| contains(row, &query))
         .map(|(i, _)| i)
         .collect()
 }
@@ -651,6 +922,86 @@ mod tests {
     fn a_short_message_is_one_block() {
         assert_eq!(split_blocks("hello\n\nworld"), vec!["hello\n\nworld"]);
         assert_eq!(split_blocks(""), vec![""]);
+    }
+
+    #[test]
+    fn thought_labels_flatten_markdown_without_damaging_code_or_link_text() {
+        assert_eq!(
+            thought_preview("**Researching current Lean formatter**\nMore"),
+            "Researching current Lean formatter"
+        );
+        assert_eq!(
+            thought_preview("Checking `document_formatting` and [Lean](https://lean-lang.org)"),
+            "Checking document_formatting and Lean"
+        );
+    }
+
+    #[test]
+    fn completed_turns_fold_intermediate_work_and_keep_the_whole_final_answer() {
+        let mut state = state(vec![
+            json!({"id":"u", "runId":"run", "ordinal":1, "type":"user_message", "createdBy":"agent", "text":"format?"}),
+            json!({"id":"r", "runId":"run", "ordinal":2, "type":"reasoning", "text":"**Researching formatter**"}),
+            json!({"id":"a", "runId":"run", "ordinal":3, "type":"assistant_message", "text":"Checking support."}),
+            json!({"id":"c", "runId":"run", "ordinal":4, "type":"command_execution", "input":"git status --short", "status":"completed", "output":"clean"}),
+            json!({"id":"f", "runId":"run", "ordinal":5, "type":"assistant_message", "text":format!("{}\n\nConclusion", "A".repeat(1300))}),
+        ]);
+        state.projection.insert("runs".into(), json!([{"id":"run", "ordinal":1, "status":"completed", "startedAt":"2026-11-14T00:00:00Z", "completedAt":"2026-11-14T00:01:19Z"}]));
+        let result = rows(&state);
+        assert_eq!(
+            result.iter().map(|row| &row.kind).collect::<Vec<_>>(),
+            [
+                &RowKind::User,
+                &RowKind::Worked,
+                &RowKind::Assistant,
+                &RowKind::Assistant
+            ]
+        );
+        assert_eq!(result[0].detail, "agent");
+        assert_eq!(result[1].text, "Worked for 1m 19s");
+        assert_eq!(result[1].children.len(), 3);
+        assert_eq!(find_rows(&result, "git status"), [1]);
+        assert_eq!(result[2].key, "f#0");
+        assert_eq!(result[3].text, "Conclusion");
+        state.projection.get_mut("runs").unwrap()[0]["status"] = json!("failed");
+        assert!(!rows(&state).iter().any(|row| row.kind == RowKind::Worked));
+    }
+
+    #[test]
+    fn active_work_shows_the_latest_thought_and_tool_without_losing_history() {
+        let mut state = state(vec![
+            json!({"id":"u", "ordinal":1, "type":"user_message", "text":"format?"}),
+            json!({"id":"r1", "ordinal":2, "type":"reasoning", "text":"**Researching current Lean formatter**\nMore detail"}),
+            json!({"id":"a", "ordinal":3, "type":"assistant_message", "text":"Checking."}),
+            json!({"id":"r2", "ordinal":4, "type":"reasoning", "text":"**Checking server capability access**"}),
+            json!({"id":"c1", "ordinal":5, "type":"command_execution", "input":"emacsclient --eval long", "status":"failed", "output":"error"}),
+            json!({"id":"r3", "ordinal":6, "type":"reasoning", "text":"**Saving the research document**"}),
+            json!({"id":"c2", "ordinal":7, "type":"command_execution", "input":"/run/current-system/sw/bin/zsh -lc 'git add design.md'", "status":"running"}),
+        ]);
+        state.projection.insert("runs".into(), json!([{"id":"run", "ordinal":1, "status":"running", "createdAt":"2026-11-14T00:00:00Z"}]));
+        let rows = rows(&state);
+        assert_eq!(
+            rows.iter().map(|row| &row.kind).collect::<Vec<_>>(),
+            [
+                &RowKind::User,
+                &RowKind::Working,
+                &RowKind::Reasoning,
+                &RowKind::Assistant,
+                &RowKind::Reasoning,
+                &RowKind::Tool,
+            ]
+        );
+        assert_eq!(
+            thought_preview(&rows[2].text),
+            "Researching current Lean formatter"
+        );
+        assert_eq!(
+            thought_preview(&rows[4].text),
+            "Saving the research document"
+        );
+        assert_eq!(rows[4].children.len(), 3);
+        assert!(rows[4].children[1].detail.contains("error"));
+        assert_eq!(rows[5].text, "Running git");
+        assert_eq!(find_rows(&rows, "emacsclient"), [4]);
     }
 
     #[test]
@@ -717,17 +1068,17 @@ mod tests {
             kinds,
             [
                 &RowKind::User,
-                &RowKind::Reasoning,
                 &RowKind::Tool,
                 &RowKind::Assistant,
                 &RowKind::Assistant
             ]
         );
-        assert_eq!(rows[1].text, "thinking hard");
-        assert_eq!(rows[2].text, "$ ls -la");
-        assert_eq!(rows[3].key, "a#0");
-        assert!(!rows[3].live);
-        assert!(rows[4].live);
+        assert_eq!(rows[1].text, "Ran 1 command");
+        assert_eq!(rows[1].children[0].text, "thinking hard");
+        assert_eq!(rows[1].children[1].text, "Ran ls");
+        assert_eq!(rows[2].key, "a#0");
+        assert!(!rows[2].live);
+        assert!(rows[3].live);
     }
 
     #[test]
@@ -854,7 +1205,7 @@ mod tests {
             }
         };
         assert_eq!(card("touch approved.txt"), "");
-        assert_eq!(card("Allow Bash?"), "$ touch approved.txt (running)");
+        assert_eq!(card("Allow Bash?"), "$ touch approved.txt");
     }
 
     #[test]
@@ -866,6 +1217,7 @@ mod tests {
             live: false,
             pending: None,
             detail: String::new(),
+            children: Vec::new(),
             link: None,
         };
         let rows = [
@@ -915,6 +1267,7 @@ mod tests {
             live: false,
             pending: None,
             detail: String::new(),
+            children: Vec::new(),
             link: None,
         };
         let list = [

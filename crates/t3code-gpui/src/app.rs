@@ -71,6 +71,8 @@ actions!(
         ToggleModelPicker,
         HistoryBack,
         HistoryForward,
+        Stop,
+        CycleAppearance,
     ]
 );
 
@@ -85,6 +87,9 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "thread.previous" => Box::new(PreviousThread),
         "thread.settle" => Box::new(Settle),
         "chat.new" | "chat.newLocal" => Box::new(NewThread),
+        "thread.stop" => Box::new(Stop),
+        "navigation.back" => Box::new(HistoryBack),
+        "navigation.forward" => Box::new(HistoryForward),
         "modelPicker.toggle" => Box::new(ToggleModelPicker),
         "composer.mode" => Box::new(CycleRuntimeMode),
         "sidebar.toggle" => Box::new(ToggleSidebar),
@@ -95,7 +100,9 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "diff.toggle" => Box::new(ToggleDiff),
         "settings.connections" => Box::new(ManageHosts),
         "settings.open" => Box::new(OpenSettings),
-        "rightPanel.toggle" | "rightPanel.close" => Box::new(CloseFilePanel),
+        "rightPanel.toggle" => Box::new(ToggleExplorer),
+        "rightPanel.close" => Box::new(CloseFilePanel),
+        "appearance.cycle" => Box::new(CycleAppearance),
         _ => return None,
     })
 }
@@ -302,6 +309,7 @@ impl Render for TimelinePane {
 
 #[derive(PartialEq)]
 struct SidebarStamp {
+    jump_labels: Vec<Option<String>>,
     history_available: (bool, bool),
     entries_revision: u64,
     open: Option<(String, String)>,
@@ -407,6 +415,9 @@ pub struct Root {
     drafts_save_scheduled: bool,
     pending_composer: Option<String>,
     key_rules: Vec<keymap::Rule>,
+    jump_modifiers: Modifiers,
+    jump_hints: bool,
+    jump_hint_epoch: u64,
     settings: ClientSettings,
     settings_path: std::path::PathBuf,
     settings_open: bool,
@@ -491,8 +502,14 @@ impl Root {
                     cx.stop_propagation();
                 }
             }),
-            cx.observe_window_activation(window, |root, window, _| {
+            cx.observe_window_activation(window, |root, window, cx| {
                 root.window_active = window.is_window_active();
+                if !root.window_active {
+                    root.jump_hint_epoch += 1;
+                    root.jump_modifiers = Modifiers::default();
+                    root.jump_hints = false;
+                    cx.notify();
+                }
             }),
             cx.subscribe(&find_input, |root, _, event: &InputEvent, cx| match event {
                 InputEvent::Change => root.find_again(true, cx),
@@ -574,6 +591,9 @@ impl Root {
             drafts_save_scheduled: false,
             pending_composer: None,
             key_rules: Vec::new(),
+            jump_modifiers: Modifiers::default(),
+            jump_hints: false,
+            jump_hint_epoch: 0,
             settings,
             settings_path,
             settings_open: false,
@@ -808,12 +828,27 @@ impl Root {
             platform: modifiers.platform,
             key: keystroke.key.clone(),
         };
-        if let Some(action) =
-            keymap::command_for(&self.key_rules, &typed, |c| action_for(c).is_some())
-                .and_then(action_for)
+        if let Some(command) = keymap::resolve(&self.key_rules, &typed, &|name| {
+            self.key_context(name, window, cx)
+        })
+        .map(str::to_string)
         {
-            window.dispatch_action(action, cx);
-            return true;
+            if self.picker_shortcut(&command, window, cx) {
+                return true;
+            }
+            if let Some(index) = keymap::jump_index(&command) {
+                if self.palette_open {
+                    return false;
+                }
+                if let Some(entry) = self.ordered_entries().get(index) {
+                    self.open_thread(entry.environment.clone(), entry.thread_id.clone(), cx);
+                }
+                return true;
+            }
+            if let Some(action) = action_for(&command) {
+                window.dispatch_action(action, cx);
+                return true;
+            }
         }
         if keystroke.key != "enter" || modifiers.alt || modifiers.shift || modifiers.platform {
             return false;
@@ -834,6 +869,150 @@ impl Root {
             .iter()
             .find(|c| c.label() == label)
             .cloned()
+    }
+
+    fn key_context(&self, name: &str, window: &Window, cx: &App) -> bool {
+        match name {
+            "isDesktop" => true,
+            "modelPickerOpen" => self.picker_open,
+            "rightPanelOpen" => self.file_panel.is_some() || self.explorer.is_some(),
+            "composerFocus" | "editableFocus" => {
+                self.composer.read(cx).focus_handle(cx).is_focused(window)
+            }
+            "draftThreadRoute" => self.draft.is_some(),
+            "turnRunning" => self
+                .open_entry()
+                .is_some_and(|entry| entry.status == ThreadStatus::Working),
+            _ => false,
+        }
+    }
+
+    fn picker_shortcut(
+        &mut self,
+        command: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.picker_open {
+            return false;
+        }
+        let jump = command
+            .strip_prefix("modelPicker.jump.")
+            .and_then(|index| index.parse::<usize>().ok())
+            .filter(|index| (1..=9).contains(index))
+            .map(|index| index - 1);
+        let direction = match command {
+            "modelPicker.previousProvider" => Some(false),
+            "modelPicker.nextProvider" => Some(true),
+            _ => None,
+        };
+        if jump.is_none() && direction.is_none() {
+            return false;
+        }
+        let Some((environment, selected, ..)) = self.composer_target() else {
+            return true;
+        };
+        let Some((_, instances)) = self.model_catalogs.get(&environment) else {
+            return true;
+        };
+        if instances.is_empty() {
+            return true;
+        }
+        let current = self.picker_instance.as_deref().or_else(|| {
+            selected
+                .as_ref()
+                .and_then(|model| model.get("instanceId")?.as_str())
+        });
+        let at = instances
+            .iter()
+            .position(|instance| Some(instance.instance_id.as_str()) == current)
+            .unwrap_or(0);
+        if let Some(forward) = direction {
+            let at = if forward {
+                (at + 1) % instances.len()
+            } else {
+                (at + instances.len() - 1) % instances.len()
+            };
+            self.picker_instance = Some(instances[at].instance_id.clone());
+            self.model_picker
+                .update(cx, |state, cx| state.set_query("", window, cx));
+            cx.notify();
+        } else if let Some(index) = jump {
+            let query = self.model_picker.read(cx).query(cx).to_lowercase();
+            let instance = &instances[at];
+            if let Some(model) = instance
+                .models
+                .iter()
+                .filter(|model| model.full_name.to_lowercase().contains(&query))
+                .nth(index)
+            {
+                self.pick_model(instance.instance_id.clone(), model.slug.clone(), cx);
+                self.composer
+                    .update(cx, |state, cx| state.focus(window, cx));
+            }
+        }
+        true
+    }
+
+    fn ordered_entries(&self) -> Vec<ThreadEntry> {
+        self.shelves_of(&self.visible_entries())
+            .into_iter()
+            .filter(|shelf| {
+                !self.collapsed.contains(&shelf.section)
+                    || matches!(
+                        shelf.section,
+                        sidebar::Section::Pinned | sidebar::Section::Active
+                    )
+            })
+            .flat_map(|shelf| {
+                sidebar::visible_rows(&shelf.rows, &self.collapsed_families)
+                    .into_iter()
+                    .map(|(entry, _, _)| entry.clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    fn modifiers_changed(
+        &mut self,
+        modifiers: Modifiers,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if modifiers == self.jump_modifiers {
+            return;
+        }
+        self.jump_modifiers = modifiers;
+        self.jump_hint_epoch += 1;
+        let was_visible = std::mem::take(&mut self.jump_hints);
+        if was_visible {
+            cx.notify();
+        }
+        let chord = keymap::Chord {
+            control: modifiers.control,
+            alt: modifiers.alt,
+            shift: modifiers.shift,
+            platform: modifiers.platform,
+            key: String::new(),
+        };
+        if !keymap::jump_hints_held(&self.key_rules, &chord, &|name| {
+            self.key_context(name, window, cx)
+        }) {
+            return;
+        }
+        let epoch = self.jump_hint_epoch;
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(200))
+                .await;
+            let _ = this.update_in(cx, |root, _, cx| {
+                if root.jump_hint_epoch == epoch && root.window_active {
+                    root.jump_hints = true;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     fn current(&self) -> Option<(String, String)> {
@@ -1080,7 +1259,21 @@ impl Root {
                 self.list_state.splice(old..old, rows.len() - old);
             }
         } else {
-            self.list_state.reset(rows.len());
+            let prefix = old_keys
+                .iter()
+                .zip(&rows)
+                .take_while(|(old, new)| **old == new.key)
+                .count();
+            let suffix = old_keys[prefix..]
+                .iter()
+                .rev()
+                .zip(rows[prefix..].iter().rev())
+                .take_while(|(old, new)| **old == new.key)
+                .count();
+            self.list_state.splice(
+                prefix..old_keys.len() - suffix,
+                rows.len() - prefix - suffix,
+            );
         }
         self.rows = rows;
         self.row_views = views;
@@ -2803,7 +2996,7 @@ impl Root {
 
     fn adjacent_thread(&mut self, forward: bool, cx: &mut Context<Self>) {
         let current = self.current();
-        let visible = self.visible_entries();
+        let visible = self.ordered_entries();
         let next = sidebar::adjacent(
             &visible,
             current.as_ref().map(|(e, t)| (e.as_str(), t.as_str())),
@@ -3330,6 +3523,12 @@ impl Root {
                 sidebar::visible_rows(&shelf.rows, &self.collapsed_families)
             {
                 index += 1;
+                let jump_label = self
+                    .sidebar_stamp
+                    .as_ref()
+                    .and_then(|stamp| stamp.jump_labels.get(index - 1))
+                    .cloned()
+                    .flatten();
                 let family_key = entry.key();
                 let selected = open.as_ref().is_some_and(|(env, id)| entry.is(env, id));
                 let dot = match entry.status {
@@ -3383,8 +3582,28 @@ impl Root {
                                         .child(entry.environment.clone()),
                                 )
                                 .child(div().flex_1())
+                                .when_some(jump_label.clone(), |row, label| {
+                                    row.child(
+                                        div()
+                                            .px_1()
+                                            .h(px(20.))
+                                            .min_w(px(20.))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .rounded_sm()
+                                            .bg(theme.foreground.opacity(0.07))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_xs()
+                                            .text_color(theme.muted_foreground)
+                                            .child(label),
+                                    )
+                                })
                                 .child(
                                     div()
+                                        .when(jump_label.is_some(), |status| {
+                                            status.absolute().opacity(0.)
+                                        })
                                         .text_xs()
                                         .text_color(dot.unwrap_or(sidebar_muted))
                                         .child(if entry.status == ThreadStatus::Idle {
@@ -4561,6 +4780,11 @@ impl Render for Root {
             (f32::from(window.viewport_size().width) - 640.).max(208.),
         );
         let sidebar_stamp = SidebarStamp {
+            jump_labels: if self.jump_hints && !self.picker_open && !self.palette_open {
+                keymap::jump_labels(&self.key_rules, &|name| self.key_context(name, window, cx))
+            } else {
+                Vec::new()
+            },
             history_available: (self.history.can_back(), self.history.can_forward()),
             entries_revision: self.entries_revision,
             open: self.current(),
@@ -4714,6 +4938,23 @@ impl Render for Root {
                     root.jump_user_message(false, cx)
                 }),
             )
+            .on_modifiers_changed(
+                cx.listener(|root, event: &ModifiersChangedEvent, window, cx| {
+                    root.modifiers_changed(event.modifiers, window, cx);
+                }),
+            )
+            .on_action(cx.listener(|root, _: &Stop, _, cx| root.stop(cx)))
+            .on_action(cx.listener(|root, _: &CycleAppearance, _, cx| {
+                root.change_setting(
+                    "gpuiAppearance",
+                    Value::from(if root.settings.light_theme {
+                        "dark"
+                    } else {
+                        "light"
+                    }),
+                    cx,
+                );
+            }))
             .on_action(cx.listener(|root, _: &NextThread, _, cx| root.adjacent_thread(true, cx)))
             .on_action(
                 cx.listener(|root, _: &PreviousThread, _, cx| root.adjacent_thread(false, cx)),

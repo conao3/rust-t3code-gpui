@@ -6826,6 +6826,7 @@ dependencies = [
  "clap",
  "gpui-kit",
  "humantime",
+ "markdown",
  "notify-rust",
  "serde_json",
  "t3-client",

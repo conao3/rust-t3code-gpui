@@ -35,26 +35,59 @@ pub enum RowEvent {
 
 pub struct RowView {
     row: Row,
+    summary: String,
     markdown: Option<Entity<TextViewState>>,
     found: bool,
     expanded: bool,
     drafts: HashMap<String, Draft>,
     responding: bool,
+    children: Vec<Entity<RowView>>,
+    _timer: Option<Task<()>>,
 }
 
 impl EventEmitter<RowEvent> for RowView {}
 
 impl RowView {
     pub fn new(row: Row, cx: &mut Context<Self>) -> Self {
+        let timer = (row.kind == RowKind::Working).then(|| {
+            cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_secs(1))
+                        .await;
+                    if this
+                        .update(cx, |view, cx| {
+                            if view.row.kind != RowKind::Working || !view.row.live {
+                                return false;
+                            }
+                            cx.notify();
+                            true
+                        })
+                        .ok()
+                        != Some(true)
+                    {
+                        break;
+                    }
+                }
+            })
+        });
         let markdown = (row.kind == RowKind::Assistant)
             .then(|| cx.new(|cx| TextViewState::markdown(&row.text, cx)));
+        let summary = if row.kind == RowKind::Reasoning {
+            crate::timeline::thought_preview(&row.text)
+        } else {
+            row.text.clone()
+        };
         Self {
             row,
+            summary,
             markdown,
             found: false,
             expanded: false,
             drafts: HashMap::new(),
             responding: false,
+            children: Vec::new(),
+            _timer: timer,
         }
     }
 
@@ -62,8 +95,20 @@ impl RowView {
         if row == self.row {
             return;
         }
+        if row.text != self.row.text || row.kind != self.row.kind {
+            self.summary = if row.kind == RowKind::Reasoning {
+                crate::timeline::thought_preview(&row.text)
+            } else {
+                row.text.clone()
+            };
+        }
         if let Some(markdown) = &self.markdown {
-            markdown.update(cx, |state, cx| state.set_text(&row.text, cx));
+            let body = if row.kind == RowKind::Reasoning {
+                &row.detail
+            } else {
+                &row.text
+            };
+            markdown.update(cx, |state, cx| state.set_text(body, cx));
         }
         if row.pending != self.row.pending {
             self.responding = false;
@@ -72,12 +117,30 @@ impl RowView {
             }
         }
         self.row = row;
+        if self.expanded {
+            self.sync_children(cx);
+        }
         cx.notify();
+    }
+
+    fn sync_children(&mut self, cx: &mut Context<Self>) {
+        for (index, row) in self.row.children.iter().enumerate() {
+            if let Some(child) = self.children.get(index) {
+                child.update(cx, |child, cx| child.update(row.clone(), cx));
+            } else {
+                self.children.push(cx.new(|cx| Self::new(row.clone(), cx)));
+            }
+        }
+        self.children.truncate(self.row.children.len());
     }
 
     pub fn set_found(&mut self, found: bool, cx: &mut Context<Self>) {
         if self.found != found {
             self.found = found;
+            if found && !self.row.children.is_empty() {
+                self.expanded = true;
+                self.sync_children(cx);
+            }
             cx.notify();
         }
     }
@@ -264,15 +327,73 @@ impl Render for RowView {
             .mx_auto()
             .text_sm()
             .px_0()
-            .border_l_2()
-            .border_color(if self.found {
-                theme.warning
-            } else {
-                gpui::transparent_black()
+            .when(self.found, |row| {
+                row.border_l_2().border_color(theme.warning)
             });
         let content = match self.row.kind {
+            RowKind::Worked => base
+                .id("worked")
+                .pt_1()
+                .pb_2()
+                .mb_3()
+                .border_b_1()
+                .border_color(theme.border.opacity(0.6))
+                .text_color(theme.muted_foreground)
+                .child(
+                    h_flex()
+                        .id("worked-toggle")
+                        .gap_1()
+                        .px_1()
+                        .cursor_pointer()
+                        .child(self.row.text.clone())
+                        .child(
+                            Icon::new(if self.expanded {
+                                IconName::ChevronDown
+                            } else {
+                                IconName::ChevronRight
+                            })
+                            .size(px(14.)),
+                        )
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.expanded = !view.expanded;
+                            if view.expanded {
+                                view.sync_children(cx);
+                            }
+                            cx.notify();
+                        })),
+                )
+                .when(self.expanded, |row| {
+                    row.child(v_flex().mt_2().children(self.children.iter().cloned()))
+                })
+                .into_any_element(),
+            RowKind::Working => {
+                let elapsed = humantime::parse_rfc3339(&self.row.detail)
+                    .ok()
+                    .and_then(|start| std::time::SystemTime::now().duration_since(start).ok());
+                let label = elapsed
+                    .map(|elapsed| {
+                        format!(
+                            "Working for {}",
+                            humantime::format_duration(std::time::Duration::from_secs(
+                                elapsed.as_secs()
+                            ))
+                        )
+                    })
+                    .unwrap_or_else(|| "Working...".into());
+                base.mt_6()
+                    .px_1()
+                    .pt_1()
+                    .pb_2()
+                    .mb_2()
+                    .border_b_1()
+                    .border_color(theme.border.opacity(0.6))
+                    .text_color(theme.muted_foreground)
+                    .child(label)
+                    .into_any_element()
+            }
             RowKind::Assistant => match &self.markdown {
                 Some(state) => base
+                    .px_1()
                     .py_1()
                     .text_color(theme.foreground.opacity(0.9))
                     .line_height(relative(1.625))
@@ -323,26 +444,43 @@ impl Render for RowView {
                 .justify_end()
                 .child(
                     div()
+                        .id("user-bubble")
                         .max_w(relative(0.8))
                         .p_3()
                         .rounded(px(16.))
                         .bg(crate::appearance::message(cx))
-                        .child(self.row.text.clone()),
+                        .when(self.row.detail == "agent", |bubble| {
+                            bubble
+                                .cursor_pointer()
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.expanded = !view.expanded;
+                                    cx.notify();
+                                }))
+                        })
+                        .map(|bubble| {
+                            if self.row.detail == "agent" && !self.expanded {
+                                bubble.py_2().child(
+                                    h_flex()
+                                        .min_w_0()
+                                        .gap_1()
+                                        .child(
+                                            div().text_color(theme.muted_foreground).child("Agent"),
+                                        )
+                                        .child(
+                                            div().min_w_0().truncate().child(self.row.text.clone()),
+                                        )
+                                        .child(Icon::new(IconName::ChevronDown).size(px(12.))),
+                                )
+                            } else {
+                                bubble.child(self.row.text.clone())
+                            }
+                        }),
                 )
                 .into_any_element(),
             RowKind::Reasoning | RowKind::Tool | RowKind::Subagent => {
-                let summary = if self.row.kind == RowKind::Reasoning {
-                    format!("Thinking: {}", self.row.text)
-                } else {
-                    self.row.text.clone()
-                };
-                let openable = !self.row.detail.is_empty();
-                let marker = match (openable, self.expanded) {
-                    (false, _) => "",
-                    (true, false) => "▸ ",
-                    (true, true) => "▾ ",
-                };
-                let detail = self.expanded.then(|| {
+                let summary = self.summary.clone();
+                let openable = !self.row.detail.is_empty() || !self.row.children.is_empty();
+                let detail = (self.expanded && self.row.children.is_empty()).then(|| {
                     let lines: Vec<&str> = self.row.detail.lines().collect();
                     let shown = lines.len().min(DETAIL_LINES);
                     let mut text = lines[..shown].join("\n");
@@ -350,40 +488,73 @@ impl Render for RowView {
                         text.push_str(&format!("\n… {} more lines", lines.len() - shown));
                     }
                     div()
+                        .id("activity-detail")
+                        .max_h(px(384.))
+                        .overflow_y_scroll()
                         .mt_1()
-                        .p_2()
-                        .rounded_md()
-                        .bg(crate::appearance::message(cx))
-                        .font_family(theme.mono_font_family.clone())
+                        .ml_7()
+                        .py_1()
                         .text_xs()
                         .whitespace_normal()
-                        .child(text)
+                        .when(self.row.kind != RowKind::Reasoning, |detail| {
+                            detail.font_family(theme.mono_font_family.clone())
+                        })
+                        .map(|detail| match &self.markdown {
+                            Some(markdown) if self.row.kind == RowKind::Reasoning => {
+                                detail.child(TextView::new(markdown).selectable(true))
+                            }
+                            _ => detail.child(text),
+                        })
+                        .on_click(|_, _, cx| cx.stop_propagation())
                 });
                 base.id("row")
                     .py_0p5()
                     .text_sm()
                     .text_color(theme.muted_foreground)
-                    .when(self.row.kind == RowKind::Tool, |row| {
-                        row.font_family(theme.mono_font_family.clone())
-                    })
                     .when(openable, |row| {
                         row.cursor_pointer().on_click(cx.listener(|view, _, _, cx| {
                             view.expanded = !view.expanded;
+                            if view.expanded {
+                                view.sync_children(cx);
+                                if view.row.kind == RowKind::Reasoning
+                                    && view.markdown.is_none()
+                                    && view.row.children.is_empty()
+                                {
+                                    view.markdown =
+                                        Some(cx.new(|cx| {
+                                            TextViewState::markdown(&view.row.detail, cx)
+                                        }));
+                                }
+                            }
                             cx.notify();
                         }))
                     })
                     .child(
                         h_flex()
-                            .gap_2()
+                            .gap(px(6.))
+                            .min_h(px(24.))
                             .child(
-                                Icon::new(match self.row.kind {
-                                    RowKind::Reasoning => IconName::Lightbulb,
-                                    RowKind::Subagent => IconName::Bot,
-                                    _ => IconName::Terminal,
-                                })
-                                .size(px(14.)),
+                                div().w(px(24.)).flex_none().flex().justify_center().child(
+                                    Icon::new(match self.row.kind {
+                                        RowKind::Reasoning => IconName::Brain,
+                                        RowKind::Subagent => IconName::Bot,
+                                        _ => IconName::Terminal,
+                                    })
+                                    .size(px(16.)),
+                                ),
                             )
-                            .child(div().flex_1().min_w_0().child(format!("{marker}{summary}")))
+                            .child(div().flex_1().min_w_0().truncate().child(summary))
+                            .when(openable, |line| {
+                                line.child(
+                                    Icon::new(if self.expanded {
+                                        IconName::ChevronDown
+                                    } else {
+                                        IconName::ChevronRight
+                                    })
+                                    .size(px(12.))
+                                    .text_color(theme.muted_foreground.opacity(0.7)),
+                                )
+                            })
                             .when_some(self.row.link.clone(), |line, thread_id| {
                                 line.child(
                                     Button::new("open-child")
@@ -399,6 +570,17 @@ impl Render for RowView {
                             }),
                     )
                     .children(detail)
+                    .when(self.expanded && !self.children.is_empty(), |row| {
+                        row.child(
+                            v_flex()
+                                .id("activity-children")
+                                .max_h(px(288.))
+                                .overflow_y_scroll()
+                                .ml_7()
+                                .children(self.children.iter().cloned())
+                                .on_click(|_, _, cx| cx.stop_propagation()),
+                        )
+                    })
                     .into_any_element()
             }
             RowKind::Notice => base
