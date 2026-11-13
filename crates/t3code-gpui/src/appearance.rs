@@ -5,6 +5,7 @@ pub const MESSAGE: u32 = 0x1e1e1e;
 pub const ROW_INSET: f32 = 10.;
 
 pub fn apply(light: bool, cx: &mut App) {
+    cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
     cx.text_system()
         .add_fonts(vec![std::borrow::Cow::Borrowed(include_bytes!(
             "../assets/InterVariable.ttf"
@@ -21,7 +22,7 @@ pub fn apply(light: bool, cx: &mut App) {
     );
     Theme::update(cx, |theme| {
         let c = &mut theme.colors;
-        c.accent = color("surface", light);
+        c.accent = color("surfaceRaised", light);
         c.accent_foreground = color("text", light);
         c.accordion = color("surface", light);
         c.background = color("canvas", light);
@@ -42,7 +43,7 @@ pub fn apply(light: bool, cx: &mut App) {
         c.button_primary_active = color("accent", light);
         c.button_primary_foreground = color("accentForeground", light);
         c.button_primary_hover = color("accent", light);
-        c.button_secondary = color("surface", light);
+        c.button_secondary = color("muted", light);
         c.button_secondary_active = color("muted", light);
         c.button_secondary_foreground = color("text", light);
         c.button_secondary_hover = color("muted", light);
@@ -101,7 +102,7 @@ pub fn apply(light: bool, cx: &mut App) {
         c.scrollbar = color("canvas", light);
         c.scrollbar_thumb = color("scrollbarThumb", light);
         c.scrollbar_thumb_hover = color("scrollbarHover", light);
-        c.secondary = color("surface", light);
+        c.secondary = color("muted", light);
         c.secondary_active = color("muted", light);
         c.secondary_foreground = color("text", light);
         c.secondary_hover = color("muted", light);
@@ -109,8 +110,8 @@ pub fn apply(light: bool, cx: &mut App) {
         c.sidebar = color("sidebar", light);
         c.sidebar_accent = color("surface", light);
         c.sidebar_accent_foreground = color("text", light);
-        c.sidebar_border = color("border", light);
-        c.sidebar_foreground = color("text", light);
+        c.sidebar_border = color("sidebarBorder", light);
+        c.sidebar_foreground = color("sidebarForeground", light);
         c.sidebar_primary = color("accent", light);
         c.sidebar_primary_foreground = color("accentForeground", light);
         c.skeleton = color("surface", light);
@@ -138,7 +139,7 @@ pub fn apply(light: bool, cx: &mut App) {
         c.table_foot_foreground = color("text", light);
         c.table_hover = color("muted", light);
         c.table_row_border = color("border", light);
-        c.title_bar = color("surface", light);
+        c.title_bar = color("canvas", light);
         c.title_bar_border = color("border", light);
         c.status_bar = color("surface", light);
         c.status_bar_border = color("border", light);
@@ -160,6 +161,14 @@ pub fn apply(light: bool, cx: &mut App) {
         c.magenta_light = color("magenta", light);
         c.cyan = color("cyan", light);
         c.cyan_light = color("cyan", light);
+        theme.highlight_theme =
+            serde_json::from_str::<gpui_kit::component::highlighter::HighlightTheme>(if light {
+                include_str!("../assets/pierre-light.json")
+            } else {
+                include_str!("../assets/pierre-dark.json")
+            })
+            .expect("load bundled T3 syntax palette")
+            .into();
         theme.radius = px(8.);
         theme.radius_lg = px(12.);
         theme.font_family = "Inter Variable".into();
@@ -167,12 +176,27 @@ pub fn apply(light: bool, cx: &mut App) {
     let base = gpui_kit::base::Theme::global_mut(cx);
     base.scrollbar = base.scrollbar.clone().with_styles(
         gpui_kit::base::ScrollbarStyles::default()
-            .track(|style| style.width(px(6.)))
-            .track_hover(|style| style.width(px(6.)))
-            .track_active(|style| style.width(px(6.)))
-            .thumb(|style| style.width(px(6.)).inset(px(0.)))
-            .thumb_hover(|style| style.width(px(6.)).inset(px(0.)))
-            .thumb_active(|style| style.width(px(6.)).inset(px(0.))),
+            .track(|style| style.width(px(6.)).bg(transparent_black()))
+            .track_hover(|style| style.width(px(6.)).bg(transparent_black()))
+            .track_active(|style| style.width(px(6.)).bg(transparent_black()))
+            .thumb(|style| {
+                style
+                    .width(px(6.))
+                    .inset(px(0.))
+                    .bg(color("scrollbarThumb", light))
+            })
+            .thumb_hover(|style| {
+                style
+                    .width(px(6.))
+                    .inset(px(0.))
+                    .bg(color("scrollbarHover", light))
+            })
+            .thumb_active(|style| {
+                style
+                    .width(px(6.))
+                    .inset(px(0.))
+                    .bg(color("scrollbarHover", light))
+            }),
     );
 }
 
@@ -180,6 +204,7 @@ fn color(role: &str, light: bool) -> Hsla {
     let (dark, bright) = match role {
         "canvas" => (0x000000, 0xfcfcfc),
         "surface" => (0x111111, 0xffffff),
+        "surfaceRaised" => (0x111111, 0xfcfcfc),
         "text" => (0xf5f5f5, 0x27272a),
         "textMuted" => (0x818181, 0x71717b),
         "border" => (0x191919, 0xe4e4e7),
@@ -198,10 +223,17 @@ fn color(role: &str, light: bool) -> Hsla {
         "scrollbarThumb" => (0x222222, 0xd6d6d6),
         "scrollbarHover" => (0x363636, 0xbdbdbd),
         "sidebar" => (0x000000, 0xfafafa),
+        "sidebarForeground" => (0xf1f3f7, 0x27272a),
+        "sidebarBorder" => (0x141414, 0xe4e4e7),
         "rowHover" => (0x131313, 0xfcfcfc),
         _ => unreachable!("unknown T3 color role"),
     };
     rgb(if light { bright } else { dark }).into()
+}
+
+pub fn composer(cx: &App) -> Hsla {
+    use gpui_kit::component::ActiveTheme as _;
+    color("surface", !cx.theme().mode.is_dark()).opacity(0.8)
 }
 
 pub fn message(cx: &App) -> Hsla {
@@ -212,4 +244,21 @@ pub fn message(cx: &App) -> Hsla {
         0xebebed
     })
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn bundled_syntax_palettes_decode_for_the_pinned_highlighter() {
+        for source in [
+            include_str!("../assets/pierre-dark.json"),
+            include_str!("../assets/pierre-light.json"),
+        ] {
+            let theme: gpui_kit::component::highlighter::HighlightTheme =
+                serde_json::from_str(source).unwrap();
+            assert!(theme.style.syntax.keyword.is_some());
+            assert!(theme.style.syntax.string.is_some());
+            assert!(theme.style.syntax.function.is_some());
+        }
+    }
 }

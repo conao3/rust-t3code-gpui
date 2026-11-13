@@ -320,7 +320,6 @@ const TOOL_TYPES: &[&str] = &[
     "web_search",
     "dynamic_tool",
     "todo_list",
-    "checkpoint",
     "compaction",
     "handoff",
 ];
@@ -460,7 +459,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 detail: tool_detail(item),
                 link: None,
             }),
-            "system_notice" | "run_interrupt_request" | "run_interrupt_result" => rows.push(Row {
+            "system_notice" | "run_interrupt_result" => rows.push(Row {
                 key: id.to_string(),
                 kind: RowKind::Notice,
                 text: first_line(
@@ -471,7 +470,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 ),
                 live: false,
                 pending: None,
-                detail: String::new(),
+                detail: text(item, "type").to_string(),
                 link: None,
             }),
             _ => {}
@@ -683,6 +682,23 @@ mod tests {
         let blocks = split_blocks(&code);
         assert!(blocks[0].ends_with("```\n\n"), "{:?}", blocks[0]);
         assert_eq!(blocks.concat(), code);
+    }
+
+    #[test]
+    fn an_interruption_has_one_visible_result_and_checkpoint_stays_out_of_chat() {
+        let s = state(vec![
+            json!({"id": "u", "ordinal": 1, "type": "user_message", "text": "hello"}),
+            json!({"id": "r", "ordinal": 2, "type": "run_interrupt_request", "message": "Stopped by user"}),
+            json!({"id": "c", "ordinal": 3, "type": "checkpoint", "status": "completed"}),
+            json!({"id": "a", "ordinal": 4, "type": "run_interrupt_result", "message": "Stopped by user"}),
+            json!({"id": "n", "ordinal": 5, "type": "system_notice", "message": "Notice"}),
+        ]);
+        let rows = rows(&s);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[1].text, "Stopped by user");
+        assert_eq!(rows[1].detail, "run_interrupt_result");
+        assert_eq!(rows[2].text, "Notice");
+        assert_eq!(rows[2].detail, "system_notice");
     }
 
     #[test]

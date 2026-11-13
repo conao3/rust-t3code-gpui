@@ -1,10 +1,11 @@
+use gpui_kit::assets::IconName;
 use std::collections::HashMap;
 
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _,
+    ActiveTheme as _, Disableable as _, Icon,
     button::{Button, ButtonVariants as _},
     h_flex,
-    text::{TextView, TextViewState},
+    text::{TextView, TextViewState, TextViewStyle},
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -273,16 +274,58 @@ impl Render for RowView {
             RowKind::Assistant => match &self.markdown {
                 Some(state) => base
                     .py_1()
-                    .child(TextView::new(state).selectable(true))
+                    .text_color(theme.foreground.opacity(0.9))
+                    .line_height(relative(1.625))
+                    .child(
+                        TextView::new(state).selectable(true).style(
+                            TextViewStyle::default()
+                                .code_block(
+                                    StyleRefinement::default()
+                                        .line_height(relative(1.375))
+                                        .bg(if theme.mode.is_dark() {
+                                            theme.input.opacity(0.32)
+                                        } else {
+                                            theme.secondary
+                                        })
+                                        .border_color(if theme.mode.is_dark() {
+                                            transparent_black()
+                                        } else {
+                                            theme.border.opacity(0.7)
+                                        }),
+                                )
+                                .table(
+                                    StyleRefinement::default()
+                                        .bg(theme.background)
+                                        .border_0()
+                                        .rounded_none(),
+                                )
+                                .table_head(
+                                    StyleRefinement::default()
+                                        .bg(theme.background)
+                                        .font_weight(FontWeight::SEMIBOLD),
+                                )
+                                .table_cell(
+                                    StyleRefinement::default()
+                                        .border_0()
+                                        .border_color(transparent_black())
+                                        .px_0()
+                                        .py_2()
+                                        .text_sm(),
+                                ),
+                        ),
+                    )
                     .into_any_element(),
                 None => base.into_any_element(),
             },
             RowKind::User => base
                 .py_2()
+                .flex()
+                .justify_end()
                 .child(
                     div()
+                        .max_w(relative(0.8))
                         .p_3()
-                        .rounded_md()
+                        .rounded(px(16.))
                         .bg(crate::appearance::message(cx))
                         .child(self.row.text.clone()),
                 )
@@ -332,6 +375,14 @@ impl Render for RowView {
                     .child(
                         h_flex()
                             .gap_2()
+                            .child(
+                                Icon::new(match self.row.kind {
+                                    RowKind::Reasoning => IconName::Lightbulb,
+                                    RowKind::Subagent => IconName::Bot,
+                                    _ => IconName::Terminal,
+                                })
+                                .size(px(14.)),
+                            )
                             .child(div().flex_1().min_w_0().child(format!("{marker}{summary}")))
                             .when_some(self.row.link.clone(), |line, thread_id| {
                                 line.child(
@@ -351,11 +402,23 @@ impl Render for RowView {
                     .into_any_element()
             }
             RowKind::Notice => base
-                .py_0p5()
-                .text_sm()
-                .font_family(theme.mono_font_family.clone())
+                .py_2()
+                .text_xs()
                 .text_color(theme.muted_foreground)
-                .child(self.row.text.clone())
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(div().h(px(1.)).flex_1().bg(theme.border))
+                        .when(self.row.detail == "run_interrupt_result", |row| {
+                            row.child(Icon::new(IconName::CircleStop).size(px(12.)))
+                        })
+                        .child(if self.row.detail == "run_interrupt_result" {
+                            format!("Run interrupted · {}", self.row.text)
+                        } else {
+                            self.row.text.clone()
+                        })
+                        .child(div().h(px(1.)).flex_1().bg(theme.border)),
+                )
                 .into_any_element(),
             RowKind::Request | RowKind::Plan => match self.row.pending.clone() {
                 Some(pending) => base

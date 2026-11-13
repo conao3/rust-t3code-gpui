@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use gpui_kit::component::{
-    ActiveTheme as _, Selectable as _, Theme,
+    ActiveTheme as _, IconName, Selectable as _, Theme,
     button::{Button, ButtonVariants as _},
     command::{Command, CommandItem, CommandState},
     diff::{Diff, DiffFile, DiffMode, DiffParseOptions, DiffState},
@@ -256,23 +256,62 @@ struct TimelinePane {
 impl Render for TimelinePane {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let views = self.views.clone();
-        list(self.list.clone(), move |ix, _, _| {
-            views
-                .get(ix)
-                .map(|view| view.clone().into_any_element())
-                .unwrap_or_else(|| div().into_any_element())
-        })
-        .flex_1()
-        .w_full()
-        .h_full()
+        div()
+            .relative()
+            .flex_1()
+            .w_full()
+            .h_full()
+            .child(
+                list(self.list.clone(), move |ix, _, _| {
+                    views
+                        .get(ix)
+                        .map(|view| view.clone().into_any_element())
+                        .unwrap_or_else(|| div().into_any_element())
+                })
+                .w_full()
+                .h_full(),
+            )
+            .child(
+                gpui_kit::base::Scrollbar::vertical(&self.list)
+                    .mode(gpui_kit::base::ScrollbarMode::Always),
+            )
+    }
+}
+
+#[derive(PartialEq)]
+struct SidebarStamp {
+    entries_revision: u64,
+    open: Option<(String, String)>,
+    filter: Option<String>,
+    collapsed: HashSet<sidebar::Section>,
+    families: HashSet<(String, String)>,
+    connections: Vec<(String, Option<String>, ConnectionStatus)>,
+    width: f32,
+    light: bool,
+    font_size: f32,
+    minute: u64,
+}
+
+struct SidebarPane {
+    root: WeakEntity<Root>,
+}
+
+impl Render for SidebarPane {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.root
+            .update(cx, |root, cx| root.render_sidebar(cx).into_any_element())
+            .expect("sidebar root is alive")
     }
 }
 
 pub struct Root {
     sidebar_resizing: bool,
+    sidebar_pane: Entity<SidebarPane>,
+    sidebar_stamp: Option<SidebarStamp>,
     runtime: Handle,
     connections: Vec<Arc<Connection>>,
     entries: Vec<ThreadEntry>,
+    entries_revision: u64,
     statuses: HashMap<(String, String), ThreadStatus>,
     host_filter: Option<String>,
     open: Option<OpenThread>,
@@ -370,8 +409,9 @@ impl Root {
             }
         });
         let composer = cx.new(|cx| {
-            let mut state = TextareaState::new(window, cx).placeholder("Message");
-            state.set_auto_grow(2, 12, cx);
+            let mut state = TextareaState::new(window, cx)
+                .placeholder("Ask anything. @ files, $ skills, / commands");
+            state.set_auto_grow(1, 12, cx);
             state
         });
         let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
@@ -418,11 +458,15 @@ impl Root {
         ];
         let list_state = ListState::new(0, ListAlignment::Bottom, px(800.));
         list_state.set_follow_mode(FollowMode::Tail);
+        let sidebar_root = cx.entity().downgrade();
         Self {
             sidebar_resizing: false,
+            sidebar_pane: cx.new(|_| SidebarPane { root: sidebar_root }),
+            sidebar_stamp: None,
             runtime,
             connections,
             entries: Vec::new(),
+            entries_revision: 0,
             statuses: HashMap::new(),
             host_filter: None,
             open: None,
@@ -837,6 +881,7 @@ impl Root {
     }
 
     fn rebuild_entries(&mut self) {
+        self.entries_revision += 1;
         let mut entries = Vec::new();
         for connection in &self.connections {
             let shell = connection.shell();
@@ -3085,33 +3130,48 @@ impl Root {
         let open = self.current();
         let primary = self.connections.first().map(|c| c.label().to_string());
         let shelves = self.shelves_of(&self.visible_entries());
+        let has_settled = shelves
+            .iter()
+            .any(|shelf| shelf.section == sidebar::Section::Settled);
+        let mut lower_started = false;
         let mut rows: Vec<AnyElement> = Vec::new();
         let mut index = 0usize;
         for shelf in shelves {
             let section = shelf.section;
-            let collapsed = self.collapsed.contains(&section);
-            rows.push(
-                h_flex()
-                    .id(SharedString::from(format!("shelf-{}", section.label())))
-                    .px_2()
-                    .pt_2()
-                    .pb_1()
-                    .gap_1()
-                    .text_xs()
-                    .text_color(theme.muted_foreground)
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |root, _, _, cx| {
-                        if !root.collapsed.remove(&section) {
-                            root.collapsed.insert(section);
-                        }
-                        cx.notify();
-                    }))
-                    .child(if collapsed { "▸" } else { "▾" })
-                    .child(section.label())
-                    .child(format!("{}", shelf.rows.len()))
-                    .into_any_element(),
+            let lower = matches!(
+                section,
+                sidebar::Section::Working | sidebar::Section::Snoozed | sidebar::Section::Settled
             );
-            if collapsed {
+            let bottom = lower && !lower_started;
+            lower_started |= lower;
+            let collapsed = self.collapsed.contains(&section);
+            if !matches!(section, sidebar::Section::Pinned | sidebar::Section::Active) {
+                rows.push(
+                    h_flex()
+                        .id(SharedString::from(format!("shelf-{}", section.label())))
+                        .px_2()
+                        .pt_2()
+                        .pb_1()
+                        .gap_1()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            if !root.collapsed.remove(&section) {
+                                root.collapsed.insert(section);
+                            }
+                            cx.notify();
+                        }))
+                        .when(bottom, |row| row.mt_auto())
+                        .child(section.label())
+                        .child(div().flex_1())
+                        .child(format!("{}", shelf.rows.len()))
+                        .child(if collapsed { "▸" } else { "▾" })
+                        .into_any_element(),
+                );
+            }
+            if collapsed && !matches!(section, sidebar::Section::Pinned | sidebar::Section::Active)
+            {
                 continue;
             }
             for (entry, depth, family) in
@@ -3134,13 +3194,13 @@ impl Root {
                 let snoozed = section == sidebar::Section::Snoozed;
                 let settled = entry.status == ThreadStatus::Settled;
                 rows.push(
-                    h_flex()
+                    v_flex()
                         .id(("thread", index))
                         .w_full()
                         .pl(px(crate::appearance::ROW_INSET + 16. * depth as f32))
                         .pr_2()
-                        .py_1()
-                        .gap_2()
+                        .py_2()
+                        .gap_1()
                         .rounded_md()
                         .when(selected, |row| row.bg(theme.list_active))
                         .when(settled || snoozed, |row| {
@@ -3151,17 +3211,49 @@ impl Root {
                             root.open_thread(environment.clone(), thread_id.clone(), cx)
                         }))
                         .child(
-                            div()
-                                .flex_none()
-                                .px_1()
-                                .rounded_sm()
-                                .text_xs()
-                                .border_1()
-                                .when(remote, |chip| {
-                                    chip.border_color(theme.warning).text_color(theme.warning)
-                                })
-                                .when(!remote, |chip| chip.border_color(theme.border))
-                                .child(entry.environment.clone()),
+                            h_flex()
+                                .w_full()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .when(remote, |chip| {
+                                            chip.px_1()
+                                                .rounded_sm()
+                                                .bg(theme.warning.opacity(0.15))
+                                                .text_color(theme.warning)
+                                        })
+                                        .child(entry.environment.clone()),
+                                )
+                                .child(div().flex_1())
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(dot.unwrap_or(theme.muted_foreground))
+                                        .child(if entry.status == ThreadStatus::Idle {
+                                            humantime::parse_rfc3339(
+                                                entry
+                                                    .latest_user_message_at
+                                                    .as_deref()
+                                                    .unwrap_or(&entry.updated_at),
+                                            )
+                                            .ok()
+                                            .and_then(|time| {
+                                                SystemTime::now().duration_since(time).ok()
+                                            })
+                                            .map(|age| {
+                                                if age.as_secs() >= 3600 {
+                                                    format!("{}h", age.as_secs() / 3600)
+                                                } else {
+                                                    format!("{}m", age.as_secs() / 60)
+                                                }
+                                            })
+                                            .unwrap_or_default()
+                                        } else {
+                                            entry.status.label().to_string()
+                                        }),
+                                ),
                         )
                         .child(
                             div()
@@ -3198,9 +3290,6 @@ impl Root {
                                     .child(label),
                             )
                         })
-                        .when_some(dot, |row, color| {
-                            row.child(div().flex_none().size_2().rounded_full().bg(color))
-                        })
                         .context_menu(move |menu, _, _| {
                             let (environment, thread_id) = menu_target.clone();
                             let op = |op: ThreadOp| -> Box<dyn Action> {
@@ -3233,6 +3322,22 @@ impl Root {
                 );
             }
         }
+        if !has_settled {
+            rows.push(
+                h_flex()
+                    .px_2()
+                    .py_2()
+                    .gap_2()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .when(!lower_started, |row| row.mt_auto())
+                    .child("Settled")
+                    .child(div().flex_1())
+                    .child("0")
+                    .child("▸")
+                    .into_any_element(),
+            );
+        }
         v_flex()
             .w(px(self.settings.sidebar_width))
             .h_full()
@@ -3242,38 +3347,53 @@ impl Root {
             .bg(theme.sidebar)
             .child(
                 div()
-                    .h(px(52.))
+                    .h(px(40.))
                     .px_4()
                     .flex()
                     .items_center()
+                    .text_sm()
                     .child("T3 Code"),
             )
             .child(
                 h_flex()
                     .px_2()
+                    .py_1()
                     .gap_2()
                     .child(
-                        Button::new("sidebar-search")
-                            .label("Search")
-                            .compact()
+                        h_flex()
+                            .id("sidebar-search")
+                            .h_8()
+                            .px_2()
+                            .gap_2()
+                            .rounded_md()
+                            .cursor_pointer()
+                            .text_sm()
+                            .text_color(theme.muted_foreground)
+                            .hover(|row| row.bg(theme.list_hover))
                             .flex_1()
+                            .child(IconName::Search)
+                            .child("Search")
                             .on_click(
                                 cx.listener(|root, _, window, cx| root.toggle_palette(window, cx)),
                             ),
                     )
                     .child(
-                        Button::new("sidebar-new").label("+").compact().on_click(
-                            cx.listener(|root, _, window, cx| root.new_thread(window, cx)),
-                        ),
+                        Button::new("sidebar-new")
+                            .icon(IconName::Plus)
+                            .tooltip("New thread")
+                            .accessibility_label("New thread")
+                            .on_click(
+                                cx.listener(|root, _, window, cx| root.new_thread(window, cx)),
+                            ),
                     ),
             )
             .children(filters)
             .child(
-                div()
+                v_flex()
                     .id("threads")
                     .flex_1()
                     .overflow_y_scroll()
-                    .p_1()
+                    .p_2()
                     .children(rows),
             )
             .child(statuses)
@@ -3284,20 +3404,22 @@ impl Root {
                     .gap_1()
                     .child(
                         Button::new("hosts")
-                            .label("Hosts")
+                            .icon(IconName::Globe)
+                            .tooltip("Connections")
+                            .accessibility_label("Connections")
                             .compact()
-                            .outline()
-                            .flex_1()
+                            .ghost()
                             .on_click(
                                 cx.listener(|root, _, window, cx| root.toggle_hosts(window, cx)),
                             ),
                     )
                     .child(
                         Button::new("settings")
-                            .label("Settings")
+                            .icon(IconName::Settings)
+                            .tooltip("Settings")
+                            .accessibility_label("Settings")
                             .compact()
-                            .outline()
-                            .flex_1()
+                            .ghost()
                             .on_click(cx.listener(|root, _, _, cx| {
                                 root.settings_open = !root.settings_open;
                                 cx.notify();
@@ -3428,6 +3550,8 @@ impl Root {
                 h_flex()
                     .px_3()
                     .pt_2()
+                    .pb_2()
+                    .justify_end()
                     .gap_2()
                     .flex_wrap()
                     .overflow_hidden()
@@ -3435,7 +3559,7 @@ impl Root {
                         Button::new("model")
                             .label(label)
                             .compact()
-                            .outline()
+                            .ghost()
                             .selected(self.picker_open)
                             .on_click(cx.listener(|root, _, _, cx| {
                                 root.picker_open = !root.picker_open;
@@ -3446,7 +3570,7 @@ impl Root {
                         Button::new("runtime-mode")
                             .label(runtime_mode.clone())
                             .compact()
-                            .outline()
+                            .ghost()
                             .on_click(cx.listener(|root, _, _, cx| root.cycle_runtime_mode(cx))),
                     )
                     .when(plan, |row| {
@@ -3454,7 +3578,7 @@ impl Root {
                             Button::new("plan")
                                 .label("Plan")
                                 .compact()
-                                .outline()
+                                .ghost()
                                 .selected(interaction_mode == "plan")
                                 .on_click(cx.listener(|root, _, _, cx| root.toggle_plan(cx))),
                         )
@@ -3566,33 +3690,28 @@ impl Root {
         let content = v_flex()
             .w_full()
             .max_w(px(736.))
-            .mb_3()
+            .mb_5()
             .rounded(px(16.))
             .border_1()
             .border_color(theme.border)
-            .bg(theme.secondary)
+            .bg(crate::appearance::composer(cx))
             .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
             .children(picker)
             .children(suggestions)
             .children(chips)
             .child(
-                h_flex()
-                    .p_3()
-                    .gap_2()
-                    .items_end()
-                    .child(
-                        div()
-                            .flex_1()
-                            .text_size(px(self.settings.font_size_prompt))
-                            .child(
-                                Textarea::new(&self.composer)
-                                    .appearance(false)
-                                    .bordered(false),
-                            ),
-                    )
-                    .child(button),
+                h_flex().px_1p5().py_3().gap_2().items_end().child(
+                    div()
+                        .flex_1()
+                        .text_size(px(self.settings.font_size_prompt))
+                        .child(
+                            Textarea::new(&self.composer)
+                                .appearance(false)
+                                .bordered(false),
+                        ),
+                ),
             )
-            .children(toolbar)
+            .children(toolbar.map(|row| row.child(button)))
             .into_any_element();
         h_flex()
             .w_full()
@@ -3686,6 +3805,7 @@ impl Root {
                 .into_any_element();
         };
         let entry = self.open_entry();
+        let project_title = entry.map(|e| e.project_title.clone()).unwrap_or_default();
         let title = entry.map(|e| e.title.clone()).unwrap_or_default();
         let status = entry.map(|e| e.status).unwrap_or(ThreadStatus::Idle);
         let working = matches!(
@@ -3693,12 +3813,26 @@ impl Root {
             ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval
         );
         let header = h_flex()
+            .h(px(40.))
+            .flex_none()
             .px_4()
-            .py_2()
             .gap_2()
             .border_b_1()
             .border_color(theme.border)
-            .child(div().flex_1().min_w_0().truncate().child(title))
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_2()
+                    .text_sm()
+                    .child(
+                        div()
+                            .text_color(theme.muted_foreground)
+                            .child(project_title),
+                    )
+                    .child(div().text_color(theme.muted_foreground).child("/"))
+                    .child(div().min_w_0().truncate().child(title)),
+            )
             .child(
                 div()
                     .text_sm()
@@ -3707,34 +3841,38 @@ impl Root {
             )
             .child(
                 Button::new("settle")
-                    .label(if status == ThreadStatus::Settled {
-                        "Unsettle"
-                    } else {
-                        "Settle"
-                    })
-                    .outline()
+                    .icon(IconName::Check)
+                    .tooltip("Settle or unsettle")
+                    .accessibility_label("Settle or unsettle")
+                    .ghost()
                     .compact()
                     .on_click(cx.listener(|root, _, _, cx| root.settle(cx))),
             )
             .child(
                 Button::new("files")
-                    .label("Files")
-                    .outline()
+                    .icon(IconName::FolderOpen)
+                    .tooltip("Files")
+                    .accessibility_label("Files")
+                    .ghost()
                     .compact()
                     .selected(self.explorer.is_some())
                     .on_click(cx.listener(|root, _, _, cx| root.toggle_explorer(cx))),
             )
             .child(
                 Button::new("diff")
-                    .label("Changes")
-                    .outline()
+                    .icon(IconName::FileText)
+                    .tooltip("Changes")
+                    .accessibility_label("Changes")
+                    .ghost()
                     .compact()
                     .on_click(cx.listener(|root, _, _, cx| root.toggle_diff(cx))),
             )
             .child(
                 Button::new("browser")
-                    .label("Open in browser")
-                    .outline()
+                    .icon(IconName::ExternalLink)
+                    .tooltip("Open in browser")
+                    .accessibility_label("Open in browser")
+                    .ghost()
                     .compact()
                     .on_click(cx.listener(|root, _, _, cx| root.open_in_browser(cx))),
             );
@@ -3745,12 +3883,18 @@ impl Root {
                 .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
         } else if working {
             Button::new("stop")
-                .label("Stop")
+                .icon(IconName::Square)
+                .tooltip("Stop")
+                .accessibility_label("Stop")
+                .rounded(px(16.))
                 .danger()
                 .on_click(cx.listener(|root, _, _, cx| root.stop(cx)))
         } else {
             Button::new("send")
-                .label("Send")
+                .icon(IconName::ArrowUp)
+                .tooltip("Send")
+                .accessibility_label("Send")
+                .rounded(px(16.))
                 .primary()
                 .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
         };
@@ -3826,8 +3970,7 @@ impl Root {
             .children(message)
             .child(
                 div()
-                    .border_t_1()
-                    .border_color(theme.border)
+                    .pt_9()
                     .children(self.render_queue(cx))
                     .child(self.render_composer(button, cx)),
             )
@@ -3841,6 +3984,36 @@ impl Render for Root {
             208.,
             (f32::from(window.viewport_size().width) - 640.).max(208.),
         );
+        let sidebar_stamp = SidebarStamp {
+            entries_revision: self.entries_revision,
+            open: self.current(),
+            filter: self.host_filter.clone(),
+            collapsed: self.collapsed.clone(),
+            families: self.collapsed_families.clone(),
+            connections: self
+                .connections
+                .iter()
+                .map(|connection| {
+                    (
+                        connection.label().to_string(),
+                        connection.environment_id(),
+                        connection.status(),
+                    )
+                })
+                .collect(),
+            width: self.settings.sidebar_width,
+            light: self.settings.light_theme,
+            font_size: self.settings.font_size_interface,
+            minute: SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                / 60,
+        };
+        if self.sidebar_stamp.as_ref() != Some(&sidebar_stamp) {
+            self.sidebar_stamp = Some(sidebar_stamp);
+            self.sidebar_pane.update(cx, |_, cx| cx.notify());
+        }
         self.follow_explorer(cx);
         if let Some(text) = self.pending_composer.take() {
             self.composer
@@ -3975,8 +4148,17 @@ impl Render for Root {
                 }),
             )
             .when(!self.sidebar_hidden, |root| {
-                root.child(self.render_sidebar(cx)).child(
+                root.child(
+                    self.sidebar_pane.clone().cached(
+                        StyleRefinement::default()
+                            .w(px(self.settings.sidebar_width))
+                            .h_full()
+                            .flex_none(),
+                    ),
+                )
+                .child(
                     div()
+                        .ml(px(-4.))
                         .w(px(4.))
                         .h_full()
                         .flex_none()
@@ -4017,40 +4199,42 @@ pub fn run(
     let drafts = Drafts::load(&drafts_path)?;
     let runtime = Runtime::new()?;
     let handle = runtime.handle().clone();
-    gpui_kit::application().run(move |cx| {
-        gpui_kit::init(cx);
-        crate::appearance::apply(settings.light_theme, cx);
-        Theme::update(cx, |theme| {
-            theme.font_family = UI_FONT.into();
-            theme.font_size = px(settings.font_size_interface);
-            theme.mono_font_size = px(settings.font_size_code);
-            theme.cursor_blink =
-                CursorBlink::blinking(CURSOR_BLINK).with_idle_timeout(CURSOR_BLINK_IDLE);
-        });
-        let root = Some("Root");
-        cx.bind_keys([KeyBinding::new("escape", Cancel, root)]);
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(1400.), px(900.)), cx)),
-            titlebar: Some(TitlebarOptions {
-                title: Some("T3 Code".into()),
+    gpui_kit::application()
+        .with_assets(gpui_kit::assets::AllAssets)
+        .run(move |cx| {
+            gpui_kit::init(cx);
+            crate::appearance::apply(settings.light_theme, cx);
+            Theme::update(cx, |theme| {
+                theme.font_family = UI_FONT.into();
+                theme.font_size = px(settings.font_size_interface);
+                theme.mono_font_size = px(settings.font_size_code);
+                theme.cursor_blink =
+                    CursorBlink::blinking(CURSOR_BLINK).with_idle_timeout(CURSOR_BLINK_IDLE);
+            });
+            let root = Some("Root");
+            cx.bind_keys([KeyBinding::new("escape", Cancel, root)]);
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::centered(size(px(1400.), px(900.)), cx)),
+                titlebar: Some(TitlebarOptions {
+                    title: Some("T3 Code".into()),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            ..Default::default()
-        };
-        gpui_kit::open_window(options, cx, |window, cx| {
-            cx.new(|cx| {
-                Root::new(
-                    (config, config_path),
-                    (settings.clone(), settings_path),
-                    (drafts, drafts_path),
-                    handle,
-                    window,
-                    cx,
-                )
+            };
+            gpui_kit::open_window(options, cx, |window, cx| {
+                cx.new(|cx| {
+                    Root::new(
+                        (config, config_path),
+                        (settings.clone(), settings_path),
+                        (drafts, drafts_path),
+                        handle,
+                        window,
+                        cx,
+                    )
+                })
             })
-        })
-        .expect("open the window");
-    });
+            .expect("open the window");
+        });
     drop(runtime);
     Ok(())
 }

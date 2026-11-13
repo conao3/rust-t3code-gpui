@@ -37,6 +37,7 @@ pub struct ThreadEntry {
     pub project_title: String,
     pub status: ThreadStatus,
     pub updated_at: String,
+    pub latest_user_message_at: Option<String>,
     pub pin_order: Option<String>,
     pub snoozed_until: Option<String>,
     pub launched_from: Option<(String, String)>,
@@ -116,6 +117,10 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
                 project_title,
                 status: status_of(thread),
                 updated_at: text(thread, "updatedAt").to_string(),
+                latest_user_message_at: thread
+                    .get("latestUserMessageAt")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
                 pin_order: present(thread, "pinnedAt").then(|| {
                     thread
                         .get("pinOrderKey")
@@ -196,8 +201,8 @@ pub fn shelves(
     let mut shelves: Vec<Shelf> = Vec::new();
     for section in [
         Section::Pinned,
-        Section::Working,
         Section::Active,
+        Section::Working,
         Section::Snoozed,
         Section::Settled,
     ] {
@@ -479,6 +484,7 @@ mod tests {
             project_title: String::new(),
             status,
             updated_at: String::new(),
+            latest_user_message_at: None,
             pin_order: None,
             snoozed_until: None,
             launched_from: None,
@@ -572,11 +578,11 @@ mod tests {
             .collect();
         let expected: Vec<(Section, Vec<(&str, usize)>)> = vec![
             (Section::Pinned, vec![("pin-a", 0), ("pin-b", 0)]),
-            (Section::Working, vec![("working", 0)]),
             (
                 Section::Active,
                 vec![("orphan", 0), ("parent", 0), ("child", 1), ("woke", 0)],
             ),
+            (Section::Working, vec![("working", 0)]),
             (Section::Snoozed, vec![("snoozed", 0)]),
         ];
         let expected: Vec<(Section, Vec<(String, usize)>)> = expected
