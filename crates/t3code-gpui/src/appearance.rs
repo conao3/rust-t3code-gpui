@@ -84,11 +84,11 @@ pub fn apply(light: bool, cx: &mut App) {
         c.link_active = color("accent", light);
         c.link_hover = color("accent", light);
         c.list = color("surface", light);
-        c.list_active = color("accentSurface", light);
-        c.list_active_border = color("accentSurface", light);
+        c.list_active = color("text", light).opacity(0.09);
+        c.list_active_border = transparent_black();
         c.list_even = color("surface", light);
         c.list_head = color("surface", light);
-        c.list_hover = color("accentSurface", light);
+        c.list_hover = color("text", light).opacity(0.09);
         c.muted = color("muted", light);
         c.muted_foreground = color("textMuted", light);
         c.popover = color("surface", light);

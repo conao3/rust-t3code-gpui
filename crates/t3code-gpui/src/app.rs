@@ -3934,7 +3934,8 @@ impl Root {
                     .w(px(192.))
                     .h_full()
                     .border_l_1()
-                    .border_color(theme.border)
+                    .border_color(theme.border.opacity(0.7))
+                    .bg(theme.muted.opacity(0.4))
                     .p_2()
                     .child(
                         div()
@@ -4044,10 +4045,11 @@ impl Root {
                 .child(
                     h_flex()
                         .h(px(44.))
+                        .bg(theme.foreground.opacity(0.025))
                         .px_2()
                         .gap_1()
                         .border_t_1()
-                        .border_color(theme.border)
+                        .border_color(theme.foreground.opacity(0.07))
                         .children(
                             selected_model
                                 .into_iter()
