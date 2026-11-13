@@ -261,14 +261,15 @@ impl Render for RowView {
             .w_full()
             .max_w(px(736.))
             .mx_auto()
-            .px_4()
+            .text_sm()
+            .px_0()
             .border_l_2()
             .border_color(if self.found {
                 theme.warning
             } else {
                 gpui::transparent_black()
             });
-        match self.row.kind {
+        let content = match self.row.kind {
             RowKind::Assistant => match &self.markdown {
                 Some(state) => base
                     .py_1()
@@ -378,6 +379,7 @@ impl Render for RowView {
                 .text_color(theme.danger)
                 .child(self.row.text.clone())
                 .into_any_element(),
-        }
+        };
+        div().w_full().flex().justify_center().child(content)
     }
 }

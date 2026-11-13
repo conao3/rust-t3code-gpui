@@ -3563,13 +3563,14 @@ impl Root {
                 }),
             )
         });
-        v_flex()
-            .mx_4()
+        let content = v_flex()
+            .w_full()
+            .max_w(px(736.))
             .mb_3()
             .rounded(px(16.))
             .border_1()
             .border_color(theme.border)
-            .bg(crate::appearance::message(cx))
+            .bg(theme.secondary)
             .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
             .children(picker)
             .children(suggestions)
@@ -3583,11 +3584,21 @@ impl Root {
                         div()
                             .flex_1()
                             .text_size(px(self.settings.font_size_prompt))
-                            .child(Textarea::new(&self.composer)),
+                            .child(
+                                Textarea::new(&self.composer)
+                                    .appearance(false)
+                                    .bordered(false),
+                            ),
                     )
                     .child(button),
             )
             .children(toolbar)
+            .into_any_element();
+        h_flex()
+            .w_full()
+            .px_4()
+            .justify_center()
+            .child(content)
             .into_any_element()
     }
 
@@ -3806,11 +3817,7 @@ impl Root {
                 )
             })
             .when(!self.thread_loading, |pane| {
-                pane.child(
-                    self.timeline_pane
-                        .clone()
-                        .cached(StyleRefinement::default().flex_1().w_full()),
-                )
+                pane.child(self.timeline_pane.clone())
             })
             .children(message)
             .child(
