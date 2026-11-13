@@ -39,7 +39,7 @@ type CommandFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<u64>> + std::marker::Send>>;
 
 const REDRAW_INTERVAL: Duration = Duration::from_millis(250);
-const UI_FONT: &str = "Inter";
+const UI_FONT: &str = "Inter Variable";
 const DIFF_TITLE: &str = "Changes";
 const CURSOR_BLINK: Duration = Duration::from_millis(500);
 const CURSOR_BLINK_IDLE: Duration = Duration::from_secs(5);
@@ -3817,7 +3817,11 @@ impl Root {
                 )
             })
             .when(!self.thread_loading, |pane| {
-                pane.child(self.timeline_pane.clone())
+                pane.child(
+                    self.timeline_pane
+                        .clone()
+                        .cached(StyleRefinement::default().flex_1().w_full()),
+                )
             })
             .children(message)
             .child(

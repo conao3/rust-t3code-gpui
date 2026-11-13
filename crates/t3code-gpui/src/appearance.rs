@@ -162,7 +162,7 @@ pub fn apply(light: bool, cx: &mut App) {
         c.cyan_light = color("cyan", light);
         theme.radius = px(8.);
         theme.radius_lg = px(12.);
-        theme.font_family = "Inter".into();
+        theme.font_family = "Inter Variable".into();
     });
     let base = gpui_kit::base::Theme::global_mut(cx);
     base.scrollbar = base.scrollbar.clone().with_styles(
