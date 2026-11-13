@@ -4090,33 +4090,57 @@ impl Root {
                                             ),
                                         );
                                     }
-                                    Some(h_flex().gap_0p5().children(
-                                        descriptor.get("options")?.as_array()?.iter().map(
-                                            |option| {
-                                                let id = id.clone();
-                                                let value = option
-                                                    .get("id")
-                                                    .cloned()
-                                                    .unwrap_or(Value::Null);
-                                                Button::new(SharedString::from(format!(
-                                                    "option-{id}-{value}"
-                                                )))
-                                                .label(
-                                                    option
-                                                        .get("label")
-                                                        .and_then(Value::as_str)
-                                                        .unwrap_or_default()
-                                                        .to_string(),
-                                                )
-                                                .compact()
-                                                .ghost()
-                                                .selected(Some(&value) == selected.as_ref())
-                                                .on_click(cx.listener(move |root, _, _, cx| {
-                                                    root.set_model_option(&id, value.clone(), cx)
-                                                }))
-                                            },
-                                        ),
-                                    ))
+                                    Some(
+                                        h_flex()
+                                            .rounded(px(6.))
+                                            .bg(theme.foreground.opacity(0.05))
+                                            .p(px(3.))
+                                            .children(
+                                                descriptor.get("options")?.as_array()?.iter().map(
+                                                    |option| {
+                                                        let id = id.clone();
+                                                        let value = option
+                                                            .get("id")
+                                                            .cloned()
+                                                            .unwrap_or(Value::Null);
+                                                        Button::new(SharedString::from(format!(
+                                                            "option-{id}-{value}"
+                                                        )))
+                                                        .label(
+                                                            option
+                                                                .get("label")
+                                                                .and_then(Value::as_str)
+                                                                .unwrap_or_default()
+                                                                .to_string(),
+                                                        )
+                                                        .compact()
+                                                        .ghost()
+                                                        .text_size(px(12.))
+                                                        .h(px(22.))
+                                                        .px(px(8.))
+                                                        .rounded(px(3.))
+                                                        .when(
+                                                            Some(&value) == selected.as_ref(),
+                                                            |button| {
+                                                                button.bg(theme
+                                                                    .foreground
+                                                                    .opacity(0.09))
+                                                            },
+                                                        )
+                                                        .selected(Some(&value) == selected.as_ref())
+                                                        .on_click(cx.listener(
+                                                            move |root, _, _, cx| {
+                                                                root.set_model_option(
+                                                                    &id,
+                                                                    value.clone(),
+                                                                    cx,
+                                                                )
+                                                            },
+                                                        ))
+                                                    },
+                                                ),
+                                            ),
+                                    )
                                 }),
                         )
                         .child(div().flex_1())
@@ -4133,6 +4157,7 @@ impl Root {
                                         })
                                         .compact()
                                         .ghost()
+                                        .text_size(px(12.))
                                         .selected(interaction_mode == "plan")
                                         .on_click(
                                             cx.listener(|root, _, _, cx| root.toggle_plan(cx)),
@@ -4151,6 +4176,8 @@ impl Root {
                                 })
                                 .compact()
                                 .ghost()
+                                .text_size(px(12.))
+                                .text_color(theme.muted_foreground)
                                 .dropdown_menu_with_anchor(
                                     Anchor::BottomRight,
                                     move |mut menu, _, _| {
