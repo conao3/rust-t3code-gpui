@@ -39,7 +39,7 @@ type CommandFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<u64>> + std::marker::Send>>;
 
 const REDRAW_INTERVAL: Duration = Duration::from_millis(250);
-const UI_FONT: &str = "Noto Sans CJK JP";
+const UI_FONT: &str = "Inter";
 const DIFF_TITLE: &str = "Changes";
 const CURSOR_BLINK: Duration = Duration::from_millis(500);
 const CURSOR_BLINK_IDLE: Duration = Duration::from_secs(5);
@@ -3124,7 +3124,7 @@ impl Root {
                     h_flex()
                         .id(("thread", index))
                         .w_full()
-                        .pl(px(8. + 16. * depth as f32))
+                        .pl(px(crate::appearance::ROW_INSET + 16. * depth as f32))
                         .pr_2()
                         .py_1()
                         .gap_2()
@@ -3534,10 +3534,15 @@ impl Root {
             )
         });
         v_flex()
+            .mx_4()
+            .mb_3()
+            .rounded(px(16.))
+            .border_1()
+            .border_color(theme.border)
+            .bg(rgb(crate::appearance::MESSAGE))
             .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
             .children(picker)
             .children(suggestions)
-            .children(toolbar)
             .children(chips)
             .child(
                 h_flex()
@@ -3552,6 +3557,7 @@ impl Root {
                     )
                     .child(button),
             )
+            .children(toolbar)
             .into_any_element()
     }
 
@@ -3930,6 +3936,7 @@ pub fn run(
     let handle = runtime.handle().clone();
     gpui_kit::application().run(move |cx| {
         gpui_kit::init(cx);
+        crate::appearance::apply(cx);
         Theme::update(cx, |theme| {
             theme.font_family = UI_FONT.into();
             theme.font_size = px(settings.font_size_interface);

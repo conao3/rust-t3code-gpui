@@ -259,6 +259,8 @@ impl Render for RowView {
         let theme = cx.theme();
         let base = div()
             .w_full()
+            .max_w(px(736.))
+            .mx_auto()
             .px_4()
             .border_l_2()
             .border_color(if self.found {
@@ -280,7 +282,7 @@ impl Render for RowView {
                     div()
                         .p_3()
                         .rounded_md()
-                        .bg(theme.secondary)
+                        .bg(rgb(crate::appearance::MESSAGE))
                         .child(self.row.text.clone()),
                 )
                 .into_any_element(),
@@ -307,7 +309,7 @@ impl Render for RowView {
                         .mt_1()
                         .p_2()
                         .rounded_md()
-                        .bg(theme.secondary)
+                        .bg(rgb(crate::appearance::MESSAGE))
                         .font_family(theme.mono_font_family.clone())
                         .text_xs()
                         .whitespace_normal()
