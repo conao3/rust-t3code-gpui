@@ -3228,15 +3228,16 @@ impl Root {
 
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
+        let sidebar_active = crate::appearance::sidebar_active(cx);
+        let sidebar_hover = crate::appearance::sidebar_hover(cx);
+        let sidebar_muted = crate::appearance::sidebar_muted(cx);
         let statuses = v_flex()
             .gap_0p5()
             .p_2()
             .children(self.connections.iter().map(|c| {
                 let (color, text) = match c.status() {
                     ConnectionStatus::Connected => (theme.success, "connected".to_string()),
-                    ConnectionStatus::Connecting => {
-                        (theme.muted_foreground, "connecting".to_string())
-                    }
+                    ConnectionStatus::Connecting => (sidebar_muted, "connecting".to_string()),
                     ConnectionStatus::Disconnected(reason) => (theme.danger, reason),
                 };
                 h_flex()
@@ -3244,12 +3245,7 @@ impl Root {
                     .text_xs()
                     .child(div().size_2().rounded_full().bg(color))
                     .child(c.label().to_string())
-                    .child(
-                        div()
-                            .text_color(theme.muted_foreground)
-                            .truncate()
-                            .child(text),
-                    )
+                    .child(div().text_color(sidebar_muted).truncate().child(text))
             }));
         let filters = (self.connections.len() > 1).then(|| {
             let chip = |id: SharedString, label: String, value: Option<String>, selected: bool| {
@@ -3310,7 +3306,7 @@ impl Root {
                         .pb_1()
                         .gap_1()
                         .text_xs()
-                        .text_color(theme.muted_foreground)
+                        .text_color(sidebar_muted)
                         .cursor_pointer()
                         .on_click(cx.listener(move |root, _, _, cx| {
                             if !root.collapsed.remove(&section) {
@@ -3358,11 +3354,15 @@ impl Root {
                         .py_2()
                         .gap_1()
                         .rounded_md()
-                        .when(selected, |row| row.bg(theme.list_active))
-                        .when(settled || snoozed, |row| {
-                            row.text_color(theme.muted_foreground)
+                        .when(selected, |row| row.bg(sidebar_active))
+                        .when(settled || snoozed, |row| row.text_color(sidebar_muted))
+                        .hover(|row| {
+                            row.bg(if selected {
+                                sidebar_active
+                            } else {
+                                sidebar_hover
+                            })
                         })
-                        .hover(|row| row.bg(theme.secondary))
                         .on_click(cx.listener(move |root, _, _, cx| {
                             root.open_thread(environment.clone(), thread_id.clone(), cx)
                         }))
@@ -3373,7 +3373,7 @@ impl Root {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(theme.muted_foreground)
+                                        .text_color(sidebar_muted)
                                         .when(remote, |chip| {
                                             chip.px_1()
                                                 .rounded_sm()
@@ -3386,7 +3386,7 @@ impl Root {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(dot.unwrap_or(theme.muted_foreground))
+                                        .text_color(dot.unwrap_or(sidebar_muted))
                                         .child(if entry.status == ThreadStatus::Idle {
                                             humantime::parse_rfc3339(
                                                 entry
@@ -3434,7 +3434,7 @@ impl Root {
                                     .flex_none()
                                     .px_1()
                                     .text_xs()
-                                    .text_color(theme.muted_foreground)
+                                    .text_color(sidebar_muted)
                                     .cursor_pointer()
                                     .on_click(cx.listener(move |root, _, _, cx| {
                                         cx.stop_propagation();
@@ -3485,7 +3485,7 @@ impl Root {
                     .py_2()
                     .gap_2()
                     .text_xs()
-                    .text_color(theme.muted_foreground)
+                    .text_color(sidebar_muted)
                     .when(!lower_started, |row| row.mt_auto())
                     .child("Settled")
                     .child(div().flex_1())
@@ -3501,6 +3501,7 @@ impl Root {
             .border_r_1()
             .border_color(theme.border)
             .bg(theme.sidebar)
+            .text_color(theme.sidebar_foreground)
             .child(
                 h_flex()
                     .h(px(40.))
@@ -3564,7 +3565,7 @@ impl Root {
                             .rounded_md()
                             .cursor_pointer()
                             .text_sm()
-                            .text_color(theme.muted_foreground)
+                            .text_color(sidebar_muted)
                             .hover(|row| row.bg(theme.list_hover))
                             .flex_1()
                             .child(IconName::Search)

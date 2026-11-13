@@ -22,15 +22,15 @@ pub fn apply(light: bool, cx: &mut App) {
     );
     Theme::update(cx, |theme| {
         let c = &mut theme.colors;
-        c.accent = color("surfaceRaised", light);
-        c.accent_foreground = color("text", light);
+        c.accent = color("accentSurface", light);
+        c.accent_foreground = color("accentSurfaceForeground", light);
         c.accordion = color("surface", light);
         c.background = color("canvas", light);
         c.border = color("border", light);
         c.button = color("surface", light);
-        c.button_active = color("muted", light);
+        c.button_active = color("accentSurface", light);
         c.button_foreground = color("text", light);
-        c.button_hover = color("muted", light);
+        c.button_hover = color("accentSurface", light);
         c.button_danger = color("error", light);
         c.button_danger_active = color("error", light);
         c.button_danger_foreground = color("errorForeground", light);
@@ -42,7 +42,7 @@ pub fn apply(light: bool, cx: &mut App) {
         c.button_primary = color("accent", light);
         c.button_primary_active = color("accent", light);
         c.button_primary_foreground = color("accentForeground", light);
-        c.button_primary_hover = color("accent", light);
+        c.button_primary_hover = color("messageActionHover", light);
         c.button_secondary = color("muted", light);
         c.button_secondary_active = color("muted", light);
         c.button_secondary_foreground = color("text", light);
@@ -84,19 +84,19 @@ pub fn apply(light: bool, cx: &mut App) {
         c.link_active = color("accent", light);
         c.link_hover = color("accent", light);
         c.list = color("surface", light);
-        c.list_active = color("muted", light);
-        c.list_active_border = color("muted", light);
+        c.list_active = color("accentSurface", light);
+        c.list_active_border = color("accentSurface", light);
         c.list_even = color("surface", light);
         c.list_head = color("surface", light);
-        c.list_hover = color("rowHover", light);
-        c.muted = color("surface", light);
+        c.list_hover = color("accentSurface", light);
+        c.muted = color("muted", light);
         c.muted_foreground = color("textMuted", light);
         c.popover = color("surface", light);
         c.popover_foreground = color("text", light);
         c.primary = color("accent", light);
         c.primary_active = color("accent", light);
         c.primary_foreground = color("accentForeground", light);
-        c.primary_hover = color("accent", light);
+        c.primary_hover = color("messageActionHover", light);
         c.progress_bar = color("accent", light);
         c.ring = color("accent", light);
         c.scrollbar = color("canvas", light);
@@ -108,8 +108,8 @@ pub fn apply(light: bool, cx: &mut App) {
         c.secondary_hover = color("muted", light);
         c.selection = color("selection", light);
         c.sidebar = color("sidebar", light);
-        c.sidebar_accent = color("surface", light);
-        c.sidebar_accent_foreground = color("text", light);
+        c.sidebar_accent = color("sidebarControlSurface", light);
+        c.sidebar_accent_foreground = color("sidebarForeground", light);
         c.sidebar_border = color("sidebarBorder", light);
         c.sidebar_foreground = color("sidebarForeground", light);
         c.sidebar_primary = color("accent", light);
@@ -200,6 +200,8 @@ pub fn apply(light: bool, cx: &mut App) {
     );
 }
 
+// Standard roles from T3 packages/shared/src/themePalettes.ts. Message surfaces
+// use the web overrides in apps/web/src/themePalette.ts, not the mobile palette.
 fn color(role: &str, light: bool) -> Hsla {
     let (dark, bright) = match role {
         "canvas" => (0x000000, 0xfcfcfc),
@@ -210,6 +212,9 @@ fn color(role: &str, light: bool) -> Hsla {
         "border" => (0x191919, 0xe4e4e7),
         "muted" => (0x111111, 0xfafafa),
         "accent" => (0x346bf1, 0x1b4ed8),
+        "accentSurface" => (0x141414, 0xf4f4f5),
+        "accentSurfaceForeground" => (0xf5f5f5, 0x18181b),
+        "messageActionHover" => (0x3061d9, 0x3160db),
         "accentForeground" => (0xffffff, 0xffffff),
         "error" => (0xfb414a, 0xfb2c36),
         "errorForeground" => (0xff6467, 0xc10007),
@@ -225,7 +230,11 @@ fn color(role: &str, light: bool) -> Hsla {
         "sidebar" => (0x000000, 0xfafafa),
         "sidebarForeground" => (0xf1f3f7, 0x27272a),
         "sidebarBorder" => (0x141414, 0xe4e4e7),
-        "rowHover" => (0x131313, 0xfcfcfc),
+        "sidebarControlSurface" => (0x0a0a0a, 0xf4f4f5),
+        "sidebarRowActive" => (0x1a1b1b, 0xffffff),
+        "sidebarRowHover" => (0x131313, 0xfcfcfc),
+        "sidebarMutedForeground" => (0xa3a3a3, 0x71717b),
+        "codeBackground" => (0x111111, 0xffffff),
         _ => unreachable!("unknown T3 color role"),
     };
     rgb(if light { bright } else { dark }).into()
@@ -244,6 +253,28 @@ pub fn message(cx: &App) -> Hsla {
         0xebebed
     })
     .into()
+}
+
+/// Sidebar roles are independent of menu/list selection and hover surfaces.
+pub fn sidebar_active(cx: &App) -> Hsla {
+    themed_color("sidebarRowActive", cx)
+}
+
+pub fn sidebar_hover(cx: &App) -> Hsla {
+    themed_color("sidebarRowHover", cx)
+}
+
+pub fn sidebar_muted(cx: &App) -> Hsla {
+    themed_color("sidebarMutedForeground", cx)
+}
+
+pub fn code_background(cx: &App) -> Hsla {
+    themed_color("codeBackground", cx)
+}
+
+fn themed_color(role: &str, cx: &App) -> Hsla {
+    use gpui_kit::component::ActiveTheme as _;
+    color(role, !cx.theme().mode.is_dark())
 }
 
 pub struct Assets;

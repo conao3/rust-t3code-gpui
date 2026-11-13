@@ -285,7 +285,7 @@ impl Render for RowView {
                                         .bg(if theme.mode.is_dark() {
                                             theme.input.opacity(0.32)
                                         } else {
-                                            theme.secondary
+                                            crate::appearance::code_background(cx)
                                         })
                                         .border_color(if theme.mode.is_dark() {
                                             transparent_black()
