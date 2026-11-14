@@ -833,7 +833,8 @@ impl Root {
         let typed = keymap::Chord {
             control: modifiers.control,
             alt: modifiers.alt,
-            shift: modifiers.shift,
+            // GPUI drops Shift from symbol keystrokes; T3 keeps the physical modifier.
+            shift: modifiers.shift || window.modifiers().shift,
             platform: modifiers.platform,
             key: keystroke.key.clone(),
         };
