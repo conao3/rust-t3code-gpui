@@ -302,7 +302,8 @@ impl Render for TimelinePane {
                         .unwrap_or_else(|| div().into_any_element())
                 })
                 .w_full()
-                .h_full(),
+                .h_full()
+                .pt_4(),
             )
             .child(
                 gpui_kit::base::Scrollbar::vertical(&self.list)
@@ -538,7 +539,7 @@ impl Root {
                 }
             }),
         ];
-        let list_state = ListState::new(0, ListAlignment::Bottom, px(800.));
+        let list_state = ListState::new(0, ListAlignment::Top, px(800.));
         list_state.set_follow_mode(FollowMode::Tail);
         let sidebar_root = cx.entity().downgrade();
         Self {

@@ -318,12 +318,7 @@ fn fold_completed_turns(rows: Vec<Row>, state: &ThreadState) -> Vec<Row> {
             .zip(humantime::parse_rfc3339(text(run, "completedAt")).ok())
             .and_then(|(start, end)| end.duration_since(start).ok());
         let label = elapsed
-            .map(|duration| {
-                format!(
-                    "Worked for {}",
-                    humantime::format_duration(std::time::Duration::from_secs(duration.as_secs()))
-                )
-            })
+            .map(|duration| format!("Worked for {}", format_duration(duration)))
             .unwrap_or_else(|| "Worked".into());
         folds.insert(
             candidates[0],
@@ -359,6 +354,29 @@ fn fold_completed_turns(rows: Vec<Row>, state: &ThreadState) -> Vec<Row> {
         }
     }
     out
+}
+
+/// T3's shared/orchestrationTiming.ts rounds before choosing the display unit.
+pub fn format_duration(duration: std::time::Duration) -> String {
+    let millis = duration.as_millis();
+    if millis < 1_000 {
+        return format!("{}ms", millis.max(1));
+    }
+    if millis < 10_000 {
+        return format!("{}s", ((millis + 50) / 100) as f64 / 10.);
+    }
+    let seconds = ((millis + 500) / 1_000) as u64;
+    let mut parts = Vec::new();
+    for (value, unit) in [
+        (seconds / 3600, "h"),
+        (seconds / 60 % 60, "m"),
+        (seconds % 60, "s"),
+    ] {
+        if value > 0 {
+            parts.push(format!("{value}{unit}"));
+        }
+    }
+    parts.join(" ")
 }
 
 fn compact_history(rows: Vec<Row>) -> Vec<Row> {
@@ -902,6 +920,25 @@ pub fn find_rows(rows: &[Row], query: &str) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn work_duration_matches_t3_rounding_and_units() {
+        for (millis, expected) in [
+            (0, "1ms"),
+            (410, "410ms"),
+            (1250, "1.3s"),
+            (9990, "10s"),
+            (30550, "31s"),
+            (59500, "1m"),
+            (79500, "1m 20s"),
+            (86400000, "24h"),
+        ] {
+            assert_eq!(
+                super::format_duration(std::time::Duration::from_millis(millis)),
+                expected
+            );
+        }
+    }
+
     use super::*;
     use serde_json::json;
 
