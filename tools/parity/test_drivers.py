@@ -1,11 +1,19 @@
+import os
+import signal
+import subprocess
+import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 from audit_commands import reference_commands
 from cdp import Cdp
+from desktop_session import read_display
 from PIL import Image
+from private_session import cleanup_bus_processes
 from run import compare, wait_for
 
 
@@ -33,6 +41,18 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await page.press("ctrl+unsupported-key")
         page.call.assert_not_called()
+
+    async def test_text_does_not_turn_a_newline_into_an_accidental_submit(self):
+        from native import Native
+
+        page = Cdp("http://127.0.0.1:1")
+        page.call = AsyncMock()
+        with self.assertRaises(ValueError):
+            await page.type("first\nsecond")
+        page.call.assert_not_called()
+        native = object.__new__(Native)
+        with self.assertRaises(ValueError):
+            native.type("first\nsecond")
 
     async def test_missing_native_input_value_fails_the_checkpoint(self):
         class App:
@@ -69,6 +89,59 @@ class ComparisonTests(unittest.TestCase):
             reference_commands(source),
             ["chat.new", "terminal.split", "terminal.toggle"],
         )
+
+
+class DisplayTests(unittest.TestCase):
+    def test_display_number_waits_for_its_complete_line(self):
+        read_fd, write_fd = os.pipe()
+
+        def write():
+            os.write(write_fd, b"12")
+            time.sleep(0.03)
+            os.write(write_fd, b"\n")
+            os.close(write_fd)
+
+        writer = threading.Thread(target=write)
+        writer.start()
+        try:
+            self.assertEqual(read_display(read_fd), ":12")
+        finally:
+            os.close(read_fd)
+            writer.join()
+
+    def test_eof_without_newline_is_a_startup_failure(self):
+        read_fd, write_fd = os.pipe()
+        os.write(write_fd, b"1")
+        os.close(write_fd)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "exited before"):
+                read_display(read_fd)
+        finally:
+            os.close(read_fd)
+
+
+@unittest.skipUnless(
+    sys.platform.startswith("linux"), "Private bus process ownership uses Linux procfs"
+)
+class CleanupTests(unittest.TestCase):
+    def test_only_processes_on_the_owned_bus_are_stopped(self):
+        address = f"parity-test:{os.getpid()}:{time.monotonic_ns()}"
+        command = [sys.executable, "-c", "import time; time.sleep(30)"]
+        owned = subprocess.Popen(
+            command, env=os.environ | {"DBUS_SESSION_BUS_ADDRESS": address}
+        )
+        protected = subprocess.Popen(
+            command, env=os.environ | {"DBUS_SESSION_BUS_ADDRESS": address + "-other"}
+        )
+        try:
+            self.assertEqual(cleanup_bus_processes(address), 1)
+            self.assertEqual(owned.wait(timeout=3), -signal.SIGTERM)
+            self.assertIsNone(protected.poll())
+        finally:
+            for process in [owned, protected]:
+                if process.poll() is None:
+                    process.terminate()
+                process.wait(timeout=3)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,23 @@ import time
 from pathlib import Path
 
 
+def read_display(read_fd, timeout=10):
+    deadline = time.monotonic() + timeout
+    number = b""
+    while not number.endswith(b"\n"):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not select.select([read_fd], [], [], remaining)[0]:
+            raise RuntimeError("Xvfb did not assign a complete display number")
+        chunk = os.read(read_fd, 64)
+        if not chunk:
+            raise RuntimeError("Xvfb exited before assigning a display")
+        number += chunk
+    display = number.decode().strip()
+    if not display.isdigit():
+        raise RuntimeError("Xvfb returned an invalid display number")
+    return ":" + display
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-binary", required=True)
@@ -56,11 +73,7 @@ def main():
                 pass_fds=(write_fd,),
             )
             os.close(write_fd)
-            if not select.select([read_fd], [], [], 10)[0]:
-                raise RuntimeError("Xvfb did not assign a display")
-            display = ":" + os.read(read_fd, 64).decode().strip()
-            if not display[1:].isdigit():
-                raise RuntimeError("Xvfb failed to start; inspect xvfb.log")
+            display = read_display(read_fd)
         finally:
             os.close(read_fd)
         env = os.environ.copy()

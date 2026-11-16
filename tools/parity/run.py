@@ -22,7 +22,7 @@ async def invoke(app, method, *args):
 
 
 def matches(nodes, selector):
-    roles = {"entry": "textbox"}
+    roles = {"entry": "textbox", "radio menu item": "menuitemradio"}
     return [
         node
         for node in nodes
@@ -40,9 +40,7 @@ async def wait_for(app, selector, count=None, value=None, timeout=10):
         nodes = await invoke(app, "tree")
         found = matches(nodes, selector)
         if (count is None and found or count is not None and len(found) == count) and (
-            value is None
-            or len(found) == 1
-            and (found[0].get("value") or "").strip("\n") == value
+            value is None or len(found) == 1 and found[0].get("value") == value
         ):
             return nodes
         if time.monotonic() >= deadline:
@@ -71,6 +69,10 @@ async def execute(app, target, scenario, directory):
             elif action in ["press", "type"]:
                 await invoke(app, action, step["value"])
             elif action == "checkpoint":
+                nodes = await wait_for(
+                    app, step["selector"], step.get("count"), step.get("value")
+                )
+                await asyncio.sleep(scenario["settle_ms"] / 1000)
                 nodes = await wait_for(
                     app, step["selector"], step.get("count"), step.get("value")
                 )

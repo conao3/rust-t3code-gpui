@@ -9,6 +9,25 @@ import time
 from pathlib import Path
 
 
+def cleanup_bus_processes(address):
+    count = 0
+    for process in Path("/proc").glob("[0-9]*"):
+        if int(process.name) == os.getpid():
+            continue
+        try:
+            environment = dict(
+                item.split(b"=", 1)
+                for item in (process / "environ").read_bytes().split(b"\0")
+                if b"=" in item
+            )
+            if environment.get(b"DBUS_SESSION_BUS_ADDRESS") == address.encode():
+                os.kill(int(process.name), signal.SIGTERM)
+                count += 1
+        except (FileNotFoundError, ProcessLookupError, PermissionError):
+            continue
+    return count
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
@@ -81,6 +100,7 @@ def main():
                 except subprocess.TimeoutExpired:
                     child.kill()
                     child.wait()
+        cleanup_bus_processes(os.environ["DBUS_SESSION_BUS_ADDRESS"])
 
 
 if __name__ == "__main__":

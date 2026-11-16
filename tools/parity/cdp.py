@@ -67,6 +67,19 @@ class Cdp:
                 "name": n.get("name", {}).get("value", ""),
                 "value": n.get("value", {}).get("value"),
                 "backend_id": n.get("backendDOMNodeId"),
+                "focused": any(
+                    p["value"].get("value") is True
+                    for p in n.get("properties", [])
+                    if p["name"] == "focused"
+                ),
+                "checked": next(
+                    (
+                        p["value"].get("value") in [True, "true"]
+                        for p in n.get("properties", [])
+                        if p["name"] == "checked"
+                    ),
+                    None,
+                ),
             }
             for n in result["nodes"]
             if not n.get("ignored")
@@ -178,6 +191,8 @@ class Cdp:
                 )
 
     async def type(self, text):
+        if any(ord(character) < 32 or ord(character) == 127 for character in text):
+            raise ValueError("Use explicit key or paste actions for control characters")
         for character in text:
             await self.call("Input.insertText", text=character)
             await asyncio.sleep(0.02)

@@ -62,7 +62,138 @@
         "name": "New thread"
       },
       "count": 1
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "Identical input 123"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+a"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Full access",
+        "checked": true,
+        "focused": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "left"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Permissions: Auto"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+a"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Auto",
+        "checked": true,
+        "focused": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "right"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Permissions: Full access"
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "focused": true
+      },
+      "value": "Identical input 123"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Permissions: Full access"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Full access",
+        "checked": true,
+        "focused": false
+      }
+    },
+    {
+      "action": "press",
+      "value": "down"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Supervised",
+        "focused": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Supervised"
+      },
+      "count": 0
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "focused": true
+      },
+      "value": "Identical input 123"
     }
   ],
-  "theme": "dark"
+  "theme": "dark",
+  "settle_ms": 1200
 }

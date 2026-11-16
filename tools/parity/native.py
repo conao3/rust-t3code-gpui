@@ -93,6 +93,16 @@ class Native:
                     "role": node.getRoleName(),
                     "name": node.name,
                     "value": value,
+                    "focused": node.getState().contains(self.atspi.STATE_FOCUSED),
+                    "checked": node.getState().contains(self.atspi.STATE_CHECKED)
+                    if node.getRoleName()
+                    in [
+                        "radio menu item",
+                        "check menu item",
+                        "check box",
+                        "radio button",
+                    ]
+                    else None,
                     "bounds": bounds,
                     "states": [str(state) for state in node.getState().getStates()],
                 }
@@ -141,6 +151,8 @@ class Native:
         self.xdo("key", "--clearmodifiers", "+".join(parts))
 
     def type(self, text):
+        if any(ord(character) < 32 or ord(character) == 127 for character in text):
+            raise ValueError("Use explicit key or paste actions for control characters")
         self.focus()
         self.xdo("type", "--clearmodifiers", "--delay", 20, text)
 
@@ -181,14 +193,32 @@ class Native:
     def screenshot(self, path):
         from io import BytesIO
 
-        from PIL import Image
+        from PIL import Image, ImageChops
 
         self.focus()
+        time.sleep(0.5)
         bounds, geometry = self.content_bounds(), self.geometry()
-        data = subprocess.check_output(["import", "-window", self.window, "png:-"])
         x, y = bounds["x"] - int(geometry["X"]), bounds["y"] - int(geometry["Y"])
-        with Image.open(BytesIO(data)) as picture:
-            picture.crop((x, y, x + bounds["width"], y + bounds["height"])).save(path)
+        previous = None
+        deadline = time.monotonic() + 5
+        while True:
+            data = subprocess.check_output(["import", "-window", self.window, "png:-"])
+            with Image.open(BytesIO(data)) as picture:
+                current = picture.crop(
+                    (x, y, x + bounds["width"], y + bounds["height"])
+                ).convert("RGB")
+            if (
+                previous is not None
+                and ImageChops.difference(previous, current).getbbox() is None
+            ):
+                current.save(path)
+                return
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    "Native checkpoint did not reach a stable painted frame"
+                )
+            previous = current
+            time.sleep(0.2)
 
 
 def main():
