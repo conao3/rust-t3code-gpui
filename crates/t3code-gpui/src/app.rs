@@ -40,6 +40,7 @@ type CommandFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<u64>> + std::marker::Send>>;
 
 const REDRAW_INTERVAL: Duration = Duration::from_millis(250);
+const APP_NAME: &str = "T3 Code GPUI (Unofficial)";
 const UI_FONT: &str = "Inter Variable";
 const DIFF_TITLE: &str = "Changes";
 const CURSOR_BLINK: Duration = Duration::from_millis(500);
@@ -1197,10 +1198,7 @@ impl Root {
         for (summary, body) in attention {
             self.runtime.spawn_blocking(move || {
                 let mut notification = notify_rust::Notification::new();
-                notification
-                    .appname("T3 Code")
-                    .summary(&summary)
-                    .body(&body);
+                notification.appname(APP_NAME).summary(&summary).body(&body);
                 if sound {
                     notification.sound_name("message-new-instant");
                 }
@@ -1764,7 +1762,7 @@ impl Root {
                     let token = if is_token {
                         code
                     } else {
-                        Api::new(&origin, "").pair(&code, "T3 Code (GPUI)").await?
+                        Api::new(&origin, "").pair(&code, APP_NAME).await?
                     };
                     Api::new(&origin, &token).get("/api/auth/session").await?;
                     Ok(token)
@@ -3835,7 +3833,16 @@ impl Root {
                             .ml_4()
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("T3 Code"),
+                            .child(
+                                h_flex().gap(px(3.)).child("T3 Code").child(
+                                    div()
+                                        .relative()
+                                        .top(px(-4.))
+                                        .text_size(px(10.))
+                                        .line_height(px(12.))
+                                        .child("GPUI"),
+                                ),
+                            ),
                     )
                     .child(
                         Button::new("history-back")
@@ -5181,7 +5188,7 @@ pub fn run(
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::centered(size(px(1400.), px(900.)), cx)),
                 titlebar: Some(TitlebarOptions {
-                    title: Some("T3 Code".into()),
+                    title: Some(APP_NAME.into()),
                     ..Default::default()
                 }),
                 ..Default::default()

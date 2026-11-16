@@ -1,4 +1,6 @@
-# rust-t3code-gpui
+# T3 Code GPUI (Unofficial)
+
+**This is an independent, unofficial project. It is not affiliated with, endorsed by, or maintained by T3 Code, T3 Tools Inc., or the upstream T3 Code team.**
 
 A native desktop frontend for [T3 Code](https://github.com/pingdotgg/t3code), built with GPUI through [gpui-kit](https://github.com/longbridge/gpui-kit). It talks to unmodified `t3 serve` servers over T3's WebSocket protocol (orchestration protocol 2) and renders the sidebar, a thread's timeline and a composer.
 
@@ -57,3 +59,7 @@ nix develop
 make check        # nix fmt --ci, clippy, unit tests
 make integration  # runs t3-client against a temporary `t3 serve` (needs `t3` on PATH)
 ```
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE). Third-party code and assets retain their respective licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

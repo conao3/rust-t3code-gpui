@@ -27,7 +27,10 @@ const EXIT_TARGET: u8 = 254;
 const EXIT_OTHER: u8 = 255;
 
 #[derive(Parser)]
-#[command(version, about = "Native GPUI frontend for T3 Code")]
+#[command(
+    version,
+    about = "T3 Code GPUI (Unofficial) — independent native frontend"
+)]
 struct Cli {
     #[arg(long, global = true)]
     config: Option<PathBuf>,

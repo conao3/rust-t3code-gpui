@@ -1,5 +1,5 @@
 {
-  description = "Native GPUI frontend for T3 Code";
+  description = "Unofficial native GPUI frontend for T3 Code";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -65,8 +65,8 @@
             desktopItems = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               (pkgs.makeDesktopItem {
                 name = "t3code-gpui";
-                desktopName = "T3 Code (GPUI)";
-                comment = "Native frontend for T3 Code";
+                desktopName = "T3 Code GPUI (Unofficial)";
+                comment = "Unofficial native frontend for T3 Code";
                 exec = "t3code-gpui";
                 icon = "t3code-gpui";
                 categories = [ "Development" ];
@@ -81,7 +81,8 @@
                 --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath runtimeLibs}
             '';
             meta = {
-              description = "Native GPUI frontend for T3 Code";
+              license = lib.licenses.asl20;
+              description = "Unofficial native GPUI frontend for T3 Code";
               homepage = "https://github.com/conao3/rust-t3code-gpui";
               mainProgram = "t3code-gpui";
               platforms = lib.platforms.unix;
