@@ -63,6 +63,8 @@ The shared draft scenario exercises text retention, sidebar toggling, permission
 
 `editor.json` selects Files and Cursor from thread details, verifies the preferred-editor button label and checks that selecting a menu item returns focus to its trigger. Use Linux fixtures advertising both editors. Selection updates the preference; the primary button opens the selected editor. Checkpoints require ordinary menu items and preserve the native role names in the result.
 
+`messages.json` opens the deterministic fixture thread named `Fixture response` in `UI parity`, checks the rendered assistant text including Japanese, opens a new thread and returns to the fixture. Prepare the same completed response on both servers. Message documents expose the text of the parsed Markdown through AT-SPI; snapshots cover the currently rendered timeline chunks. `text_contains` checks actual text content within the selected nodes, while `value` continues to require an exact input value. The saved images independently check message layout.
+
 Inventory the reference commands separately:
 
 ```sh

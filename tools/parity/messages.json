@@ -1,0 +1,73 @@
+{
+  "name": "rendered-message-navigation",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1200,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Fixture response, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText"
+      },
+      "native": {
+        "role": "document frame",
+        "name": "Assistant message"
+      },
+      "text_contains": "Fixture output"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText"
+      },
+      "native": {
+        "role": "document frame",
+        "name": "Assistant message"
+      },
+      "text_contains": "日本語の表示。"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "focused": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Fixture response, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText"
+      },
+      "native": {
+        "role": "document frame",
+        "name": "Assistant message"
+      },
+      "text_contains": "Fixture output"
+    }
+  ]
+}

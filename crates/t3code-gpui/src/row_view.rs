@@ -1,11 +1,12 @@
 use gpui_kit::assets::IconName;
 use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
 
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon,
     button::{Button, ButtonVariants as _},
     h_flex,
-    text::{TextView, TextViewState, TextViewStyle},
+    text::{RenderedText, TextView, TextViewState, TextViewStyle},
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -14,6 +15,44 @@ use gpui_kit::*;
 use crate::timeline::{Draft, Pending, Question, Row, RowKind};
 
 const DETAIL_LINES: usize = 400;
+
+#[derive(Clone)]
+enum BodySource {
+    Markdown(RenderedText),
+    Plain(SharedString),
+}
+
+#[derive(Clone)]
+struct AccessibleBody {
+    source: BodySource,
+    character_lengths: Arc<OnceLock<Vec<u8>>>,
+}
+
+impl AccessibleBody {
+    fn text(&self) -> &str {
+        match &self.source {
+            BodySource::Markdown(snapshot) => snapshot.as_str(),
+            BodySource::Plain(text) => text.as_ref(),
+        }
+    }
+
+    fn append(&self, builder: &mut A11ySubtreeBuilder) {
+        let mut run = accesskit::Node::new(accesskit::Role::TextRun);
+        run.set_value(self.text());
+        run.set_character_lengths(
+            self.character_lengths
+                .get_or_init(|| {
+                    self.text()
+                        .chars()
+                        .map(|character| character.len_utf8() as u8)
+                        .collect()
+                })
+                .clone(),
+        );
+        let id = builder.synthetic_node_id("body");
+        builder.push_child(id, run);
+    }
+}
 
 #[derive(Clone)]
 pub enum RowEvent {
@@ -37,6 +76,8 @@ pub struct RowView {
     row: Row,
     summary: String,
     markdown: Option<Entity<TextViewState>>,
+    accessible_body: Option<AccessibleBody>,
+    _markdown_observer: Option<Subscription>,
     found: bool,
     expanded: bool,
     drafts: HashMap<String, Draft>,
@@ -78,17 +119,59 @@ impl RowView {
         } else {
             row.text.clone()
         };
-        Self {
+        let observer = markdown.as_ref().map(|markdown| {
+            cx.observe(markdown, |view, _, cx| {
+                if view.refresh_accessible_body(cx) {
+                    cx.notify();
+                }
+            })
+        });
+        let mut view = Self {
             row,
             summary,
             markdown,
+            accessible_body: None,
+            _markdown_observer: observer,
             found: false,
             expanded: false,
             drafts: HashMap::new(),
             responding: false,
             children: Vec::new(),
             _timer: timer,
-        }
+        };
+        view.refresh_accessible_body(cx);
+        view
+    }
+
+    fn refresh_accessible_body(&mut self, cx: &Context<Self>) -> bool {
+        let source = match self.row.kind {
+            RowKind::Assistant => {
+                let Some(markdown) = &self.markdown else {
+                    return false;
+                };
+                let snapshot = markdown.read(cx).rendered_text();
+                if self.accessible_body.as_ref().is_some_and(|body| {
+                    matches!(&body.source, BodySource::Markdown(previous) if previous == &snapshot)
+                }) {
+                    return false;
+                }
+                BodySource::Markdown(snapshot)
+            }
+            RowKind::User => {
+                if self.accessible_body.as_ref().is_some_and(|body| {
+                    matches!(&body.source, BodySource::Plain(previous) if previous.as_ref() == self.row.text)
+                }) {
+                    return false;
+                }
+                BodySource::Plain(self.row.text.clone().into())
+            }
+            _ => return self.accessible_body.take().is_some(),
+        };
+        self.accessible_body = Some(AccessibleBody {
+            source,
+            character_lengths: Arc::new(OnceLock::new()),
+        });
+        true
     }
 
     pub fn update(&mut self, row: Row, cx: &mut Context<Self>) {
@@ -117,6 +200,7 @@ impl RowView {
             }
         }
         self.row = row;
+        self.refresh_accessible_body(cx);
         if self.expanded {
             self.sync_children(cx);
         }
@@ -393,6 +477,18 @@ impl Render for RowView {
             }
             RowKind::Assistant => match &self.markdown {
                 Some(state) => base
+                    .id("assistant-message")
+                    .role(accesskit::Role::Document)
+                    .aria_label("Assistant message")
+                    .accessibility_id(self.row.key.clone())
+                    .a11y_synthetic_children({
+                        let body = self.accessible_body.clone();
+                        move |builder| {
+                            if let Some(body) = body {
+                                body.append(builder);
+                            }
+                        }
+                    })
                     .px_1()
                     .py_1()
                     .text_color(theme.foreground.opacity(0.9))
@@ -445,6 +541,17 @@ impl Render for RowView {
                 .child(
                     div()
                         .id("user-bubble")
+                        .role(accesskit::Role::Document)
+                        .aria_label("User message")
+                        .accessibility_id(self.row.key.clone())
+                        .a11y_synthetic_children({
+                            let body = self.accessible_body.clone();
+                            move |builder| {
+                                if let Some(body) = body {
+                                    body.append(builder);
+                                }
+                            }
+                        })
                         .max_w(relative(0.8))
                         .p_3()
                         .rounded(px(16.))

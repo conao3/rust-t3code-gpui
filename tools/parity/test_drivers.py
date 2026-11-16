@@ -22,6 +22,45 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rendered_text_checkpoint_checks_text_content(self):
+        app = Mock()
+        app.tree = AsyncMock(
+            side_effect=[
+                [
+                    {
+                        "role": "document frame",
+                        "name": "Assistant message",
+                        "value": "stale",
+                    }
+                ],
+                [
+                    {
+                        "role": "document frame",
+                        "name": "Assistant message",
+                        "value": "日本語の表示。",
+                    }
+                ],
+            ]
+        )
+        with patch("run.asyncio.sleep", new=AsyncMock()):
+            nodes = await wait_for(
+                app, {"name": "Assistant message"}, text_contains="日本語の表示。"
+            )
+        self.assertEqual(app.tree.call_count, 2)
+        self.assertEqual(nodes[0]["value"], "日本語の表示。")
+
+    async def test_rendered_text_checkpoint_reads_reference_static_text(self):
+        app = Mock()
+        app.tree = AsyncMock(
+            return_value=[
+                {"role": "StaticText", "name": "日本語の表示。", "value": None}
+            ]
+        )
+        nodes = await wait_for(
+            app, {"role": "StaticText"}, text_contains="日本語の表示。"
+        )
+        self.assertEqual(len(nodes), 1)
+
     async def test_viewport_waits_for_both_accessible_and_x11_geometry_to_settle(self):
         from native import Native
 

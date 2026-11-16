@@ -91,6 +91,7 @@ class Native:
     def snapshot(self):
         result = []
         for node in self.nodes():
+            role = node.getRoleName()
             try:
                 rect = node.queryComponent().getExtents(self.atspi.DESKTOP_COORDS)
                 bounds = {
@@ -102,7 +103,7 @@ class Native:
             except NotImplementedError:
                 bounds = None
             value = None
-            if node.getRoleName() in ["entry", "text"]:
+            if role in ["entry", "text", "label", "document frame"]:
                 try:
                     content = node.queryText()
                     value = content.getText(0, content.characterCount)
@@ -111,13 +112,13 @@ class Native:
             state = node.getState()
             result.append(
                 {
-                    "role": node.getRoleName(),
+                    "role": role,
                     "name": node.name,
                     "value": value,
                     "focused": state.contains(self.atspi.STATE_FOCUSED),
                     "disabled": not state.contains(self.atspi.STATE_ENABLED),
                     "checked": state.contains(self.atspi.STATE_CHECKED)
-                    if node.getRoleName()
+                    if role
                     in [
                         "radio menu item",
                         "check menu item",

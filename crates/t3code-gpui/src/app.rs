@@ -3785,12 +3785,36 @@ impl Root {
                 let remote = primary.as_ref() != Some(&entry.environment);
                 let (environment, thread_id) = entry.key();
                 let menu_target = (environment.clone(), thread_id.clone());
+                let key_target = menu_target.clone();
+                let status_label = match entry.status {
+                    ThreadStatus::Idle | ThreadStatus::Settled => "",
+                    status => status.label(),
+                };
+                let accessible_label = [
+                    entry.title.as_str(),
+                    status_label,
+                    entry.project_title.as_str(),
+                ]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(", ");
                 let pinned = entry.pin_order.is_some();
                 let snoozed = section == sidebar::Section::Snoozed;
                 let settled = entry.status == ThreadStatus::Settled;
                 rows.push(
                     v_flex()
-                        .id(("thread", index))
+                        .id(SharedString::from(format!(
+                            "thread:{environment}:{thread_id}"
+                        )))
+                        .role(accesskit::Role::Button)
+                        .aria_label(accessible_label)
+                        .aria_current(if selected {
+                            accesskit::AriaCurrent::Page
+                        } else {
+                            accesskit::AriaCurrent::False
+                        })
+                        .focusable()
                         .w_full()
                         .pl(px(crate::appearance::ROW_INSET + 16. * depth as f32))
                         .pr_2()
@@ -3808,6 +3832,15 @@ impl Root {
                         })
                         .on_click(cx.listener(move |root, _, _, cx| {
                             root.open_thread(environment.clone(), thread_id.clone(), cx)
+                        }))
+                        .on_key_down(cx.listener(move |root, event: &KeyDownEvent, window, cx| {
+                            if matches!(event.keystroke.key.as_str(), "enter" | "space")
+                                && event.keystroke.modifiers.is_subset_of(&Modifiers::shift())
+                            {
+                                window.prevent_default();
+                                cx.stop_propagation();
+                                root.open_thread(key_target.0.clone(), key_target.1.clone(), cx);
+                            }
                         }))
                         .child(
                             h_flex()

@@ -1437,6 +1437,12 @@ pub trait StatefulInteractiveElement: InteractiveElement {
         self
     }
 
+    #[allow(missing_docs)]
+    fn aria_current(mut self, current: accesskit::AriaCurrent) -> Self {
+        self.interactivity().aria.current = Some(current);
+        self
+    }
+
     /// Set the selected state for this element.
     fn aria_selected(mut self, selected: bool) -> Self {
         self.interactivity().aria.selected = Some(selected);
@@ -2158,6 +2164,7 @@ pub(crate) struct AriaProperties {
     pub(crate) label: Option<SharedString>,
     pub(crate) description: Option<SharedString>,
     pub(crate) keyshortcuts: Option<SharedString>,
+    pub(crate) current: Option<accesskit::AriaCurrent>,
     pub(crate) selected: Option<bool>,
     pub(crate) expanded: Option<bool>,
     pub(crate) toggled: Option<accesskit::Toggled>,
@@ -3600,6 +3607,9 @@ impl Interactivity {
         }
         if let Some(keyshortcuts) = &self.aria.keyshortcuts {
             node.set_keyboard_shortcut(keyshortcuts.to_string());
+        }
+        if let Some(current) = self.aria.current {
+            node.set_aria_current(current);
         }
         if let Some(selected) = self.aria.selected {
             node.set_selected(selected);

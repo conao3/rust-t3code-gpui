@@ -41,18 +41,28 @@ def matches(nodes, selector):
     ]
 
 
-async def wait_for(app, selector, count=None, value=None, timeout=10):
+async def wait_for(
+    app, selector, count=None, value=None, timeout=10, *, text_contains=None
+):
     deadline = time.monotonic() + timeout
     while True:
         nodes = await invoke(app, "tree")
         found = matches(nodes, selector)
-        if (count is None and found or count is not None and len(found) == count) and (
-            value is None or len(found) == 1 and found[0].get("value") == value
+        if (
+            (count is None and found or count is not None and len(found) == count)
+            and (value is None or len(found) == 1 and found[0].get("value") == value)
+            and (
+                text_contains is None
+                or any(
+                    text_contains in (node.get("value") or node.get("name", ""))
+                    for node in found
+                )
+            )
         ):
             return nodes
         if time.monotonic() >= deadline:
             raise AssertionError(
-                f"Timed out: {selector}, count={count}, value={value!r}; found={found}"
+                f"Timed out: {selector}, count={count}, value={value!r}, text_contains={text_contains!r}; found={found}"
             )
         await asyncio.sleep(0.1)
 
@@ -80,11 +90,19 @@ async def execute(app, target, scenario, directory):
             elif action == "checkpoint":
                 selector = step.get(target, step["selector"])
                 nodes = await wait_for(
-                    app, selector, step.get("count"), step.get("value")
+                    app,
+                    selector,
+                    step.get("count"),
+                    step.get("value"),
+                    text_contains=step.get("text_contains"),
                 )
                 await asyncio.sleep(scenario["settle_ms"] / 1000)
                 nodes = await wait_for(
-                    app, selector, step.get("count"), step.get("value")
+                    app,
+                    selector,
+                    step.get("count"),
+                    step.get("value"),
+                    text_contains=step.get("text_contains"),
                 )
                 (directory / f"{index:02d}.json").write_text(
                     json.dumps(nodes, ensure_ascii=False, indent=2) + "\n"
