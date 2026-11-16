@@ -372,6 +372,7 @@ impl Render for ComposerControlsPane {
 
 pub struct Root {
     sidebar_resizing: bool,
+    window_drag_pending: bool,
     history: crate::navigation::History,
     sidebar_pane: Entity<SidebarPane>,
     sidebar_stamp: Option<SidebarStamp>,
@@ -514,6 +515,7 @@ impl Root {
             cx.observe_window_activation(window, |root, window, cx| {
                 root.window_active = window.is_window_active();
                 if !root.window_active {
+                    root.window_drag_pending = false;
                     root.jump_hint_epoch += 1;
                     root.jump_modifiers = Modifiers::default();
                     root.jump_hints = false;
@@ -545,6 +547,7 @@ impl Root {
         let sidebar_root = cx.entity().downgrade();
         Self {
             sidebar_resizing: false,
+            window_drag_pending: false,
             history: crate::navigation::History::default(),
             sidebar_pane: cx.new(|_| SidebarPane {
                 root: sidebar_root.clone(),
@@ -3813,64 +3816,6 @@ impl Root {
             .text_color(theme.sidebar_foreground)
             .child(
                 h_flex()
-                    .h(px(40.))
-                    .px_2()
-                    .gap_1()
-                    .child(
-                        Button::new("collapse-sidebar")
-                            .icon(gpui_kit::assets::IconName::PanelLeftClose)
-                            .ghost()
-                            .size(px(24.))
-                            .tooltip("Toggle sidebar")
-                            .accessibility_label("Toggle sidebar")
-                            .on_click(cx.listener(|root, _, _, cx| {
-                                root.sidebar_hidden = true;
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        div()
-                            .ml_4()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(
-                                h_flex().gap(px(3.)).child("T3 Code").child(
-                                    div()
-                                        .relative()
-                                        .top(px(-4.))
-                                        .text_size(px(10.))
-                                        .line_height(px(12.))
-                                        .child("GPUI"),
-                                ),
-                            ),
-                    )
-                    .child(
-                        Button::new("history-back")
-                            .icon(IconName::ArrowLeft)
-                            .ghost()
-                            .size(px(24.))
-                            .disabled(!self.history.can_back())
-                            .tooltip("Back")
-                            .accessibility_label("Back")
-                            .on_click(cx.listener(|_, _, window, cx| {
-                                window.dispatch_action(Box::new(HistoryBack), cx)
-                            })),
-                    )
-                    .child(
-                        Button::new("history-forward")
-                            .icon(IconName::ArrowRight)
-                            .ghost()
-                            .size(px(24.))
-                            .disabled(!self.history.can_forward())
-                            .tooltip("Forward")
-                            .accessibility_label("Forward")
-                            .on_click(cx.listener(|_, _, window, cx| {
-                                window.dispatch_action(Box::new(HistoryForward), cx)
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
                     .px_2()
                     .py_1()
                     .gap_2()
@@ -4629,10 +4574,14 @@ impl Root {
             .into_any_element()
     }
 
-    fn render_draft(&self, draft: &NewThreadDraft, cx: &mut Context<Self>) -> AnyElement {
+    fn render_draft(
+        &self,
+        draft: &NewThreadDraft,
+        groups: &[ProjectGroup],
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let message = self.render_message(cx);
         let theme = cx.theme();
-        let groups = self.project_groups();
         let choices = groups.iter().enumerate().map(|(i, group)| {
             let key = group.key.clone();
             let hosts: Vec<&str> = group
@@ -4652,30 +4601,10 @@ impl Root {
                     cx.notify();
                 }))
         });
-        let target = groups
-            .iter()
-            .find(|g| draft.group.as_ref() == Some(&g.key))
-            .map(|g| format!("Starts on {}", g.target().environment))
-            .unwrap_or_else(|| "Pick a project".into());
         v_flex()
             .flex_1()
             .h_full()
             .min_w_0()
-            .child(
-                h_flex()
-                    .px_4()
-                    .py_2()
-                    .gap_2()
-                    .border_b_1()
-                    .border_color(theme.border)
-                    .child(div().flex_1().child("New thread"))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(theme.muted_foreground)
-                            .child(target),
-                    ),
-            )
             .child(
                 div()
                     .id("projects")
@@ -4694,35 +4623,91 @@ impl Root {
             .into_any_element()
     }
 
-    fn render_thread(&self, cx: &mut Context<Self>) -> AnyElement {
-        let message = self.render_message(cx);
+    fn window_drag_area(&self, id: &'static str, cx: &Context<Self>) -> Stateful<Div> {
+        div()
+            .id(id)
+            .window_control_area(WindowControlArea::Drag)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|root, event: &MouseDownEvent, window, cx| {
+                    root.window_drag_pending = event.click_count == 1;
+                    if event.click_count == 2 {
+                        root.window_drag_pending = false;
+                        window.zoom_window();
+                        cx.notify();
+                    }
+                }),
+            )
+            .on_mouse_move(cx.listener(|root, event: &MouseMoveEvent, window, _| {
+                if root.window_drag_pending && event.pressed_button == Some(MouseButton::Left) {
+                    root.window_drag_pending = false;
+                    window.start_window_move();
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|root, _, _, _| root.window_drag_pending = false),
+            )
+            .on_mouse_down(MouseButton::Right, |event, window, _| {
+                window.show_window_menu(event.position)
+            })
+    }
+
+    fn render_titlebar(
+        &self,
+        window: &Window,
+        target: Option<String>,
+        cx: &Context<Self>,
+    ) -> AnyElement {
         let theme = cx.theme();
-        let Some(_) = &self.open else {
-            return div()
+        let content = if self.draft.is_some() || self.open.is_none() {
+            self.window_drag_area("empty-window-drag", cx)
                 .flex_1()
+                .min_w_0()
+                .h_full()
+                .px_4()
                 .flex()
                 .items_center()
-                .justify_center()
-                .text_color(theme.muted_foreground)
-                .child("Select a thread")
-                .into_any_element();
+                .text_sm()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .child(if self.draft.is_some() {
+                            "New thread"
+                        } else {
+                            APP_NAME
+                        }),
+                )
+                .children(target.map(|label| div().text_color(theme.muted_foreground).child(label)))
+                .into_any_element()
+        } else {
+            self.render_thread_header(cx)
         };
-        let entry = self.open_entry();
-        let project_title = entry.map(|e| e.project_title.clone()).unwrap_or_default();
-        let title = entry.map(|e| e.title.clone()).unwrap_or_default();
-        let status = entry.map(|e| e.status).unwrap_or(ThreadStatus::Idle);
-        let menu_root = cx.entity().downgrade();
-        let header = h_flex()
+        let custom_controls = !cfg!(target_os = "macos")
+            && matches!(window.window_decorations(), Decorations::Client { .. });
+        h_flex()
             .h(px(40.))
+            .when(cfg!(target_os = "macos"), |bar| bar.pl(px(80.)))
+            .w_full()
             .flex_none()
-            .px_4()
-            .gap_2()
             .border_b_1()
             .border_color(theme.border)
-            .when(self.sidebar_hidden, |header| {
-                header.child(
+            .when(!self.sidebar_hidden, |bar| {
+                bar.child(
+                    div()
+                        .w(px(self.settings.sidebar_width))
+                        .flex_none()
+                        .bg(theme.sidebar)
+                        .text_color(theme.sidebar_foreground)
+                        .child(self.render_sidebar_title(cx)),
+                )
+            })
+            .when(self.sidebar_hidden, |bar| {
+                bar.child(
                     Button::new("show-sidebar")
-                        .icon(gpui_kit::assets::IconName::PanelLeftOpen)
+                        .icon(IconName::PanelLeftOpen)
                         .ghost()
                         .size(px(24.))
                         .tooltip("Show sidebar")
@@ -4733,8 +4718,138 @@ impl Root {
                         })),
                 )
             })
+            .child(content)
+            .when(custom_controls, |bar| {
+                bar.child(
+                    h_flex()
+                        .gap_1()
+                        .px_2()
+                        .child(
+                            Button::new("window-minimize")
+                                .icon(IconName::Minus)
+                                .size(px(24.))
+                                .rounded_full()
+                                .ghost()
+                                .bg(theme.foreground.opacity(0.07))
+                                .tooltip("Minimize")
+                                .accessibility_label("Minimize window")
+                                .on_click(|_, window, _| window.minimize_window()),
+                        )
+                        .child(
+                            Button::new("window-maximize")
+                                .icon(if window.is_maximized() {
+                                    IconName::WindowRestore
+                                } else {
+                                    IconName::WindowMaximize
+                                })
+                                .size(px(24.))
+                                .rounded_full()
+                                .ghost()
+                                .bg(theme.foreground.opacity(0.07))
+                                .tooltip(if window.is_maximized() {
+                                    "Restore"
+                                } else {
+                                    "Maximize"
+                                })
+                                .accessibility_label("Maximize or restore window")
+                                .on_click(|_, window, _| {
+                                    window.zoom_window();
+                                    window.refresh();
+                                }),
+                        )
+                        .child(
+                            Button::new("window-close")
+                                .icon(IconName::WindowClose)
+                                .size(px(24.))
+                                .rounded_full()
+                                .ghost()
+                                .bg(theme.foreground.opacity(0.07))
+                                .tooltip("Close")
+                                .accessibility_label("Close window")
+                                .on_click(|_, window, _| window.remove_window()),
+                        ),
+                )
+            })
+            .into_any_element()
+    }
+
+    fn render_sidebar_title(&self, cx: &Context<Self>) -> AnyElement {
+        h_flex()
+            .h(px(40.))
+            .px_2()
+            .gap_1()
             .child(
-                h_flex()
+                Button::new("collapse-sidebar")
+                    .icon(gpui_kit::assets::IconName::PanelLeftClose)
+                    .ghost()
+                    .size(px(24.))
+                    .tooltip("Toggle sidebar")
+                    .accessibility_label("Toggle sidebar")
+                    .on_click(cx.listener(|root, _, _, cx| {
+                        root.sidebar_hidden = true;
+                        cx.notify();
+                    })),
+            )
+            .child(
+                self.window_drag_area("sidebar-window-drag", cx)
+                    .ml_4()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(
+                        h_flex().gap(px(3.)).child("T3 Code").child(
+                            div()
+                                .relative()
+                                .top(px(-4.))
+                                .text_size(px(10.))
+                                .line_height(px(12.))
+                                .child("GPUI"),
+                        ),
+                    ),
+            )
+            .child(
+                Button::new("history-back")
+                    .icon(IconName::ArrowLeft)
+                    .ghost()
+                    .size(px(24.))
+                    .disabled(!self.history.can_back())
+                    .tooltip("Back")
+                    .accessibility_label("Back")
+                    .on_click(cx.listener(|_, _, window, cx| {
+                        window.dispatch_action(Box::new(HistoryBack), cx)
+                    })),
+            )
+            .child(
+                Button::new("history-forward")
+                    .icon(IconName::ArrowRight)
+                    .ghost()
+                    .size(px(24.))
+                    .disabled(!self.history.can_forward())
+                    .tooltip("Forward")
+                    .accessibility_label("Forward")
+                    .on_click(cx.listener(|_, _, window, cx| {
+                        window.dispatch_action(Box::new(HistoryForward), cx)
+                    })),
+            )
+            .into_any_element()
+    }
+
+    fn render_thread_header(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let entry = self.open_entry();
+        let project_title = entry.map(|e| e.project_title.clone()).unwrap_or_default();
+        let title = entry.map(|e| e.title.clone()).unwrap_or_default();
+        let status = entry.map(|e| e.status).unwrap_or(ThreadStatus::Idle);
+        let menu_root = cx.entity().downgrade();
+        h_flex()
+            .flex_1()
+            .min_w_0()
+            .h(px(40.))
+            .px_4()
+            .gap_2()
+            .child(
+                self.window_drag_area("thread-window-drag", cx)
+                    .flex()
+                    .items_center()
                     .flex_1()
                     .min_w_0()
                     .gap_2()
@@ -4801,12 +4916,27 @@ impl Root {
                                 }),
                         )
                     }),
-            );
+            )
+            .into_any_element()
+    }
+
+    fn render_thread(&self, cx: &mut Context<Self>) -> AnyElement {
+        let message = self.render_message(cx);
+        let theme = cx.theme();
+        let Some(_) = &self.open else {
+            return div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(theme.muted_foreground)
+                .child("Select a thread")
+                .into_any_element();
+        };
         v_flex()
             .flex_1()
             .h_full()
             .min_w_0()
-            .child(header)
             .when(self.find_open, |pane| {
                 let count = if self.find_hits.is_empty() {
                     "No results".to_string()
@@ -4962,11 +5092,21 @@ impl Render for Root {
         {
             self.focus.focus(window, cx);
         }
+        let draft_groups = self.draft.as_ref().map(|_| self.project_groups());
+        let target = self.draft.as_ref().map(|draft| {
+            draft_groups
+                .as_ref()
+                .unwrap()
+                .iter()
+                .find(|group| draft.group.as_ref() == Some(&group.key))
+                .map(|group| format!("Starts on {}", group.target().environment))
+                .unwrap_or_else(|| "Pick a project".into())
+        });
         let pane = match &self.draft {
-            Some(draft) => self.render_draft(draft, cx),
+            Some(draft) => self.render_draft(draft, draft_groups.as_ref().unwrap(), cx),
             None => self.render_thread(cx),
         };
-        h_flex()
+        v_flex()
             .relative()
             .size_full()
             .track_focus(&self.focus)
@@ -5104,6 +5244,7 @@ impl Render for Root {
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|root, _, _, cx| {
+                    root.window_drag_pending = false;
                     if root.sidebar_resizing {
                         root.sidebar_resizing = false;
                         if let Err(error) = client_settings::update(
@@ -5119,34 +5260,41 @@ impl Render for Root {
                     }
                 }),
             )
-            .when(!self.sidebar_hidden, |root| {
-                root.child(
-                    self.sidebar_pane.clone().cached(
-                        StyleRefinement::default()
-                            .w(px(self.settings.sidebar_width))
-                            .h_full()
-                            .flex_none(),
-                    ),
-                )
-                .child(
-                    div()
-                        .ml(px(-4.))
-                        .w(px(4.))
-                        .h_full()
-                        .flex_none()
-                        .cursor_col_resize()
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(|root, _, _, cx| {
-                                root.sidebar_resizing = true;
-                                cx.notify();
-                            }),
-                        ),
-                )
-            })
-            .child(pane)
-            .children(self.render_explorer(cx))
-            .children(self.render_file_panel(cx))
+            .child(self.render_titlebar(window, target, cx))
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .when(!self.sidebar_hidden, |root| {
+                        root.child(
+                            self.sidebar_pane.clone().cached(
+                                StyleRefinement::default()
+                                    .w(px(self.settings.sidebar_width))
+                                    .h_full()
+                                    .flex_none(),
+                            ),
+                        )
+                        .child(
+                            div()
+                                .ml(px(-4.))
+                                .w(px(4.))
+                                .h_full()
+                                .flex_none()
+                                .cursor_col_resize()
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(|root, _, _, cx| {
+                                        root.sidebar_resizing = true;
+                                        cx.notify();
+                                    }),
+                                ),
+                        )
+                    })
+                    .child(pane)
+                    .children(self.render_explorer(cx))
+                    .children(self.render_file_panel(cx)),
+            )
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))
             })
@@ -5189,8 +5337,14 @@ pub fn run(
                 window_bounds: Some(WindowBounds::centered(size(px(1400.), px(900.)), cx)),
                 titlebar: Some(TitlebarOptions {
                     title: Some(APP_NAME.into()),
-                    ..Default::default()
+                    appears_transparent: true,
+                    traffic_light_position: Some(point(px(12.), px(12.))),
                 }),
+                window_decorations: Some(WindowDecorations::Client),
+                window_background: WindowBackgroundAppearance::Transparent,
+                app_owns_titlebar_drag: true,
+                app_id: Some("t3code-gpui".into()),
+                window_min_size: Some(size(px(840.), px(620.))),
                 ..Default::default()
             };
             gpui_kit::open_window(options, cx, |window, cx| {

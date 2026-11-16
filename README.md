@@ -38,6 +38,8 @@ t3code-gpui environment list-environments
 t3code-gpui environment check-environment --label eos
 ```
 
+The application draws its own title bar, combining navigation and window controls. Drag the title or an empty area of the bar to move the window, double-click to maximize or restore, and use the buttons at the right to minimize, maximize, or close.
+
 The first environment is the primary host. A new thread in a project that several hosts share starts on the first host that has it. It takes the project's default model, or else the model of the project's latest thread, and the runtime mode of the latest thread (full access when the project has none).
 
 | Key | Action |
