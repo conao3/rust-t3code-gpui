@@ -130,33 +130,38 @@ pub fn jump_index(command: &str) -> Option<usize> {
     (1..=9).contains(&digit).then(|| digit - 1)
 }
 
+pub fn command_label(
+    rules: &[Rule],
+    command: &str,
+    context: &impl Fn(&str) -> bool,
+) -> Option<String> {
+    let rule = rules.iter().find(|rule| {
+        rule.command == command
+            && holds_in(rule.when.as_ref(), context)
+            && resolve(rules, &rule.chord, context) == Some(command)
+    })?;
+    let chord = &rule.chord;
+    let mut parts = Vec::new();
+    if chord.control {
+        parts.push("Ctrl");
+    }
+    if chord.alt {
+        parts.push("Alt");
+    }
+    if chord.shift {
+        parts.push("Shift");
+    }
+    if chord.platform {
+        parts.push("Super");
+    }
+    let key = chord.key.to_uppercase();
+    parts.push(&key);
+    Some(parts.join("+"))
+}
+
 pub fn jump_labels(rules: &[Rule], context: &impl Fn(&str) -> bool) -> Vec<Option<String>> {
     (1..=9)
-        .map(|index| {
-            let command = format!("thread.jump.{index}");
-            let rule = rules.iter().find(|rule| {
-                rule.command == command
-                    && holds_in(rule.when.as_ref(), context)
-                    && resolve(rules, &rule.chord, context) == Some(command.as_str())
-            })?;
-            let chord = &rule.chord;
-            let mut parts = Vec::new();
-            if chord.control {
-                parts.push("Ctrl");
-            }
-            if chord.alt {
-                parts.push("Alt");
-            }
-            if chord.shift {
-                parts.push("Shift");
-            }
-            if chord.platform {
-                parts.push("Super");
-            }
-            let key = chord.key.to_uppercase();
-            parts.push(&key);
-            Some(parts.join("+"))
-        })
+        .map(|index| command_label(rules, &format!("thread.jump.{index}"), context))
         .collect()
 }
 

@@ -277,9 +277,95 @@ fn themed_color(role: &str, cx: &App) -> Hsla {
     color(role, !cx.theme().mode.is_dark())
 }
 
+const EDITOR_ASSETS: &[(&str, &[u8])] = &[
+    (
+        "icons/editors/antigravity.svg",
+        include_bytes!("../assets/editors/antigravity.svg"),
+    ),
+    (
+        "icons/editors/aqua.svg",
+        include_bytes!("../assets/editors/aqua.svg"),
+    ),
+    (
+        "icons/editors/clion.svg",
+        include_bytes!("../assets/editors/clion.svg"),
+    ),
+    (
+        "icons/editors/cursor.svg",
+        include_bytes!("../assets/editors/cursor.svg"),
+    ),
+    (
+        "icons/editors/datagrip.svg",
+        include_bytes!("../assets/editors/datagrip.svg"),
+    ),
+    (
+        "icons/editors/dataspell.svg",
+        include_bytes!("../assets/editors/dataspell.svg"),
+    ),
+    (
+        "icons/editors/goland.svg",
+        include_bytes!("../assets/editors/goland.svg"),
+    ),
+    (
+        "icons/editors/idea.svg",
+        include_bytes!("../assets/editors/idea.svg"),
+    ),
+    (
+        "icons/editors/kiro.svg",
+        include_bytes!("../assets/editors/kiro.svg"),
+    ),
+    (
+        "icons/editors/phpstorm.svg",
+        include_bytes!("../assets/editors/phpstorm.svg"),
+    ),
+    (
+        "icons/editors/pycharm.svg",
+        include_bytes!("../assets/editors/pycharm.svg"),
+    ),
+    (
+        "icons/editors/rider.svg",
+        include_bytes!("../assets/editors/rider.svg"),
+    ),
+    (
+        "icons/editors/rubymine.svg",
+        include_bytes!("../assets/editors/rubymine.svg"),
+    ),
+    (
+        "icons/editors/rustrover.svg",
+        include_bytes!("../assets/editors/rustrover.svg"),
+    ),
+    (
+        "icons/editors/trae.svg",
+        include_bytes!("../assets/editors/trae.svg"),
+    ),
+    (
+        "icons/editors/vscode-insiders.svg",
+        include_bytes!("../assets/editors/vscode-insiders.svg"),
+    ),
+    (
+        "icons/editors/vscode.svg",
+        include_bytes!("../assets/editors/vscode.svg"),
+    ),
+    (
+        "icons/editors/vscodium.svg",
+        include_bytes!("../assets/editors/vscodium.svg"),
+    ),
+    (
+        "icons/editors/webstorm.svg",
+        include_bytes!("../assets/editors/webstorm.svg"),
+    ),
+    (
+        "icons/editors/zed.svg",
+        include_bytes!("../assets/editors/zed.svg"),
+    ),
+];
+
 pub struct Assets;
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> anyhow::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        if let Some((_, data)) = EDITOR_ASSETS.iter().find(|(name, _)| *name == path) {
+            return Ok(Some(std::borrow::Cow::Borrowed(*data)));
+        }
         match path {
             "icons/t3-stop.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
                 "../assets/stop.svg"
@@ -304,6 +390,12 @@ impl AssetSource for Assets {
             .into_iter()
             .filter(|p| p.starts_with(path))
             .map(Into::into),
+        );
+        paths.extend(
+            EDITOR_ASSETS
+                .iter()
+                .filter(|(name, _)| name.starts_with(path))
+                .map(|(name, _)| SharedString::from(*name)),
         );
         Ok(paths)
     }

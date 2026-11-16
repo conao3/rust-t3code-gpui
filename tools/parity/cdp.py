@@ -4,7 +4,9 @@ import argparse
 import asyncio
 import base64
 import json
+import time
 from pathlib import Path
+from urllib.error import URLError
 from urllib.request import urlopen
 
 import websockets
@@ -21,8 +23,21 @@ class Cdp:
             with urlopen(self.endpoint + "/json/list", timeout=5) as response:
                 return json.load(response)
 
-        pages = await asyncio.to_thread(list_pages)
-        pages = [p for p in pages if p.get("type") == "page"]
+        deadline = time.monotonic() + 120
+        while True:
+            try:
+                pages = await asyncio.to_thread(list_pages)
+                pages = [p for p in pages if p.get("type") == "page"]
+                if pages or time.monotonic() >= deadline:
+                    break
+            except (URLError, TimeoutError) as error:
+                reason = error.reason if isinstance(error, URLError) else error
+                if (
+                    not isinstance(reason, (ConnectionRefusedError, TimeoutError))
+                    or time.monotonic() >= deadline
+                ):
+                    raise
+            await asyncio.sleep(0.1)
         if len(pages) != 1:
             raise RuntimeError(f"Expected one isolated renderer, got {len(pages)}")
         self.page_url = pages[0]["url"]

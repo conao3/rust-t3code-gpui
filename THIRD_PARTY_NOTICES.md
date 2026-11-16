@@ -64,7 +64,7 @@ SOFTWARE.
 
 ## T3 Code interface
 
-Interface behavior, permission labels and descriptions are based on [T3 Code](https://github.com/pingdotgg/t3code/tree/24e77473ecf41bc1f7142529c7911c1c1aae1d76), including `apps/web/src/components/chat/runtimeModeConfig.ts` and `ComposerFooterControls.tsx`. T3 Code is distributed under the MIT License:
+Interface behavior, permission labels and descriptions are based on [T3 Code](https://github.com/pingdotgg/t3code/tree/24e77473ecf41bc1f7142529c7911c1c1aae1d76), including `apps/web/src/components/chat/runtimeModeConfig.ts` and `ComposerFooterControls.tsx`. Editor icon SVGs in `crates/t3code-gpui/assets/editors` derive from `apps/web/src/components/Icons.tsx` and `JetBrainsIcons.tsx` at that revision. T3 Code is distributed under the MIT License:
 
 ```text
 MIT License
@@ -89,3 +89,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## GPUI component menus
+
+`vendor/gpui-component/` is `gpui-component` 0.9.1, distributed under Apache-2.0 (`vendor/gpui-component/LICENSE-APACHE`). Custom popup menu items expose an explicit accessible label alongside their custom content.

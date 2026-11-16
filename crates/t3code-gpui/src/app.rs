@@ -10,7 +10,7 @@ use gpui_kit::component::{
     diff::{Diff, DiffFile, DiffMode, DiffParseOptions, DiffState},
     h_flex,
     input::{CursorBlink, Input, InputEvent, InputState, Position, Textarea, TextareaState},
-    menu::{ContextMenuExt as _, DropdownMenu as _},
+    menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenuItem},
     text::{TextView, TextViewState},
     v_flex,
 };
@@ -79,6 +79,7 @@ actions!(
         OpenPermissions,
         ToggleThreadDetails,
         OpenBranchPicker,
+        OpenFavoriteEditor,
     ]
 );
 
@@ -107,6 +108,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "diff.toggle" => Box::new(ToggleDiff),
         "threadPanel.toggle" => Box::new(ToggleThreadDetails),
         "composer.branch" => Box::new(OpenBranchPicker),
+        "editor.openFavorite" => Box::new(OpenFavoriteEditor),
         "settings.connections" => Box::new(ManageHosts),
         "settings.open" => Box::new(OpenSettings),
         "rightPanel.toggle" => Box::new(ToggleExplorer),
@@ -396,6 +398,7 @@ struct DetailsStamp {
     branch_loading: bool,
     branch_count: usize,
     light: bool,
+    preferred_editor: Option<String>,
 }
 
 struct DetailsPane {
@@ -410,6 +413,7 @@ impl Render for DetailsPane {
 }
 
 pub struct Root {
+    editor_picker_focus: FocusHandle,
     details_pane: Entity<DetailsPane>,
     details_stamp: Option<DetailsStamp>,
     workspace_revision: u64,
@@ -623,6 +627,7 @@ impl Root {
         list_state.set_follow_mode(FollowMode::Tail);
         let sidebar_root = cx.entity().downgrade();
         Self {
+            editor_picker_focus: cx.focus_handle(),
             details_pane: cx.new(|_| DetailsPane {
                 root: sidebar_root.clone(),
             }),
@@ -4848,7 +4853,11 @@ impl Root {
     fn render_workspace_canvas(&self, pane: AnyElement, cx: &Context<Self>) -> AnyElement {
         let layout = workspace::layout(self.canvas_width, self.details_open);
         let card_height =
-            84. + if self.workspace_status.is_repo() {
+            52. + if self.workspace_editor().is_some() {
+                32.
+            } else {
+                0.
+            } + if self.workspace_status.is_repo() {
                 83.
             } else {
                 0.
@@ -4967,34 +4976,111 @@ impl Root {
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default();
-        let editor = editors
-            .iter()
-            .filter_map(Value::as_str)
-            .next()
-            .unwrap_or("file-manager")
-            .to_string();
+        let preferred = self.workspace_editor();
         let focus = self.focus.clone();
-        let editor_button = Button::new("workspace-editor")
-            .label(format!("Open in {}", workspace::editor_label(&editor)))
-            .icon(gpui_kit::assets::IconName::ExternalLink)
+        let weak = cx.entity().downgrade();
+        let light = self.settings.light_theme;
+        let editor_picker_focus = self.editor_picker_focus.clone();
+        let editor_menu = Button::new("workspace-editor-picker")
+            .track_focus(&editor_picker_focus)
+            .icon(IconName::ChevronDown)
             .ghost()
-            .w_full()
+            .w(px(32.))
             .h(px(32.))
-            .px_2p5()
+            .px_0()
             .rounded(px(8.))
-            .accessibility_label("Open in editor")
-            .dropdown_menu(move |mut menu, _, _| {
+            .accessibility_label("Choose editor")
+            .dropdown_menu_with_anchor(Anchor::TopRight, move |mut menu, window, cx| {
+                let shortcut = weak.upgrade().and_then(|entity| {
+                    let root = entity.read(cx);
+                    keymap::command_label(&root.key_rules, "editor.openFavorite", &|name| {
+                        root.key_context(name, window, cx)
+                    })
+                });
                 for editor in editors.iter().filter_map(Value::as_str) {
-                    menu = menu.menu(
-                        workspace::editor_label(editor),
-                        Box::new(WorkspaceAction {
-                            kind: "editor".into(),
-                            value: json!(editor),
-                        }),
+                    let editor = editor.to_string();
+                    let label = workspace::editor_label(&editor).to_string();
+                    let hint = shortcut
+                        .clone()
+                        .filter(|_| preferred.as_deref() == Some(&editor));
+                    let accessible_label = label.clone();
+                    let selected_editor = editor.clone();
+                    menu = menu.item(
+                        PopupMenuItem::element(move |_, cx| {
+                            h_flex()
+                                .w_full()
+                                .gap_2()
+                                .child(workspace::editor_icon(
+                                    &editor,
+                                    light,
+                                    cx.theme().foreground,
+                                    cx.theme().muted_foreground,
+                                ))
+                                .child(label.clone())
+                                .child(div().flex_1())
+                                .children(hint.clone().map(|hint| {
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(hint)
+                                }))
+                        })
+                        .accessibility_label(accessible_label)
+                        .action(Box::new(WorkspaceAction {
+                            kind: "choose-editor".into(),
+                            value: json!(selected_editor),
+                        })),
                     );
                 }
-                menu.action_context(focus.clone())
+                menu.min_w(px(262.))
+                    .max_w(px(262.))
+                    .action_context(focus.clone())
+            })
+            .on_open_change(move |open, window, cx| {
+                if !open {
+                    editor_picker_focus.focus(window, cx);
+                }
             });
+        let editor_button = self.workspace_editor().map(|editor| {
+            let label = format!("Open in {}", workspace::editor_label(&editor));
+            h_flex()
+                .w_full()
+                .id("workspace-editor-group")
+                .role(accesskit::Role::Group)
+                .aria_label("Open in editor")
+                .child(
+                    Button::new("workspace-editor")
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .gap_2p5()
+                                .child(workspace::editor_icon(
+                                    &editor,
+                                    self.settings.light_theme,
+                                    theme.foreground,
+                                    theme.muted_foreground,
+                                ))
+                                .child(div().flex_1().text_size(px(13.)).child(label.clone())),
+                        )
+                        .ghost()
+                        .flex_1()
+                        .h(px(32.))
+                        .px_2p5()
+                        .rounded(px(8.))
+                        .accessibility_label(label)
+                        .on_click(cx.listener(move |root, _, window, cx| {
+                            root.workspace_action(
+                                &WorkspaceAction {
+                                    kind: "editor".into(),
+                                    value: json!(editor),
+                                },
+                                window,
+                                cx,
+                            )
+                        })),
+                )
+                .child(editor_menu)
+        });
         v_flex()
             .size_full()
             .id("thread-details")
@@ -5012,7 +5098,7 @@ impl Root {
                     .pt_2()
                     .pb_2p5()
                     .child(host)
-                    .child(editor_button),
+                    .children(editor_button),
             )
             .when(self.workspace_status.is_repo(), |card| {
                 let changes = &self.workspace_status.local["workingTree"];
@@ -5134,6 +5220,15 @@ impl Root {
             .into_any_element()
     }
 
+    fn workspace_editor(&self) -> Option<String> {
+        let environment = &self.workspace_watch.as_ref()?.target.environment;
+        let config = &self.model_catalogs.get(environment)?.0;
+        workspace::preferred_editor(
+            config.get("availableEditors")?.as_array()?,
+            self.settings.preferred_editor.as_deref(),
+        )
+    }
+
     fn render_branch_control(&self, id: &'static str, cx: &Context<Self>) -> AnyElement {
         let branch = self
             .draft
@@ -5149,8 +5244,13 @@ impl Root {
             .unwrap_or("Select branch")
             .to_string();
         let button = Button::new(id)
-            .label(branch)
-            .icon(gpui_kit::assets::IconName::GitBranch)
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_2p5()
+                    .child(Icon::new(gpui_kit::assets::IconName::GitBranch).size(px(16.)))
+                    .child(div().flex_1().truncate().child(branch)),
+            )
             .ghost()
             .w_full()
             .h(px(32.))
@@ -5366,6 +5466,10 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match action.kind.as_str() {
+            "choose-editor" => {
+                self.change_setting("gpuiPreferredEditor", action.value.clone(), cx);
+                return;
+            }
             "host" => {
                 if let Some(draft) = self.draft.as_mut() {
                     draft.environment = action.value.as_str().map(str::to_string);
@@ -5378,14 +5482,22 @@ impl Root {
                 if let Some((environment, cwd)) = self.composer_cwd()
                     && let Some(connection) = self.connection(&environment)
                 {
-                    let input = json!({"cwd":cwd,"editor":action.value});
+                    let editor = action.value.clone();
+                    let target = action
+                        .value
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .unwrap_or(&cwd);
+                    let editor = editor.get("editor").cloned().unwrap_or(editor);
+                    let input = json!({"cwd":target,"editor":editor});
+                    self.change_setting("gpuiPreferredEditor", editor, cx);
                     let runtime = self.runtime.clone();
                     cx.spawn(async move |this, cx| {
-                        if let Err(error) = on_runtime(&runtime, async move {
+                        let result = on_runtime(&runtime, async move {
                             connection.request("shell.openInEditor", input).await
                         })
-                        .await
-                        {
+                        .await;
+                        if let Err(error) = result {
                             let _ = this.update(cx, |root, cx| {
                                 root.message = Some(format!("Could not open editor: {error:#}"));
                                 cx.notify();
@@ -5394,6 +5506,7 @@ impl Root {
                     })
                     .detach();
                 }
+                return;
             }
             "mode" => {
                 if let Some(draft) = self.draft.as_mut() {
@@ -6016,6 +6129,7 @@ impl Render for Root {
             branch_loading: self.branch_loading,
             branch_count: self.branch_refs.len(),
             light: self.settings.light_theme,
+            preferred_editor: self.settings.preferred_editor.clone(),
         };
         if self.details_stamp.as_ref() != Some(&details_stamp) {
             self.details_stamp = Some(details_stamp);
@@ -6099,6 +6213,12 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &ToggleDiff, _, cx| root.toggle_diff(cx)))
             .on_action(cx.listener(|root, _: &OpenBranchPicker, window, cx| {
                 root.open_branch_picker("composer-branch", window, cx)
+            }))
+            .on_action(cx.listener(|root, _: &OpenFavoriteEditor, window, cx| {
+                if let Some(editor) = root.workspace_editor() {
+                    let value = root.file_panel.as_ref().and_then(|panel| root.composer_cwd().map(|(_,cwd)| json!({"editor":editor,"path":std::path::Path::new(&cwd).join(&panel.path)}))).unwrap_or_else(|| json!(editor));
+                    root.workspace_action(&WorkspaceAction {kind:"editor".into(),value},window,cx);
+                }
             }))
             .on_action(cx.listener(|root, action: &WorkspaceAction, window, cx| {
                 root.workspace_action(action, window, cx);

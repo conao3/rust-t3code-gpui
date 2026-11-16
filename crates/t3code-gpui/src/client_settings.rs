@@ -22,6 +22,7 @@ pub struct ClientSettings {
     pub font_size_code: f32,
     pub sidebar_width: f32,
     pub light_theme: bool,
+    pub preferred_editor: Option<String>,
 }
 
 impl Default for ClientSettings {
@@ -59,6 +60,7 @@ impl ClientSettings {
             font_size_code: number("fontSizeCode", 13.),
             sidebar_width: number("gpuiSidebarWidth", 256.).max(208.),
             light_theme: text("gpuiAppearance") == Some("light"),
+            preferred_editor: text("gpuiPreferredEditor").map(str::to_string),
         }
     }
 

@@ -1,0 +1,94 @@
+{
+  "name": "preferred-editor-selection",
+  "theme": "dark",
+  "viewport": [
+    1400,
+    900
+  ],
+  "settle_ms": 1000,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "region",
+        "name": "Thread details"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Choose editor"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitem",
+        "name": "Files"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Files"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Files"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Files"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Open in Files"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Choose editor",
+        "focused": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Choose editor"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Cursor"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Cursor"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Open in Cursor"
+      }
+    }
+  ]
+}

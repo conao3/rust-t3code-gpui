@@ -7,7 +7,9 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
+from urllib.error import URLError
 
 from audit_commands import reference_commands
 from cdp import Cdp
@@ -19,6 +21,33 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    async def test_startup_waits_for_the_single_renderer_after_connection_refusal(self):
+        page = Cdp("http://127.0.0.1:1")
+        socket = Mock()
+        with (
+            patch(
+                "cdp.asyncio.to_thread",
+                new=AsyncMock(
+                    side_effect=[
+                        URLError(ConnectionRefusedError()),
+                        [],
+                        [
+                            {
+                                "type": "page",
+                                "url": "t3code://app/",
+                                "webSocketDebuggerUrl": "ws://127.0.0.1:1/page",
+                            }
+                        ],
+                    ]
+                ),
+            ),
+            patch("cdp.asyncio.sleep", new=AsyncMock()),
+            patch("cdp.websockets.connect", new=AsyncMock(return_value=socket)),
+        ):
+            await page.__aenter__()
+        self.assertIs(page.socket, socket)
+        self.assertEqual(page.page_url, "t3code://app/")
+
     async def test_a_disabled_control_is_not_reported_as_a_successful_click(self):
         page = Cdp("http://127.0.0.1:1")
         page.tree = AsyncMock(
@@ -89,6 +118,20 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_only_removed_accessible_objects_are_retried(self):
+        from native import stale_object
+
+        self.assertTrue(stale_object(Exception("Unknown object")))
+        error = SimpleNamespace(
+            domain="atspi_error", code=1, message="/org/a11y/atspi/accessible/0/123"
+        )
+        self.assertTrue(stale_object(error))
+        error.message = "Service unavailable"
+        self.assertFalse(stale_object(error))
+        error.message = "/org/a11y/atspi/accessible/0/123"
+        error.code = 2
+        self.assertFalse(stale_object(error))
+
     def test_native_click_uses_the_retrying_snapshot_instead_of_stale_objects(self):
         from native import Native
 

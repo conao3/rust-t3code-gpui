@@ -9,6 +9,14 @@ import time
 from pathlib import Path
 
 
+def stale_object(error):
+    return "Unknown object" in str(error) or (
+        error.domain == "atspi_error"
+        and error.code == 1
+        and error.message.startswith("/org/a11y/atspi/accessible/")
+    )
+
+
 class Native:
     def __init__(self, session):
         self.session = json.loads(Path(session).read_text())
@@ -76,7 +84,7 @@ class Native:
             try:
                 return self.snapshot()
             except GLib.Error as error:
-                if "Unknown object" not in str(error) or time.monotonic() >= deadline:
+                if not stale_object(error) or time.monotonic() >= deadline:
                     raise
                 time.sleep(0.05)
 

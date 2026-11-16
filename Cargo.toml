@@ -25,6 +25,7 @@ uuid = { version = "1.29.2", features = ["v4"] }
 debug = 1
 
 [patch.crates-io]
+gpui-component = { path = "vendor/gpui-component" }
 gpui-pre-linux = { path = "vendor/gpui-pre-linux" }
 gpui-pre-wgpu = { path = "vendor/gpui-pre-wgpu" }
 gpui-pre = { path = "vendor/gpui-pre" }

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use gpui_kit::component::{Icon, IconName};
+use gpui_kit::{AnyElement, Hsla, IntoElement, Styled, img, px, rgb};
 use serde_json::{Value, json};
 use t3_client::rpc::StreamLimits;
 use t3_client::session::Connection;
@@ -167,8 +169,67 @@ pub fn editor_label(editor: &str) -> &str {
         "rubymine" => "RubyMine",
         "rustrover" => "RustRover",
         "webstorm" => "WebStorm",
-        "file-manager" => "File Manager",
+        "file-manager" if cfg!(target_os = "macos") => "Finder",
+        "file-manager" if cfg!(target_os = "windows") => "File Explorer",
+        "file-manager" => "Files",
         other => other,
+    }
+}
+
+pub fn preferred_editor(available: &[Value], saved: Option<&str>) -> Option<String> {
+    let available = |editor: &str| available.iter().any(|value| value.as_str() == Some(editor));
+    saved
+        .filter(|editor| available(editor))
+        .or_else(|| {
+            [
+                "cursor",
+                "trae",
+                "kiro",
+                "vscode",
+                "vscode-insiders",
+                "vscodium",
+                "zed",
+                "antigravity",
+                "idea",
+                "aqua",
+                "clion",
+                "datagrip",
+                "dataspell",
+                "goland",
+                "phpstorm",
+                "pycharm",
+                "rider",
+                "rubymine",
+                "rustrover",
+                "webstorm",
+                "file-manager",
+            ]
+            .into_iter()
+            .find(|editor| available(editor))
+        })
+        .map(str::to_string)
+}
+
+pub fn editor_icon(editor: &str, light: bool, foreground: Hsla, muted: Hsla) -> AnyElement {
+    if editor == "file-manager" {
+        return Icon::new(IconName::Folder)
+            .size(px(16.))
+            .text_color(muted)
+            .into_any_element();
+    }
+    let path = format!("icons/editors/{editor}.svg");
+    if matches!(editor, "cursor" | "trae" | "zed") {
+        Icon::default()
+            .path(path)
+            .size(px(16.))
+            .text_color(if editor == "cursor" {
+                rgb(if light { 0x26251e } else { 0xedecec }).into()
+            } else {
+                foreground
+            })
+            .into_any_element()
+    } else {
+        img(path).size(px(16.)).flex_shrink_0().into_any_element()
     }
 }
 
@@ -209,6 +270,24 @@ pub fn branch_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_saved_editor_wins_and_discovery_order_does_not_change_the_default() {
+        let available = [json!("file-manager"), json!("vscode"), json!("cursor")];
+        assert_eq!(
+            preferred_editor(&available, None).as_deref(),
+            Some("cursor")
+        );
+        assert_eq!(
+            preferred_editor(&available, Some("vscode")).as_deref(),
+            Some("vscode")
+        );
+        assert_eq!(
+            preferred_editor(&available, Some("zed")).as_deref(),
+            Some("cursor")
+        );
+        assert_eq!(preferred_editor(&[], Some("vscode")), None);
+    }
 
     #[test]
     fn branch_selection_preserves_worktrees_and_returns_to_the_project_checkout() {

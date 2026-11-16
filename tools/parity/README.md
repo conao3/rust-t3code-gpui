@@ -61,6 +61,8 @@ The shared draft scenario exercises text retention, sidebar toggling, permission
 
 `workspace.json` opens and hides thread details, searches for `feature/parity`, checks out that branch and checks composer focus. Prepare both Git fixtures with identical commits, refs and files, including a `feature/parity` branch. Pass their paths with `--reference-workspace` and `--native-workspace`. The runner rejects shared Git stores or different initial snapshots, then saves and compares the final branch, HEAD, refs, status and file hashes. Each platform's native accessibility roles remain in the saved trees; selectors can explicitly identify equivalent native controls with `reference` and `native` fields on clicks and checkpoints.
 
+`editor.json` selects Files and Cursor from thread details, verifies the preferred-editor button label and checks that selecting a menu item returns focus to its trigger. Use Linux fixtures advertising both editors. Selection updates the preference; the primary button opens the selected editor. Checkpoints require ordinary menu items and preserve the native role names in the result.
+
 Inventory the reference commands separately:
 
 ```sh
