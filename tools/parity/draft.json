@@ -1,0 +1,68 @@
+{
+  "name": "new-thread-text-and-sidebar",
+  "viewport": [
+    1400,
+    900
+  ],
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "type",
+      "value": "Identical input 123"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "Identical input 123"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+b"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      },
+      "count": 0
+    },
+    {
+      "action": "press",
+      "value": "ctrl+b"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      },
+      "count": 1
+    }
+  ],
+  "theme": "dark"
+}

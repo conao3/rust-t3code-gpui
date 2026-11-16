@@ -4552,6 +4552,12 @@ impl Root {
                         .text_size(px(self.settings.font_size_prompt))
                         .child(
                             Textarea::new(&self.composer)
+                                .aria_label(format!(
+                                    "Message {}",
+                                    self.open_entry()
+                                        .map(|entry| entry.title.as_str())
+                                        .unwrap_or("New thread")
+                                ))
                                 .appearance(false)
                                 .bordered(false),
                         ),
@@ -5107,6 +5113,9 @@ impl Render for Root {
             None => self.render_thread(cx),
         };
         v_flex()
+            .id("application-content")
+            .role(accesskit::Role::Group)
+            .aria_label("Application content")
             .relative()
             .size_full()
             .track_focus(&self.focus)

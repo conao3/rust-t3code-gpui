@@ -99,14 +99,38 @@
                 rust-analyzer
                 rustc
                 rustfmt
-              ]);
+                ruff
+                (python3.withPackages (
+                  python:
+                  [
+                    python.websockets
+                    python.pillow
+                  ]
+                  ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+                    python.pyatspi
+                    python.pygobject3
+                  ]
+                ))
+              ])
+              ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+                pkgs.at-spi2-core
+                pkgs.gobject-introspection
+                pkgs.dbus
+                pkgs.xdotool
+                pkgs.xorg-server
+                pkgs.xfwm4
+                pkgs.imagemagick
+              ];
             buildInputs = buildLibs;
             LD_LIBRARY_PATH = lib.makeLibraryPath runtimeLibs;
+            T3CODE_ATSPI_LAUNCHER = lib.optionalString pkgs.stdenv.hostPlatform.isLinux "${pkgs.at-spi2-core}/libexec/at-spi-bus-launcher";
+            GI_TYPELIB_PATH = lib.optionalString pkgs.stdenv.hostPlatform.isLinux "${pkgs.at-spi2-core}/lib/girepository-1.0";
           };
 
           treefmt.programs = {
             nixfmt.enable = true;
             rustfmt.enable = true;
+            ruff-format.enable = true;
           };
           treefmt.settings.global.excludes = [ "vendor/**" ];
         };
