@@ -10,7 +10,7 @@ use tokio::task::JoinHandle;
 use crate::config::Environment;
 use crate::http::Api;
 use crate::projection::{Applied, ShellState, ThreadState, apply_config};
-use crate::rpc::{RpcClient, RpcError};
+use crate::rpc::{BoundedStream, RpcClient, RpcError, StreamLimits};
 
 const DISPATCH_TIMEOUT: Duration = Duration::from_secs(30);
 const RETRY_FIRST: Duration = Duration::from_secs(1);
@@ -155,6 +155,27 @@ impl Connection {
         let client = RpcClient::connect(&self.api).await?;
         *held = Some(client.clone());
         Ok(client)
+    }
+
+    pub async fn request(&self, method: &str, payload: Value) -> Result<Value> {
+        self.rpc()
+            .await?
+            .call(method, payload, DISPATCH_TIMEOUT)
+            .await
+            .map_err(Into::into)
+    }
+
+    pub async fn subscribe(
+        &self,
+        method: &str,
+        payload: Value,
+        limits: StreamLimits,
+    ) -> Result<BoundedStream> {
+        self.rpc()
+            .await?
+            .bounded_stream(method, payload, limits)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn dispatch(&self, mut command: Value) -> Result<u64> {

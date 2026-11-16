@@ -169,6 +169,36 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
     )
     .await;
 
+    let workspace = shell.lock().unwrap().projects[0]["workspaceRoot"].clone();
+    let status = connection
+        .request(
+            "vcs.refreshStatus",
+            json!({"cwd": workspace, "localOnly": true}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(status["isRepo"], false);
+    let mut status_stream = connection
+        .subscribe(
+            "subscribeVcsStatus",
+            json!({"cwd": workspace, "includeRemote": false}),
+            t3_client::rpc::StreamLimits::new(8, 1 << 20).unwrap(),
+        )
+        .await
+        .unwrap();
+    let snapshot = tokio::time::timeout(Duration::from_secs(10), status_stream.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .accept();
+    assert!(
+        snapshot
+            .iter()
+            .any(|event| event["_tag"] == "snapshot" && event["local"]["isRepo"] == false)
+    );
+    drop(status_stream);
+
     let project_id = shell.lock().unwrap().projects[0]["id"]
         .as_str()
         .unwrap()
