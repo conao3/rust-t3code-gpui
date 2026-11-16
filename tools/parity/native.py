@@ -21,9 +21,19 @@ class Native:
         from gi.repository import Atspi
 
         self.desktop.set_cache_mask(Atspi.Cache.NONE)
-        self.window = self.xdo(
-            "search", "--onlyvisible", "--pid", self.session["pid"]
-        ).splitlines()[0]
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                self.window = self.xdo(
+                    "search", "--onlyvisible", "--pid", self.session["pid"]
+                ).splitlines()[0]
+                break
+            except subprocess.CalledProcessError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(
+                        "Native fixture did not open its window"
+                    ) from None
+                time.sleep(0.1)
 
     def xdo(self, *args):
         return subprocess.check_output(["xdotool", *map(str, args)], text=True).strip()
@@ -202,7 +212,9 @@ class Native:
         previous = None
         deadline = time.monotonic() + 5
         while True:
-            data = subprocess.check_output(["import", "-window", self.window, "png:-"])
+            data = subprocess.check_output(
+                ["import", "-window", self.window, "png:-"], timeout=8
+            )
             with Image.open(BytesIO(data)) as picture:
                 current = picture.crop(
                     (x, y, x + bounds["width"], y + bounds["height"])

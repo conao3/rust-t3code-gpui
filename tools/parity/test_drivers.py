@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 from audit_commands import reference_commands
 from cdp import Cdp
-from desktop_session import read_display
+from desktop_session import read_display, stop_process_group
 from fixture_validation import distinct, inspect_environments
 from PIL import Image
 from private_session import cleanup_bus_processes
@@ -181,6 +181,35 @@ class DisplayTests(unittest.TestCase):
     sys.platform.startswith("linux"), "Private bus process ownership uses Linux procfs"
 )
 class CleanupTests(unittest.TestCase):
+    def test_owned_descendants_stop_even_when_the_launcher_has_exited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / "child.pid"
+            launcher = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import subprocess,sys; from pathlib import Path; "
+                        "p=subprocess.Popen([sys.executable,'-c',"
+                        "'import time; time.sleep(30)']); "
+                        "Path(sys.argv[1]).write_text(str(p.pid))"
+                    ),
+                    str(pid_file),
+                ],
+                start_new_session=True,
+            )
+            launcher.wait(timeout=3)
+            descendant = int(pid_file.read_text())
+            stop_process_group(launcher)
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                stat = Path(f"/proc/{descendant}/stat")
+                if not stat.exists() or stat.read_text().split()[2] == "Z":
+                    break
+                time.sleep(0.01)
+            else:
+                self.fail("The owned descendant survived launcher cleanup")
+
     def test_only_processes_on_the_owned_bus_are_stopped(self):
         address = f"parity-test:{os.getpid()}:{time.monotonic_ns()}"
         command = [sys.executable, "-c", "import time; time.sleep(30)"]

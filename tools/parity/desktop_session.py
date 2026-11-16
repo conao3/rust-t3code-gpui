@@ -30,8 +30,28 @@ def read_display(read_fd, timeout=10):
     return ":" + display
 
 
+def stop_process_group(process):
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        process.wait()
+        return
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--display", help="Use an existing X11 desktop; own only the test applications"
+    )
     parser.add_argument("--reference-binary", required=True)
     parser.add_argument("--reference-home", type=Path, required=True)
     parser.add_argument("--reference-profile", type=Path, required=True)
@@ -56,42 +76,53 @@ def main():
     def launch(command, name, env=None, **kwargs):
         with (args.session.parent / (name + ".log")).open("w") as output:
             process = subprocess.Popen(
-                command, env=env, stdout=output, stderr=subprocess.STDOUT, **kwargs
+                command,
+                env=env,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                **kwargs,
             )
         children.append(process)
         return process
 
     try:
-        read_fd, write_fd = os.pipe()
-        try:
-            launch(
-                [
-                    "Xvfb",
-                    "-displayfd",
-                    str(write_fd),
-                    "-nolisten",
-                    "tcp",
-                    "-noreset",
-                    "-screen",
-                    "0",
-                    "1920x1080x24",
-                ],
-                "xvfb",
-                pass_fds=(write_fd,),
-            )
-            os.close(write_fd)
-            display = read_display(read_fd)
-        finally:
-            os.close(read_fd)
+        if args.display is None:
+            read_fd, write_fd = os.pipe()
+            try:
+                launch(
+                    [
+                        "Xvfb",
+                        "-displayfd",
+                        str(write_fd),
+                        "-nolisten",
+                        "tcp",
+                        "-noreset",
+                        "-screen",
+                        "0",
+                        "1920x1080x24",
+                    ],
+                    "xvfb",
+                    pass_fds=(write_fd,),
+                )
+                os.close(write_fd)
+                display = read_display(read_fd)
+            finally:
+                os.close(read_fd)
+        else:
+            display = args.display
         env = os.environ.copy()
         env["DISPLAY"] = display
         env.pop("WAYLAND_DISPLAY", None)
         env.pop("SESSION_MANAGER", None)
         env.pop("DESKTOP_AUTOSTART_ID", None)
-        launch(
-            ["xfwm4", "--compositor=off", "--sm-client-disable"], "window-manager", env
-        )
-        time.sleep(0.5)
+        if args.display is None:
+            launch(
+                ["xfwm4", "--compositor=off", "--sm-client-disable"],
+                "window-manager",
+                env,
+            )
+            time.sleep(0.5)
         reference_env = env | {
             "T3CODE_HOME": str(args.reference_home.resolve()),
             "XDG_CONFIG_HOME": str(args.reference_profile.resolve()),
@@ -153,13 +184,7 @@ def main():
             )
     finally:
         for child in reversed(children):
-            if child.poll() is None:
-                child.terminate()
-                try:
-                    child.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait()
+            stop_process_group(child)
 
 
 if __name__ == "__main__":
