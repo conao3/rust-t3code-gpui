@@ -35,8 +35,10 @@ class Native:
                     ) from None
                 time.sleep(0.1)
 
-    def xdo(self, *args):
-        return subprocess.check_output(["xdotool", *map(str, args)], text=True).strip()
+    def xdo(self, *args, timeout=10):
+        return subprocess.check_output(
+            ["xdotool", *map(str, args)], text=True, timeout=timeout
+        ).strip()
 
     def app(self):
         for app in self.desktop:
@@ -98,13 +100,15 @@ class Native:
                     value = content.getText(0, content.characterCount)
                 except NotImplementedError:
                     pass
+            state = node.getState()
             result.append(
                 {
                     "role": node.getRoleName(),
                     "name": node.name,
                     "value": value,
-                    "focused": node.getState().contains(self.atspi.STATE_FOCUSED),
-                    "checked": node.getState().contains(self.atspi.STATE_CHECKED)
+                    "focused": state.contains(self.atspi.STATE_FOCUSED),
+                    "disabled": not state.contains(self.atspi.STATE_ENABLED),
+                    "checked": state.contains(self.atspi.STATE_CHECKED)
                     if node.getRoleName()
                     in [
                         "radio menu item",
@@ -114,7 +118,7 @@ class Native:
                     ]
                     else None,
                     "bounds": bounds,
-                    "states": [str(state) for state in node.getState().getStates()],
+                    "states": [str(value) for value in state.getStates()],
                 }
             )
         return result
@@ -128,17 +132,21 @@ class Native:
         self.focus()
         matches = [
             node
-            for node in self.nodes()
-            if node.getRoleName() == role and node.name == name
+            for node in self.tree()
+            if node["role"] == role and node["name"] == name
         ]
         if not 0 <= index < len(matches):
             raise RuntimeError(
                 f"Cannot find {role} {name!r} #{index}; matches={len(matches)}"
             )
-        rect = matches[index].queryComponent().getExtents(self.atspi.DESKTOP_COORDS)
-        if rect.width <= 0 or rect.height <= 0:
+        rect = matches[index]["bounds"]
+        if matches[index].get("disabled", False):
+            raise RuntimeError(f"Target is disabled: {role} {name!r}")
+        if rect is None or rect["width"] <= 0 or rect["height"] <= 0:
             raise RuntimeError("Target has no visible bounds")
-        self.xdo("mousemove", rect.x + rect.width // 2, rect.y + rect.height // 2)
+        self.xdo(
+            "mousemove", rect["x"] + rect["width"] // 2, rect["y"] + rect["height"] // 2
+        )
         time.sleep(0.1)
         self.xdo("mousedown", 1)
         time.sleep(0.08)
@@ -164,7 +172,14 @@ class Native:
         if any(ord(character) < 32 or ord(character) == 127 for character in text):
             raise ValueError("Use explicit key or paste actions for control characters")
         self.focus()
-        self.xdo("type", "--clearmodifiers", "--delay", 20, text)
+        self.xdo(
+            "type",
+            "--clearmodifiers",
+            "--delay",
+            20,
+            text,
+            timeout=max(10, len(text) * 0.02 + 5),
+        )
 
     def content_bounds(self):
         groups = [node for node in self.tree() if node["name"] == "Application content"]

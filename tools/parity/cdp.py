@@ -80,6 +80,11 @@ class Cdp:
                 "name": n.get("name", {}).get("value", ""),
                 "value": n.get("value", {}).get("value"),
                 "backend_id": n.get("backendDOMNodeId"),
+                "disabled": any(
+                    p["value"].get("value") is True
+                    for p in n.get("properties", [])
+                    if p["name"] == "disabled"
+                ),
                 "focused": any(
                     p["value"].get("value") is True
                     for p in n.get("properties", [])
@@ -107,6 +112,8 @@ class Cdp:
                 f"Cannot find {role} {name!r} #{index}; matches={len(matches)}"
             )
         node = matches[index]["backend_id"]
+        if matches[index]["disabled"]:
+            raise RuntimeError(f"Target is disabled: {role} {name!r}")
         await self.call("DOM.scrollIntoViewIfNeeded", backendNodeId=node)
         box = (await self.call("DOM.getBoxModel", backendNodeId=node))["model"][
             "content"

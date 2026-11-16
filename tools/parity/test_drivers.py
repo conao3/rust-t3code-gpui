@@ -7,7 +7,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from audit_commands import reference_commands
 from cdp import Cdp
@@ -19,6 +19,18 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_disabled_control_is_not_reported_as_a_successful_click(self):
+        page = Cdp("http://127.0.0.1:1")
+        page.tree = AsyncMock(
+            return_value=[
+                {"role": "button", "name": "Send", "backend_id": 1, "disabled": True}
+            ]
+        )
+        page.call = AsyncMock()
+        with self.assertRaisesRegex(RuntimeError, "disabled"):
+            await page.click("button", "Send")
+        page.call.assert_not_called()
+
     async def test_failed_key_dispatch_releases_held_modifiers(self):
         page = Cdp("http://127.0.0.1:1")
         events = []
@@ -77,6 +89,27 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_native_click_uses_the_retrying_snapshot_instead_of_stale_objects(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.tree = Mock(
+            return_value=[
+                {
+                    "role": "button",
+                    "name": "Choose editor",
+                    "bounds": {"x": 10, "y": 20, "width": 32, "height": 32},
+                }
+            ]
+        )
+        app.nodes = Mock(side_effect=RuntimeError("Stale accessibility object"))
+        app.xdo = Mock()
+        with patch("native.time.sleep"):
+            app.click("button", "Choose editor")
+        app.nodes.assert_not_called()
+        self.assertEqual(app.xdo.call_args_list[0].args, ("mousemove", 26, 36))
+
     def test_platform_accessibility_roles_keep_the_same_control_semantics(self):
         for native, reference in [
             ("entry", "textbox"),
