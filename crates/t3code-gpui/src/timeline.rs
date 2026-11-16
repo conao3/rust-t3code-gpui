@@ -60,8 +60,15 @@ pub enum Pending {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MessagePart {
+    pub first: bool,
+    pub last: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
+    pub message_part: Option<MessagePart>,
     pub key: String,
     pub kind: RowKind,
     pub text: String,
@@ -248,6 +255,7 @@ fn present_activity(mut rows: Vec<Row>, state: &ThreadState) -> Vec<Row> {
     rows.insert(
         boundary.min(rows.len()),
         Row {
+            message_part: None,
             key: format!("working:{}", text(run, "id")),
             kind: RowKind::Working,
             text: "Working".into(),
@@ -324,6 +332,7 @@ fn fold_completed_turns(rows: Vec<Row>, state: &ThreadState) -> Vec<Row> {
             candidates[0],
             (
                 Row {
+                    message_part: None,
                     key: format!("worked:{run_id}"),
                     kind: RowKind::Worked,
                     text: label,
@@ -609,6 +618,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
         }
         match text(item, "type") {
             "user_message" => rows.push(Row {
+                message_part: None,
                 key: id.to_string(),
                 kind: RowKind::User,
                 text: user_text(item),
@@ -631,6 +641,10 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 let last = blocks.len() - 1;
                 for (i, block) in blocks.into_iter().enumerate() {
                     rows.push(Row {
+                        message_part: Some(MessagePart {
+                            first: i == 0,
+                            last: i == last,
+                        }),
                         key: format!("{id}#{i}"),
                         kind: RowKind::Assistant,
                         text: block.to_string(),
@@ -650,6 +664,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 }
             }
             "reasoning" if !text(item, "text").trim().is_empty() => rows.push(Row {
+                message_part: None,
                 key: id.to_string(),
                 kind: RowKind::Reasoning,
                 text: first_line(text(item, "text"), 200),
@@ -686,6 +701,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     _ => format!("{label} ({state_label}): {prompt}"),
                 };
                 rows.push(Row {
+                    message_part: None,
                     key: id.to_string(),
                     kind: RowKind::Request,
                     text,
@@ -697,6 +713,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 });
             }
             "error" => rows.push(Row {
+                message_part: None,
                 key: id.to_string(),
                 kind: RowKind::Error,
                 text: item
@@ -711,6 +728,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 link: None,
             }),
             "subagent" => rows.push(Row {
+                message_part: None,
                 key: id.to_string(),
                 kind: RowKind::Subagent,
                 text: subagent_summary(item),
@@ -732,6 +750,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                     .map(str::to_string),
             }),
             kind if TOOL_TYPES.contains(&kind) => rows.push(Row {
+                message_part: None,
                 key: id.to_string(),
                 kind: RowKind::Tool,
                 text: tool_summary(item),
@@ -742,6 +761,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 link: None,
             }),
             "system_notice" | "run_interrupt_result" => rows.push(Row {
+                message_part: None,
                 key: id.to_string(),
                 kind: RowKind::Notice,
                 text: first_line(
@@ -763,6 +783,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
         rows.insert(
             at,
             Row {
+                message_part: None,
                 key: format!("plan:{plan_id}"),
                 kind: RowKind::Plan,
                 text: "Plan".into(),
@@ -1042,6 +1063,32 @@ mod tests {
     }
 
     #[test]
+    fn message_boundaries_survive_virtualization_chunks() {
+        for body in ["short".to_string(), "paragraph\n\n".repeat(500)] {
+            let state = state(vec![
+                json!({"id": "m1", "type": "assistant_message", "text": body}),
+            ]);
+            let message = rows(&state);
+            assert_eq!(
+                message
+                    .iter()
+                    .map(|row| row.text.as_str())
+                    .collect::<String>(),
+                body
+            );
+            for (index, row) in message.iter().enumerate() {
+                assert_eq!(
+                    row.message_part,
+                    Some(MessagePart {
+                        first: index == 0,
+                        last: index + 1 == message.len()
+                    })
+                );
+            }
+        }
+    }
+
+    #[test]
     fn blocks_are_stable_as_the_text_grows() {
         let paragraph = format!("{}\n\n", "a".repeat(700));
         let full = paragraph.repeat(6);
@@ -1248,6 +1295,7 @@ mod tests {
     #[test]
     fn user_message_jumps_step_over_the_rows_between() {
         let row = |kind: RowKind| Row {
+            message_part: None,
             key: String::new(),
             kind,
             text: String::new(),
@@ -1298,6 +1346,7 @@ mod tests {
     #[test]
     fn find_matches_rows_ignoring_case() {
         let row = |text: &str| Row {
+            message_part: None,
             key: String::new(),
             kind: RowKind::Assistant,
             text: text.into(),

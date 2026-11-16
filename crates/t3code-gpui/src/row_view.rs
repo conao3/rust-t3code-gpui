@@ -403,7 +403,7 @@ impl RowView {
 }
 
 impl Render for RowView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let base = div()
             .w_full()
@@ -490,12 +490,22 @@ impl Render for RowView {
                         }
                     })
                     .px_1()
-                    .py_1()
+                    .pt(px(if self.row.message_part.is_none_or(|part| part.first) {
+                        2.
+                    } else {
+                        0.
+                    }))
+                    .pb(if self.row.message_part.is_none_or(|part| part.last) {
+                        px(2.)
+                    } else {
+                        rems(0.65).to_pixels(window.rem_size())
+                    })
                     .text_color(theme.foreground.opacity(0.9))
                     .line_height(relative(1.625))
                     .child(
                         TextView::new(state).selectable(true).style(
                             TextViewStyle::default()
+                                .paragraph_gap(rems(0.65))
                                 .code_block(
                                     StyleRefinement::default()
                                         .line_height(relative(1.375))
