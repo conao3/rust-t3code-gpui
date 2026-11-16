@@ -15,7 +15,7 @@ from desktop_session import read_display, stop_process_group
 from fixture_validation import distinct, inspect_environments
 from PIL import Image
 from private_session import cleanup_bus_processes
-from run import compare, wait_for
+from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
@@ -77,6 +77,19 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_platform_accessibility_roles_keep_the_same_control_semantics(self):
+        for native, reference in [
+            ("entry", "textbox"),
+            ("combo box", "combobox"),
+            ("landmark", "region"),
+            ("radio menu item", "menuitemradio"),
+        ]:
+            node = {"role": native, "name": "Control"}
+            self.assertEqual(
+                matches([node], {"role": reference, "name": "Control"}), [node]
+            )
+            self.assertEqual(matches([node], {"role": "button", "name": "Control"}), [])
+
     def test_changed_content_and_wrong_viewport_fail(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)

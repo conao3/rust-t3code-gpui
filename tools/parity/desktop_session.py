@@ -58,6 +58,9 @@ def main():
     parser.add_argument("--reference-port", type=int, required=True)
     parser.add_argument("--cdp-port", type=int, required=True)
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument(
+        "--native-binary", type=Path, default=Path("target/debug/t3code-gpui")
+    )
     parser.add_argument("--session", type=Path, required=True)
     args = parser.parse_args()
     configuration = json.loads(args.config.read_text())
@@ -143,6 +146,8 @@ def main():
                 "--",
                 sys.executable,
                 str(Path(__file__).with_name("private_session.py")),
+                "--binary",
+                str(args.native_binary.resolve()),
                 "--config",
                 str(args.config.resolve()),
                 "--session",

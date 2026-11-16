@@ -11,6 +11,7 @@ from cdp import Cdp
 from fixture_validation import distinct, environment_descriptor, origin
 from native import Native
 from PIL import Image, ImageChops, ImageStat
+from workspace_fixture import independent, observe
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,12 @@ async def invoke(app, method, *args):
 
 
 def matches(nodes, selector):
-    roles = {"entry": "textbox", "radio menu item": "menuitemradio"}
+    roles = {
+        "entry": "textbox",
+        "radio menu item": "menuitemradio",
+        "combo box": "combobox",
+        "landmark": "region",
+    }
     return [
         node
         for node in nodes
@@ -61,21 +67,24 @@ async def execute(app, target, scenario, directory):
             if action == "click":
                 selector = step.get(target, step.get("selector"))
                 await wait_for(app, selector)
-                role = (
-                    "entry"
-                    if target == "native" and selector["role"] == "textbox"
-                    else selector["role"]
-                )
+                role = selector["role"]
+                if target == "native":
+                    role = {
+                        "textbox": "entry",
+                        "combobox": "combo box",
+                        "region": "landmark",
+                    }.get(role, role)
                 await invoke(app, "click", role, selector["name"])
             elif action in ["press", "type"]:
                 await invoke(app, action, step["value"])
             elif action == "checkpoint":
+                selector = step.get(target, step["selector"])
                 nodes = await wait_for(
-                    app, step["selector"], step.get("count"), step.get("value")
+                    app, selector, step.get("count"), step.get("value")
                 )
                 await asyncio.sleep(scenario["settle_ms"] / 1000)
                 nodes = await wait_for(
-                    app, step["selector"], step.get("count"), step.get("value")
+                    app, selector, step.get("count"), step.get("value")
                 )
                 (directory / f"{index:02d}.json").write_text(
                     json.dumps(nodes, ensure_ascii=False, indent=2) + "\n"
@@ -135,6 +144,8 @@ async def main():
     parser.add_argument("--session", type=Path, required=True)
     parser.add_argument("--scenario", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--reference-workspace", type=Path)
+    parser.add_argument("--native-workspace", type=Path)
     args = parser.parse_args()
     scenario = json.loads(args.scenario.read_text())
     if args.output.exists():
@@ -142,6 +153,20 @@ async def main():
             "Output directory already exists; preserve each run separately"
         )
     args.output.mkdir(parents=True)
+    workspaces = None
+    workspace_before = None
+    if "workspace" in scenario:
+        if args.reference_workspace is None or args.native_workspace is None:
+            raise ValueError("This scenario requires both independent workspace paths")
+        workspaces = {
+            "reference": args.reference_workspace,
+            "native": args.native_workspace,
+        }
+        workspace_before = independent(*workspaces.values())
+        for target, state in workspace_before.items():
+            for key, value in scenario.get("workspace_initial", {}).items():
+                if state.get(key) != value:
+                    raise ValueError(f"{target}: initial {key} must be {value!r}")
     native = Native(args.session)
     width, height = scenario["viewport"]
     async with Cdp(args.endpoint) as reference:
@@ -207,6 +232,20 @@ async def main():
         and all(r["status"] == "passed" for r in comparisons)
         else "failed",
     }
+    if workspaces is not None:
+        report["workspace_before"] = workspace_before
+        started = time.monotonic()
+        while True:
+            observed = await asyncio.to_thread(
+                observe, workspaces, scenario["workspace"]
+            )
+            if observed["status"] == "passed" or time.monotonic() - started >= 10:
+                break
+            await asyncio.sleep(0.2)
+        report["workspace_after"] = observed
+        report["workspace_after"]["wait_seconds"] = time.monotonic() - started
+        if report["workspace_after"]["status"] == "failed":
+            report["status"] = "failed"
     (args.output / "report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     )

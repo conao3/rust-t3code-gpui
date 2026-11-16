@@ -1,0 +1,116 @@
+{
+  "name": "thread-details-and-branch-checkout",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1200,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "region",
+        "name": "Thread details"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+b"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "region",
+        "name": "Thread details"
+      },
+      "count": 0
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+b"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "region",
+        "name": "Thread details"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+g"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Search refs...",
+        "focused": true
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Search refs...",
+        "focused": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "type",
+      "value": "feature/parity"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Search refs...",
+        "focused": true
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Search refs...",
+        "focused": true
+      },
+      "value": "feature/parity"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "option",
+        "name": "feature/ parity"
+      },
+      "native": {
+        "role": "list item",
+        "name": "feature/parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "focused": true
+      }
+    }
+  ],
+  "workspace": {
+    "branch": "feature/parity"
+  },
+  "workspace_initial": {
+    "branch": "master"
+  }
+}

@@ -20,6 +20,8 @@ python3 tools/parity/desktop_session.py \
 
 The native fixture server must already be running independently. Startup verifies authentication with the native CLI. The launcher rejects a configuration that points to the reference origin; the runner also compares the actual Electron bootstrap origin and both server identities. Origins and identities are retained in the report, without bearer or bootstrap tokens. The default native binary is `target/debug/t3code-gpui`; build it before launching. The GUI scenario uses a declared content viewport and theme. For a light scenario, initialize the native fixture's client settings with `gpuiAppearance: "light"` as well.
 
+Pass `--display :0` to the desktop launcher to use an existing X11 desktop for physical GPU measurements. Select the measured release or packaged binary with `--native-binary`. Its application process groups belong to that comparison and are cleaned up with the launcher.
+
 To operate an original desktop on an existing X11 display, start it with its isolated profile and these additional arguments:
 
 ```sh
@@ -56,6 +58,8 @@ python3 tools/parity/run.py \
 ```
 
 The shared draft scenario exercises text retention, sidebar toggling, permission selection and keyboard versus mouse focus. Checkpoints assert exact input values, checked state and focus, not just control presence. Each checkpoint saves the accessible tree and a screenshot after the scenario’s explicit `settle_ms` delay. The native capture waits for a stable painted frame after activating its window; an unstable checkpoint fails. This static-image delay is separate from input/streaming latency measurements. Input values are compared exactly, including newlines. `type` accepts printable text; control characters require explicit key or paste actions. The runner sizes both content areas to the declared viewport and excludes native window shadows/borders using accessible content bounds. Output includes action results, side-by-side images, pixel differences and `report.json`. Every action and visual checkpoint must pass for exit status zero. Missing controls, unreadable input values and missing screenshots fail. Large visual differences remain failures even when typing works. Inspect the actual images as well as numeric differences; the pixel metric detects differences and does not certify feature coverage.
+
+`workspace.json` opens and hides thread details, searches for `feature/parity`, checks out that branch and checks composer focus. Prepare both Git fixtures with identical commits, refs and files, including a `feature/parity` branch. Pass their paths with `--reference-workspace` and `--native-workspace`. The runner rejects shared Git stores or different initial snapshots, then saves and compares the final branch, HEAD, refs, status and file hashes. Each platform's native accessibility roles remain in the saved trees; selectors can explicitly identify equivalent native controls with `reference` and `native` fields on clicks and checkpoints.
 
 Inventory the reference commands separately:
 
