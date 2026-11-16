@@ -7,11 +7,12 @@ import threading
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from audit_commands import reference_commands
 from cdp import Cdp
 from desktop_session import read_display
+from fixture_validation import distinct, inspect_environments
 from PIL import Image
 from private_session import cleanup_bus_processes
 from run import compare, wait_for
@@ -54,6 +55,16 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             native.type("first\nsecond")
 
+    async def test_desktop_origin_is_read_without_returning_bootstrap_credentials(self):
+        page = Cdp("http://127.0.0.1:1")
+        page.page_url = "t3code://app/"
+        page.evaluate = AsyncMock(return_value="http://127.0.0.1:2")
+        self.assertEqual(await page.server_origin(), "http://127.0.0.1:2")
+        self.assertIn("?.httpBaseUrl", page.evaluate.call_args.args[0])
+        page.evaluate.return_value = None
+        with self.assertRaisesRegex(TypeError, "did not expose"):
+            await page.server_origin()
+
     async def test_missing_native_input_value_fails_the_checkpoint(self):
         class App:
             async def tree(self):
@@ -89,6 +100,52 @@ class ComparisonTests(unittest.TestCase):
             reference_commands(source),
             ["chat.new", "terminal.split", "terminal.toggle"],
         )
+
+
+class FixtureTests(unittest.TestCase):
+    def test_shared_origin_and_shared_server_identity_are_rejected(self):
+        for url in ["http://localhost", "http://127.0.0.1:80", "http://[::1]:80"]:
+            with self.assertRaisesRegex(ValueError, "same server origin"):
+                distinct("http://127.0.0.1", [{"origin": url}])
+        with self.assertRaisesRegex(ValueError, "same server identity"):
+            distinct(
+                "http://127.0.0.1:1",
+                [{"origin": "http://127.0.0.1:2", "environment_id": "one"}],
+                "one",
+            )
+        with self.assertRaisesRegex(ValueError, "missing"):
+            distinct("http://127.0.0.1:1", [])
+        distinct(
+            "http://127.0.0.1:1",
+            [{"origin": "http://127.0.0.1:2", "environment_id": "two"}],
+            "one",
+        )
+
+    def test_unauthenticated_fixture_cannot_start_a_comparison(self):
+        import json
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "environments.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "environments": [
+                            {"label": "Fixture", "httpBaseUrl": "http://127.0.0.1:2"}
+                        ]
+                    }
+                )
+            )
+            with (
+                patch(
+                    "fixture_validation.subprocess.run",
+                    return_value=SimpleNamespace(
+                        stdout=json.dumps({"Authenticated": False})
+                    ),
+                ),
+                self.assertRaisesRegex(RuntimeError, "did not authenticate"),
+            ):
+                inspect_environments(Path(directory) / "app", config)
 
 
 class DisplayTests(unittest.TestCase):

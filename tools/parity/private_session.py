@@ -8,6 +8,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from fixture_validation import inspect_environments
+
 
 def cleanup_bus_processes(address):
     count = 0
@@ -34,6 +36,7 @@ def main():
     parser.add_argument("--session", type=Path, required=True)
     parser.add_argument("--binary", type=Path, default=Path("target/debug/t3code-gpui"))
     args = parser.parse_args()
+    environments = inspect_environments(args.binary, args.config)
     args.session.parent.mkdir(parents=True, exist_ok=True)
     launcher = Path(os.environ["T3CODE_ATSPI_LAUNCHER"])
     children = []
@@ -83,6 +86,7 @@ def main():
             "dbus_address": os.environ["DBUS_SESSION_BUS_ADDRESS"],
             "binary": str(args.binary.resolve()),
             "display": env["DISPLAY"],
+            "environments": environments,
         }
         args.session.write_text(json.dumps(manifest, indent=2) + "\n")
         args.session.chmod(0o600)

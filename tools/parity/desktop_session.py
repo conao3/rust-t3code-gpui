@@ -10,6 +10,8 @@ import sys
 import time
 from pathlib import Path
 
+from fixture_validation import distinct
+
 
 def read_display(read_fd, timeout=10):
     deadline = time.monotonic() + timeout
@@ -38,6 +40,11 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--session", type=Path, required=True)
     args = parser.parse_args()
+    configuration = json.loads(args.config.read_text())
+    distinct(
+        f"http://127.0.0.1:{args.reference_port}",
+        [{"origin": e["httpBaseUrl"]} for e in configuration["environments"]],
+    )
     if args.session.exists() or args.reference_profile.exists():
         raise FileExistsError(
             "Use a fresh session directory and reference profile for each comparison"

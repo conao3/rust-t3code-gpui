@@ -18,7 +18,7 @@ python3 tools/parity/desktop_session.py \
   --session .claude-dev/parity/run-001/native-session.json
 ```
 
-The native fixture server must already be running independently. The default native binary is `target/debug/t3code-gpui`; build it before launching. The GUI scenario uses a declared content viewport and theme. For a light scenario, initialize the native fixture's client settings with `gpuiAppearance: "light"` as well.
+The native fixture server must already be running independently. Startup verifies authentication with the native CLI. The launcher rejects a configuration that points to the reference origin; the runner also compares the actual Electron bootstrap origin and both server identities. Origins and identities are retained in the report, without bearer or bootstrap tokens. The default native binary is `target/debug/t3code-gpui`; build it before launching. The GUI scenario uses a declared content viewport and theme. For a light scenario, initialize the native fixture's client settings with `gpuiAppearance: "light"` as well.
 
 To operate an original desktop on an existing X11 display, start it with its isolated profile and these additional arguments:
 

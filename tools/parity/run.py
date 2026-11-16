@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from cdp import Cdp
+from fixture_validation import distinct, environment_descriptor, origin
 from native import Native
 from PIL import Image, ImageChops, ImageStat
 
@@ -144,6 +145,13 @@ async def main():
     native = Native(args.session)
     width, height = scenario["viewport"]
     async with Cdp(args.endpoint) as reference:
+        reference_origin = origin(await reference.server_origin())
+        descriptor = await asyncio.to_thread(environment_descriptor, reference_origin)
+        distinct(
+            reference_origin,
+            native.session.get("environments", []),
+            descriptor["environmentId"],
+        )
         await reference.call(
             "Emulation.setEmulatedMedia",
             features=[{"name": "prefers-color-scheme", "value": scenario["theme"]}],
@@ -184,6 +192,13 @@ async def main():
         )
     report = {
         "scenario": scenario,
+        "fixtures": {
+            "reference": {
+                "origin": reference_origin,
+                "environment_id": descriptor["environmentId"],
+            },
+            "native": native.session["environments"],
+        },
         "targets": reports,
         "visual": comparisons,
         "status": "passed"

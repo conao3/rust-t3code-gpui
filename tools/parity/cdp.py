@@ -25,6 +25,7 @@ class Cdp:
         pages = [p for p in pages if p.get("type") == "page"]
         if len(pages) != 1:
             raise RuntimeError(f"Expected one isolated renderer, got {len(pages)}")
+        self.page_url = pages[0]["url"]
         self.socket = await websockets.connect(
             pages[0]["webSocketDebuggerUrl"], max_size=32 * 1024 * 1024
         )
@@ -58,6 +59,18 @@ class Cdp:
         if "exceptionDetails" in reply:
             raise RuntimeError(str(reply["exceptionDetails"]))
         return reply.get("result", {}).get("value")
+
+    async def server_origin(self):
+        if self.page_url.startswith(("http://", "https://")):
+            return self.page_url
+        result = await self.evaluate(
+            "window.desktopBridge?.getLocalEnvironmentBootstraps().find(e => e.id === 'primary')?.httpBaseUrl"
+        )
+        if not isinstance(result, str):
+            raise TypeError(
+                "The reference desktop did not expose its local server origin"
+            )
+        return result
 
     async def tree(self):
         result = await self.call("Accessibility.getFullAXTree")
