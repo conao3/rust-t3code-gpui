@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, IconName, Selectable as _, Theme,
+    ActiveTheme as _, Disableable as _, Icon, IconName, Selectable as _, Sizable as _, Theme,
     button::{Button, ButtonVariants as _},
     command::{Command, CommandGroup, CommandItem, CommandState},
     diff::{Diff, DiffFile, DiffMode, DiffParseOptions, DiffState},
@@ -16,7 +16,7 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use serde_json::Value;
+use serde_json::{Value, json};
 use t3_client::config::{self, Config, Environment};
 use t3_client::http::Api;
 use t3_client::session::{Change, Connection, ConnectionStatus, Delivery, Launch, ThreadWatch};
@@ -35,6 +35,7 @@ use crate::row_view::{RowEvent, RowView};
 use crate::sidebar::{self, ThreadEntry, ThreadStatus};
 use crate::tables;
 use crate::timeline::{self, Pending, Row, RowKind};
+use crate::workspace;
 
 type CommandFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<u64>> + std::marker::Send>>;
@@ -76,6 +77,8 @@ actions!(
         Stop,
         CycleAppearance,
         OpenPermissions,
+        ToggleThreadDetails,
+        OpenBranchPicker,
     ]
 );
 
@@ -102,6 +105,8 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "commandPalette.toggle" => Box::new(TogglePalette),
         "filePicker.toggle" => Box::new(ToggleFilePicker),
         "diff.toggle" => Box::new(ToggleDiff),
+        "threadPanel.toggle" => Box::new(ToggleThreadDetails),
+        "composer.branch" => Box::new(OpenBranchPicker),
         "settings.connections" => Box::new(ManageHosts),
         "settings.open" => Box::new(OpenSettings),
         "rightPanel.toggle" => Box::new(ToggleExplorer),
@@ -121,6 +126,13 @@ enum ThreadOp {
     Settle,
     Unsettle,
     Archive,
+}
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = t3code_gpui, no_json)]
+struct WorkspaceAction {
+    kind: String,
+    value: Value,
 }
 
 #[derive(Clone, Debug, PartialEq, Action)]
@@ -275,6 +287,9 @@ struct Completion {
 }
 
 struct NewThreadDraft {
+    id: String,
+    environment: Option<String>,
+    workspace_strategy: Value,
     group: Option<String>,
     carry: Option<Value>,
     model: Option<Value>,
@@ -370,7 +385,48 @@ impl Render for ComposerControlsPane {
     }
 }
 
+#[derive(PartialEq)]
+struct DetailsStamp {
+    target: Option<workspace::Target>,
+    status_revision: u64,
+    catalog_revision: u64,
+    draft_strategy: Option<Value>,
+    branch_anchor: Option<&'static str>,
+    branch_request: u64,
+    branch_loading: bool,
+    branch_count: usize,
+    light: bool,
+}
+
+struct DetailsPane {
+    root: WeakEntity<Root>,
+}
+impl Render for DetailsPane {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.root
+            .update(cx, |root, cx| root.render_thread_details(cx))
+            .expect("details root is alive")
+    }
+}
+
 pub struct Root {
+    details_pane: Entity<DetailsPane>,
+    details_stamp: Option<DetailsStamp>,
+    workspace_revision: u64,
+    branch_picker: Entity<CommandState>,
+    branch_anchor: Option<&'static str>,
+    branch_refs: Vec<Value>,
+    branch_cursor: Option<u64>,
+    branch_query: String,
+    branch_request: u64,
+    branch_loading: bool,
+    workspace_watch: Option<workspace::Watch>,
+    workspace_status: workspace::Status,
+    workspace_sender: async_channel::Sender<workspace::Update>,
+    _workspace_updates: Task<()>,
+    canvas_width: f32,
+    details_open: bool,
+    details_popover: bool,
     sidebar_resizing: bool,
     window_drag_pending: bool,
     history: crate::navigation::History,
@@ -487,6 +543,27 @@ impl Root {
                 }
             }
         });
+        let (workspace_sender, workspace_receiver) = async_channel::bounded::<workspace::Update>(8);
+        let workspace_updates = cx.spawn(async move |this, cx| {
+            while let Ok(update) = workspace_receiver.recv().await {
+                if this
+                    .update(cx, |root, cx| {
+                        if root
+                            .workspace_watch
+                            .as_ref()
+                            .is_some_and(|watch| watch.target == update.target)
+                            && root.workspace_status.apply(update.event)
+                        {
+                            root.workspace_revision += 1;
+                            cx.notify();
+                        }
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
         let composer = cx.new(|cx| {
             let mut state = TextareaState::new(window, cx)
                 .placeholder("Ask anything. @ files, $ skills, / commands");
@@ -546,6 +623,25 @@ impl Root {
         list_state.set_follow_mode(FollowMode::Tail);
         let sidebar_root = cx.entity().downgrade();
         Self {
+            details_pane: cx.new(|_| DetailsPane {
+                root: sidebar_root.clone(),
+            }),
+            details_stamp: None,
+            workspace_revision: 0,
+            branch_picker: cx.new(|cx| CommandState::new(window, cx)),
+            branch_anchor: None,
+            branch_refs: Vec::new(),
+            branch_cursor: None,
+            branch_query: String::new(),
+            branch_request: 0,
+            branch_loading: false,
+            workspace_watch: None,
+            workspace_status: workspace::Status::default(),
+            workspace_sender,
+            _workspace_updates: workspace_updates,
+            canvas_width: 0.,
+            details_open: true,
+            details_popover: false,
             sidebar_resizing: false,
             window_drag_pending: false,
             history: crate::navigation::History::default(),
@@ -637,9 +733,15 @@ impl Root {
     /// project the new thread starts in.
     fn composer_cwd(&self) -> Option<(String, String)> {
         if self.draft.is_some() {
-            let (environment, project_id, ..) = self.draft_target()?;
+            let (environment, project_id) = self.draft_project()?;
             let project = self.project_value(&environment, &project_id)?;
-            let root = project.get("workspaceRoot")?.as_str()?.to_string();
+            let root = self
+                .draft
+                .as_ref()
+                .and_then(|draft| draft.workspace_strategy.get("worktreePath"))
+                .and_then(Value::as_str)
+                .or_else(|| project.get("workspaceRoot").and_then(Value::as_str))?
+                .to_string();
             return Some((environment, root));
         }
         let (environment, thread_id) = self.current()?;
@@ -899,6 +1001,7 @@ impl Root {
                     self.file_find_input.read(cx).focus_handle(cx),
                     self.palette.read(cx).focus_handle(cx),
                     self.file_picker.read(cx).focus_handle(cx),
+                    self.branch_picker.read(cx).focus_handle(cx),
                     self.model_picker.read(cx).focus_handle(cx),
                 ]
                 .iter()
@@ -3100,16 +3203,32 @@ impl Root {
         config.clone()
     }
 
-    /// Where the draft starts and with what: the host, the project, the model and the runtime mode.
-    fn draft_target(&self) -> Option<(String, String, Option<Value>, String)> {
+    /// The environment and project of the new thread.
+    fn draft_project(&self) -> Option<(String, String)> {
         let draft = self.draft.as_ref()?;
         let groups = self.project_groups();
         let group = groups
             .iter()
             .find(|g| Some(&g.key) == draft.group.as_ref())?;
-        let member = group.target().clone();
-        let project = self.project_value(&member.environment, &member.project_id)?;
-        let config = self.config_of(&member.environment);
+        let member = draft
+            .environment
+            .as_ref()
+            .and_then(|environment| {
+                group
+                    .members
+                    .iter()
+                    .find(|member| &member.environment == environment)
+            })
+            .unwrap_or_else(|| group.target())
+            .clone();
+        Some((member.environment, member.project_id))
+    }
+
+    fn draft_target(&self) -> Option<(String, String, Option<Value>, String)> {
+        let draft = self.draft.as_ref()?;
+        let (environment, project_id) = self.draft_project()?;
+        let project = self.project_value(&environment, &project_id)?;
+        let config = self.config_of(&environment);
         let defaults = models::new_thread(config.as_ref(), &project, draft.carry.as_ref());
         let model = draft
             .model
@@ -3120,7 +3239,7 @@ impl Root {
             .clone()
             .or_else(|| defaults.map(|(_, r)| r))
             .unwrap_or_else(|| "full-access".into());
-        Some((member.environment, member.project_id, model, runtime_mode))
+        Some((environment, project_id, model, runtime_mode))
     }
 
     fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3138,6 +3257,9 @@ impl Root {
             .and_then(|t| t.get("modelSelection").cloned())
             .filter(|m| !m.is_null());
         self.draft = Some(NewThreadDraft {
+            id: uuid::Uuid::new_v4().to_string(),
+            environment: None,
+            workspace_strategy: json!({"type":"root"}),
             group,
             carry,
             model: None,
@@ -3146,6 +3268,8 @@ impl Root {
         });
         self.message = None;
         self.picker_open = false;
+        self.branch_anchor = None;
+        self.branch_request += 1;
         self.close_thread(cx);
         self.load_composer();
         self.composer
@@ -3153,6 +3277,12 @@ impl Root {
     }
 
     fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.branch_anchor.take().is_some() {
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+            cx.notify();
+            return;
+        }
         if self.permissions_menu.take().is_some() {
             self.permissions_subscription = None;
             if self.picker_open {
@@ -3196,6 +3326,11 @@ impl Root {
             .as_ref()
             .map(|d| d.interaction_mode.clone())
             .unwrap_or_else(|| "default".into());
+        let workspace_strategy = self
+            .draft
+            .as_ref()
+            .map(|draft| draft.workspace_strategy.clone())
+            .unwrap_or_else(|| json!({"type":"root"}));
         let thread_id = uuid::Uuid::new_v4().to_string();
         let title = projects::title_seed(&text);
         self.composer
@@ -3214,6 +3349,7 @@ impl Root {
                             thread_id: &thread_id,
                             project_id: &project_id,
                             title: &title,
+                            workspace_strategy,
                             model,
                             runtime_mode: &runtime_mode,
                             interaction_mode: &interaction_mode,
@@ -4614,14 +4750,15 @@ impl Root {
             .flex_wrap()
             .gap_2()
             .text_size(px(30.))
+            .line_height(px(36.))
             .child(if selected.is_some() {
                 "What should we build in"
             } else {
-                "Choose"
+                ""
             })
             .child(
                 h_flex()
-                    .items_baseline()
+                    .items_center()
                     .child(project)
                     .child(if selected.is_some() { "?" } else { " to start" }),
             );
@@ -4654,12 +4791,756 @@ impl Root {
                                 .px_2()
                                 .items_start()
                                 .pt_1()
+                                .child(self.render_workspace_mode(cx))
                                 .child(div().flex_1())
+                                .when(self.workspace_status.is_repo(), |row| {
+                                    row.child(
+                                        div().w(px(140.)).child(
+                                            self.render_branch_control("composer-branch", cx),
+                                        ),
+                                    )
+                                })
                                 .child(self.render_permissions_control(false, cx)),
                         ),
                     ),
             )
             .into_any_element()
+    }
+
+    fn follow_workspace(&mut self) {
+        let target = self
+            .composer_cwd()
+            .map(|(environment, cwd)| workspace::Target {
+                environment,
+                cwd,
+                include_remote: self.details_open
+                    && workspace::layout(self.canvas_width, true).details_inline
+                    || self.details_popover,
+            });
+        if self.workspace_watch.as_ref().map(|watch| &watch.target) == target.as_ref() {
+            return;
+        }
+        let same_directory = self
+            .workspace_watch
+            .as_ref()
+            .zip(target.as_ref())
+            .is_some_and(|(watch, target)| {
+                watch.target.environment == target.environment && watch.target.cwd == target.cwd
+            });
+        self.workspace_watch = None;
+        if !same_directory {
+            self.branch_request += 1;
+            self.workspace_status = workspace::Status::default();
+            self.branch_anchor = None;
+        }
+        if let Some(target) = target
+            && let Some(connection) = self.connection(&target.environment)
+        {
+            self.workspace_watch = Some(workspace::Watch::new(
+                connection,
+                target,
+                &self.runtime,
+                self.workspace_sender.clone(),
+            ));
+        }
+    }
+
+    fn render_workspace_canvas(&self, pane: AnyElement, cx: &Context<Self>) -> AnyElement {
+        let layout = workspace::layout(self.canvas_width, self.details_open);
+        let card_height =
+            84. + if self.workspace_status.is_repo() {
+                83.
+            } else {
+                0.
+            } + if self.workspace_status.error.is_some() {
+                32.
+            } else {
+                0.
+            };
+        let weak = cx.entity().downgrade();
+        div()
+            .relative()
+            .flex_1()
+            .h_full()
+            .min_w_0()
+            .child(div().h_full().pr(px(layout.inset_end)).child(pane))
+            .when(
+                self.workspace_watch.is_some()
+                    && (layout.details_inline && self.details_open
+                        || !layout.details_inline && self.details_popover),
+                |canvas| {
+                    canvas.child(
+                        div()
+                            .absolute()
+                            .top(px(12.))
+                            .right(px(12.))
+                            .w(px(280.))
+                            .h(px(card_height))
+                            .child(if self.branch_anchor == Some("details-branch") {
+                                self.details_pane.clone().into_any_element()
+                            } else {
+                                self.details_pane
+                                    .clone()
+                                    .cached(
+                                        StyleRefinement::default().w(px(280.)).h(px(card_height)),
+                                    )
+                                    .into_any_element()
+                            }),
+                    )
+                },
+            )
+            .child(
+                canvas(
+                    move |bounds, _, cx| {
+                        let _ = weak.update(cx, |root, cx| {
+                            let width = f32::from(bounds.size.width);
+                            if (root.canvas_width - width).abs() >= 0.5 {
+                                root.canvas_width = width;
+                                cx.notify();
+                            }
+                        });
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full()
+                .top_0()
+                .left_0(),
+            )
+            .into_any_element()
+    }
+
+    fn render_thread_details(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let Some((environment, cwd)) = self.composer_cwd() else {
+            return div().into_any_element();
+        };
+        let config = self
+            .model_catalogs
+            .get(&environment)
+            .map(|(config, _)| config)
+            .unwrap_or(&Value::Null);
+        let label = environment.clone();
+        let groups = self.project_groups();
+        let members = self
+            .draft
+            .as_ref()
+            .and_then(|draft| {
+                groups
+                    .iter()
+                    .find(|group| Some(&group.key) == draft.group.as_ref())
+            })
+            .map(|group| group.members.clone())
+            .unwrap_or_default();
+        let focus = self.focus.clone();
+        let host = Button::new("workspace-host")
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_2p5()
+                    .child(Icon::new(gpui_kit::assets::IconName::Monitor).size(px(16.)))
+                    .child(div().flex_1().text_size(px(13.)).child(label))
+                    .child(Icon::new(IconName::ChevronDown).size(px(16.))),
+            )
+            .ghost()
+            .w_full()
+            .h(px(32.))
+            .px_2p5()
+            .rounded(px(8.))
+            .accessibility_label("Environment")
+            .tooltip(cwd.clone())
+            .dropdown_menu(move |mut menu, _, _| {
+                for member in &members {
+                    menu = menu.menu_with_check(
+                        member.environment.clone(),
+                        member.environment == environment,
+                        Box::new(WorkspaceAction {
+                            kind: "host".into(),
+                            value: json!(member.environment),
+                        }),
+                    );
+                }
+                menu.action_context(focus.clone())
+            });
+        let editors = config
+            .get("availableEditors")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let editor = editors
+            .iter()
+            .filter_map(Value::as_str)
+            .next()
+            .unwrap_or("file-manager")
+            .to_string();
+        let focus = self.focus.clone();
+        let editor_button = Button::new("workspace-editor")
+            .label(format!("Open in {}", workspace::editor_label(&editor)))
+            .icon(gpui_kit::assets::IconName::ExternalLink)
+            .ghost()
+            .w_full()
+            .h(px(32.))
+            .px_2p5()
+            .rounded(px(8.))
+            .accessibility_label("Open in editor")
+            .dropdown_menu(move |mut menu, _, _| {
+                for editor in editors.iter().filter_map(Value::as_str) {
+                    menu = menu.menu(
+                        workspace::editor_label(editor),
+                        Box::new(WorkspaceAction {
+                            kind: "editor".into(),
+                            value: json!(editor),
+                        }),
+                    );
+                }
+                menu.action_context(focus.clone())
+            });
+        v_flex()
+            .size_full()
+            .id("thread-details")
+            .role(accesskit::Role::Region)
+            .aria_label("Thread details")
+            .rounded(px(16.))
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.popover)
+            .text_color(theme.foreground.opacity(0.8))
+            .text_size(px(13.))
+            .child(
+                v_flex()
+                    .px_2()
+                    .pt_2()
+                    .pb_2p5()
+                    .child(host)
+                    .child(editor_button),
+            )
+            .when(self.workspace_status.is_repo(), |card| {
+                let changes = &self.workspace_status.local["workingTree"];
+                card.child(
+                    v_flex()
+                        .px_2()
+                        .pt_2()
+                        .pb_2p5()
+                        .border_t_1()
+                        .border_color(theme.border.opacity(0.65))
+                        .child(self.render_branch_control("details-branch", cx))
+                        .child(
+                            Button::new("workspace-changes")
+                                .child(
+                                    h_flex()
+                                        .gap_2p5()
+                                        .w_full()
+                                        .child(
+                                            Icon::new(gpui_kit::assets::IconName::FileDiff)
+                                                .size(px(16.)),
+                                        )
+                                        .child("Changes")
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child("Uncommitted"),
+                                        )
+                                        .child(div().text_xs().text_color(theme.success).child(
+                                            format!(
+                                                "+{}",
+                                                changes["insertions"].as_u64().unwrap_or(0)
+                                            ),
+                                        ))
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(format!(
+                                                    "-{}",
+                                                    changes["deletions"].as_u64().unwrap_or(0)
+                                                )),
+                                        ),
+                                )
+                                .ghost()
+                                .w_full()
+                                .h(px(32.))
+                                .px_2p5()
+                                .rounded(px(8.))
+                                .accessibility_label("Open changes")
+                                .on_click(cx.listener(|root, _, _, cx| root.toggle_diff(cx))),
+                        ),
+                )
+            })
+            .when_some(self.workspace_status.error.clone(), |card, error| {
+                card.child(
+                    div()
+                        .h(px(32.))
+                        .px_3()
+                        .pb_2()
+                        .text_xs()
+                        .truncate()
+                        .text_color(theme.danger)
+                        .child(error),
+                )
+            })
+            .into_any_element()
+    }
+
+    fn render_workspace_mode(&self, cx: &Context<Self>) -> AnyElement {
+        let worktree = self
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.workspace_strategy["type"].as_str() == Some("worktree"));
+        let focus = self.focus.clone();
+        Button::new("workspace-mode")
+            .child(
+                h_flex()
+                    .gap_1()
+                    .text_size(px(12.))
+                    .child(
+                        Icon::new(if worktree {
+                            gpui_kit::assets::IconName::GitBranch
+                        } else {
+                            gpui_kit::assets::IconName::Folder
+                        })
+                        .size(px(12.)),
+                    )
+                    .child(if worktree {
+                        "New worktree"
+                    } else {
+                        "Current checkout"
+                    }),
+            )
+            .ghost()
+            .compact()
+            .h(px(28.))
+            .px_1()
+            .text_color(cx.theme().muted_foreground)
+            .role(accesskit::Role::ComboBox)
+            .accessibility_label("Workspace")
+            .dropdown_menu(move |mut menu, _, _| {
+                for (label, mode, checked) in [
+                    ("Current checkout", "root", !worktree),
+                    ("New worktree", "worktree", worktree),
+                ] {
+                    menu = menu.menu_with_check(
+                        label,
+                        checked,
+                        Box::new(WorkspaceAction {
+                            kind: "mode".into(),
+                            value: json!(mode),
+                        }),
+                    );
+                }
+                menu.action_context(focus.clone())
+            })
+            .into_any_element()
+    }
+
+    fn render_branch_control(&self, id: &'static str, cx: &Context<Self>) -> AnyElement {
+        let branch = self
+            .draft
+            .as_ref()
+            .and_then(|draft| {
+                draft
+                    .workspace_strategy
+                    .get("baseRef")
+                    .or_else(|| draft.workspace_strategy.get("branch"))
+            })
+            .and_then(Value::as_str)
+            .or_else(|| self.workspace_status.branch())
+            .unwrap_or("Select branch")
+            .to_string();
+        let button = Button::new(id)
+            .label(branch)
+            .icon(gpui_kit::assets::IconName::GitBranch)
+            .ghost()
+            .w_full()
+            .h(px(32.))
+            .px_2p5()
+            .rounded(px(8.))
+            .accessibility_label("Select branch")
+            .role(accesskit::Role::ComboBox)
+            .on_click(
+                cx.listener(move |root, _, window, cx| root.open_branch_picker(id, window, cx)),
+            );
+        let mut popup = gpui_kit::base::Popup::new(id, button)
+            .anchor(if id == "details-branch" {
+                Anchor::TopRight
+            } else {
+                Anchor::BottomRight
+            })
+            .offset(px(4.));
+        if self.branch_anchor == Some(id) {
+            let weak = cx.entity().downgrade();
+            let search = weak.clone();
+            let cancel = weak.clone();
+            let mut items = self
+                .branch_refs
+                .iter()
+                .map(|reference| {
+                    CommandItem::new()
+                        .label(reference["name"].as_str().unwrap_or_default().to_string())
+                        .checked(reference["current"].as_bool() == Some(true))
+                        .action(Box::new(WorkspaceAction {
+                            kind: "branch".into(),
+                            value: reference.clone(),
+                        }))
+                })
+                .collect::<Vec<_>>();
+            if self.branch_cursor.is_some() {
+                items.push(
+                    CommandItem::new()
+                        .label("Load more branches")
+                        .action(Box::new(WorkspaceAction {
+                            kind: "more-branches".into(),
+                            value: Value::Null,
+                        })),
+                );
+            }
+            popup = popup.content(
+                div()
+                    .w(px(320.))
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .bg(cx.theme().popover)
+                    .child(
+                        Command::new(&self.branch_picker)
+                            .placeholder("Search refs...")
+                            .filterable(false)
+                            .max_h(px(224.))
+                            .items(items)
+                            .on_query(move |query, _, cx| {
+                                let _ = search.update(cx, |root, cx| {
+                                    root.search_branches(query.to_string(), false, cx)
+                                });
+                            })
+                            .on_cancel(move |window, cx| {
+                                let _ = cancel.update(cx, |root, cx| {
+                                    root.branch_anchor = None;
+                                    root.composer
+                                        .update(cx, |state, cx| state.focus(window, cx));
+                                    cx.notify();
+                                });
+                            }),
+                    )
+                    .when(
+                        self.draft.as_ref().is_some_and(|draft| {
+                            draft.workspace_strategy["type"].as_str() == Some("worktree")
+                        }),
+                        |popup| {
+                            popup.child(
+                                h_flex()
+                                    .justify_between()
+                                    .px_3()
+                                    .py_2()
+                                    .border_t_1()
+                                    .border_color(cx.theme().border.opacity(0.6))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .child("Start from remote"),
+                                    )
+                                    .child(
+                                        gpui_kit::component::switch::Switch::new(
+                                            "branch-from-origin",
+                                        )
+                                        .small()
+                                        .accessibility_label("Start worktree from remote")
+                                        .checked(self.draft.as_ref().is_some_and(|draft| {
+                                            draft.workspace_strategy["startFromOrigin"].as_bool()
+                                                == Some(true)
+                                        }))
+                                        .on_change(
+                                            cx.listener(|root, checked, _, cx| {
+                                                if let Some(draft) = root.draft.as_mut() {
+                                                    draft.workspace_strategy["startFromOrigin"] =
+                                                        json!(*checked);
+                                                }
+                                                cx.notify();
+                                            }),
+                                        ),
+                                    ),
+                            )
+                        },
+                    ),
+            )
+        }
+        popup.into_any_element()
+    }
+
+    fn open_branch_picker(
+        &mut self,
+        id: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.workspace_status.is_repo() {
+            return;
+        }
+        self.branch_anchor = (self.branch_anchor != Some(id)).then_some(id);
+        if self.branch_anchor.is_some() {
+            self.branch_request += 1;
+            self.branch_loading = false;
+            self.branch_picker.update(cx, |state, cx| {
+                state.set_query("", window, cx);
+                state.focus(window, cx);
+            });
+            self.search_branches(String::new(), false, cx);
+        } else {
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    fn search_branches(&mut self, query: String, more: bool, cx: &mut Context<Self>) {
+        let Some((environment, cwd)) = self.composer_cwd() else {
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        self.branch_query = query.clone();
+        if self.branch_loading {
+            cx.notify();
+            return;
+        }
+        self.branch_request += 1;
+        let request = self.branch_request;
+        self.branch_loading = true;
+        let cursor = if more { self.branch_cursor } else { None };
+        if !more {
+            self.branch_refs.clear();
+            self.branch_cursor = None;
+        }
+        let runtime = self.runtime.clone();
+        let requested_query = query.clone();
+        cx.spawn(async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                let mut input = json!({"cwd":cwd,"limit":200});
+                if query.is_empty() && !more {
+                    connection
+                        .request("vcs.refreshStatus", json!({"cwd":cwd,"localOnly":true}))
+                        .await?;
+                    input["refresh"] = json!(true);
+                }
+                if !query.trim().is_empty() {
+                    input["query"] = json!(query.trim());
+                }
+                if let Some(cursor) = cursor {
+                    input["cursor"] = json!(cursor);
+                }
+                connection.request("vcs.listRefs", input).await
+            })
+            .await;
+            let _ = this.update(cx, |root, cx| {
+                if root.branch_request != request || root.branch_anchor.is_none() {
+                    return;
+                }
+                root.branch_loading = false;
+                if root.branch_query != requested_query {
+                    root.search_branches(root.branch_query.clone(), false, cx);
+                    return;
+                }
+                match result {
+                    Ok(result) => {
+                        root.branch_refs
+                            .extend(result["refs"].as_array().cloned().unwrap_or_default());
+                        root.branch_cursor = result["nextCursor"].as_u64();
+                    }
+                    Err(error) => {
+                        root.message = Some(format!("Could not load branches: {error:#}"))
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn workspace_action(
+        &mut self,
+        action: &WorkspaceAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match action.kind.as_str() {
+            "host" => {
+                if let Some(draft) = self.draft.as_mut() {
+                    draft.environment = action.value.as_str().map(str::to_string);
+                    draft.workspace_strategy = json!({"type":"root"});
+                    draft.model = None;
+                    draft.runtime_mode = None;
+                }
+            }
+            "editor" => {
+                if let Some((environment, cwd)) = self.composer_cwd()
+                    && let Some(connection) = self.connection(&environment)
+                {
+                    let input = json!({"cwd":cwd,"editor":action.value});
+                    let runtime = self.runtime.clone();
+                    cx.spawn(async move |this, cx| {
+                        if let Err(error) = on_runtime(&runtime, async move {
+                            connection.request("shell.openInEditor", input).await
+                        })
+                        .await
+                        {
+                            let _ = this.update(cx, |root, cx| {
+                                root.message = Some(format!("Could not open editor: {error:#}"));
+                                cx.notify();
+                            });
+                        }
+                    })
+                    .detach();
+                }
+            }
+            "mode" => {
+                if let Some(draft) = self.draft.as_mut() {
+                    draft.workspace_strategy = if action.value.as_str() == Some("worktree") {
+                        json!({"type":"worktree","baseRef":self.workspace_status.branch().unwrap_or("HEAD"),"startFromOrigin":false})
+                    } else {
+                        json!({"type":"root"})
+                    };
+                }
+            }
+            "more-branches" => {
+                self.search_branches(self.branch_query.clone(), true, cx);
+                return;
+            }
+            "branch" => self.select_workspace_branch(action.value.clone(), cx),
+            _ => return,
+        }
+        if action.kind != "more-branches" {
+            self.branch_anchor = None;
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    fn select_workspace_branch(&mut self, reference: Value, cx: &mut Context<Self>) {
+        let Some(name) = reference["name"].as_str().map(str::to_string) else {
+            return;
+        };
+        if let Some(draft) = self.draft.as_mut()
+            && draft.workspace_strategy["type"].as_str() == Some("worktree")
+        {
+            draft.workspace_strategy["baseRef"] = json!(name);
+            return;
+        }
+        let Some((environment, _)) = self.composer_cwd() else {
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let thread_id = self.current().map(|(_, id)| id);
+        let draft_id = self.draft.as_ref().map(|draft| draft.id.clone());
+        let project = if let Some((_, project_id, ..)) =
+            self.draft_target().filter(|_| self.draft.is_some())
+        {
+            self.project_value(&environment, &project_id)
+        } else {
+            self.current()
+                .and_then(|(_, id)| self.thread_value(&environment, &id))
+                .and_then(|thread| {
+                    thread["projectId"]
+                        .as_str()
+                        .and_then(|id| self.project_value(&environment, id))
+                })
+        };
+        let Some(project_root) = project
+            .as_ref()
+            .and_then(|project| project["workspaceRoot"].as_str())
+        else {
+            return;
+        };
+        let current_worktree = self
+            .draft
+            .as_ref()
+            .and_then(|draft| draft.workspace_strategy["worktreePath"].as_str());
+        let thread = thread_id
+            .as_ref()
+            .and_then(|id| self.thread_value(&environment, id));
+        let current_worktree = current_worktree.or_else(|| {
+            thread
+                .as_ref()
+                .and_then(|thread| thread["worktreePath"].as_str())
+        });
+        let target = workspace::branch_target(
+            project_root,
+            self.workspace_status
+                .local
+                .pointer("/workingTree/rootPath")
+                .and_then(Value::as_str)
+                .filter(|_| current_worktree.is_none()),
+            current_worktree,
+            &reference,
+        );
+        let sessions = if current_worktree != target.worktree.as_deref() {
+            self.open
+                .as_ref()
+                .map(|open| {
+                    open.watch
+                        .state()
+                        .lock()
+                        .expect("thread lock")
+                        .projection
+                        .get("providerSessions")
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .unwrap_or_default()
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let runtime = self.runtime.clone();
+        cx.spawn(async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                let branch = if target.reuse {
+                    name
+                } else {
+                    connection
+                        .request("vcs.switchRef", json!({"cwd":target.cwd,"refName":name}))
+                        .await?["refName"]
+                        .as_str()
+                        .unwrap_or(&name)
+                        .to_string()
+                };
+                let existing = target.worktree;
+                if let Some(thread_id) = thread_id {
+                    for session in sessions {
+                        connection.dispatch(json!({
+                            "type":"provider-session.detach",
+                            "threadId":thread_id,
+                            "providerSessionId":session["id"],
+                            "reason":"client-requested"
+                        })).await?;
+                    }
+                    connection.dispatch(json!({
+                        "type":"thread.metadata.update",
+                        "threadId":thread_id,
+                        "branch":branch,
+                        "worktreePath":existing
+                    })).await?;
+                }
+                Ok::<_, anyhow::Error>((branch, existing))
+            }).await;
+            let _ = this.update(cx, |root, cx| {
+                match result {
+                    Ok((branch, existing)) => if let Some(draft) = root.draft.as_mut().filter(|draft| Some(&draft.id) == draft_id.as_ref()) {
+                        draft.workspace_strategy = match existing {
+                            Some(path) => json!({"type":"existing_worktree","worktreePath":path,"branch":branch}),
+                            None => json!({"type":"root","branch":branch})
+                        };
+                    },
+                    Err(error) => root.message = Some(format!("Could not switch branch: {error:#}")),
+                }
+                cx.notify();
+            });
+        }).detach();
     }
 
     fn window_drag_area(&self, id: &'static str, cx: &Context<Self>) -> Stateful<Div> {
@@ -4765,6 +5646,19 @@ impl Root {
                 )
             })
             .child(content)
+            .when(self.workspace_watch.is_some(), |bar| {
+                bar.child(
+                    Button::new("thread-details-toggle")
+                        .icon(gpui_kit::assets::IconName::PanelRight)
+                        .ghost()
+                        .size(px(28.))
+                        .accessibility_label("Toggle thread details panel")
+                        .tooltip("Toggle thread details")
+                        .on_click(cx.listener(|_, _, window, cx| {
+                            window.dispatch_action(Box::new(ToggleThreadDetails), cx)
+                        })),
+                )
+            })
             .when(custom_controls, |bar| {
                 bar.child(
                     h_flex()
@@ -5105,6 +5999,28 @@ impl Render for Root {
             self.sidebar_pane.update(cx, |_, cx| cx.notify());
         }
         self.follow_explorer(cx);
+        self.follow_workspace();
+        let details_stamp = DetailsStamp {
+            target: self
+                .workspace_watch
+                .as_ref()
+                .map(|watch| watch.target.clone()),
+            status_revision: self.workspace_revision,
+            catalog_revision: self.model_catalog_revision,
+            draft_strategy: self
+                .draft
+                .as_ref()
+                .map(|draft| draft.workspace_strategy.clone()),
+            branch_anchor: self.branch_anchor,
+            branch_request: self.branch_request,
+            branch_loading: self.branch_loading,
+            branch_count: self.branch_refs.len(),
+            light: self.settings.light_theme,
+        };
+        if self.details_stamp.as_ref() != Some(&details_stamp) {
+            self.details_stamp = Some(details_stamp);
+            self.details_pane.update(cx, |_, cx| cx.notify());
+        }
         if let Some(text) = self.pending_composer.take() {
             self.composer
                 .update(cx, |state, cx| state.set_value(text, window, cx));
@@ -5181,6 +6097,20 @@ impl Render for Root {
                 root.toggle_file_picker(window, cx)
             }))
             .on_action(cx.listener(|root, _: &ToggleDiff, _, cx| root.toggle_diff(cx)))
+            .on_action(cx.listener(|root, _: &OpenBranchPicker, window, cx| {
+                root.open_branch_picker("composer-branch", window, cx)
+            }))
+            .on_action(cx.listener(|root, action: &WorkspaceAction, window, cx| {
+                root.workspace_action(action, window, cx);
+            }))
+            .on_action(cx.listener(|root, _: &ToggleThreadDetails, _, cx| {
+                if workspace::layout(root.canvas_width, root.details_open).details_inline {
+                    root.details_open = !root.details_open;
+                } else {
+                    root.details_popover = !root.details_popover;
+                }
+                cx.notify();
+            }))
             .on_action(cx.listener(|root, _: &ToggleExplorer, _, cx| root.toggle_explorer(cx)))
             .on_action(
                 cx.listener(|root, _: &ManageHosts, window, cx| root.toggle_hosts(window, cx)),
@@ -5274,6 +6204,8 @@ impl Render for Root {
             .on_action(cx.listener(|root, action: &PickProjectAction, _, cx| {
                 if let Some(draft) = root.draft.as_mut() {
                     draft.group = Some(action.key.clone());
+                    draft.environment = None;
+                    draft.workspace_strategy = json!({"type":"root"});
                     cx.notify();
                 }
             }))
@@ -5343,7 +6275,7 @@ impl Render for Root {
                                 ),
                         )
                     })
-                    .child(pane)
+                    .child(self.render_workspace_canvas(pane, cx))
                     .children(self.render_explorer(cx))
                     .children(self.render_file_panel(cx)),
             )

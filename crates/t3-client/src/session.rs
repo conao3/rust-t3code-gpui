@@ -51,6 +51,7 @@ pub struct Launch<'a> {
     pub thread_id: &'a str,
     pub project_id: &'a str,
     pub title: &'a str,
+    pub workspace_strategy: Value,
     pub model: Value,
     pub runtime_mode: &'a str,
     pub interaction_mode: &'a str,
@@ -211,7 +212,7 @@ impl Connection {
             "modelSelection": launch.model,
             "runtimeMode": launch.runtime_mode,
             "interactionMode": launch.interaction_mode,
-            "workspaceStrategy": {"type": "root"},
+            "workspaceStrategy": launch.workspace_strategy,
             "initialMessage": {
                 "messageId": uuid::Uuid::new_v4().to_string(),
                 "text": launch.text,

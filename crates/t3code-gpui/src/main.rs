@@ -14,6 +14,7 @@ mod row_view;
 mod sidebar;
 mod tables;
 mod timeline;
+mod workspace;
 
 use std::path::PathBuf;
 use std::process::ExitCode;

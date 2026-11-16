@@ -351,6 +351,7 @@ async fn follows_the_shell_and_a_thread_on_a_real_server() {
             thread_id: &launched_id,
             project_id: &project_id,
             title: "launched",
+            workspace_strategy: json!({"type":"root"}),
             model: json!({"instanceId": "integration-missing", "model": "none"}),
             runtime_mode: "full-access",
             interaction_mode: "default",
