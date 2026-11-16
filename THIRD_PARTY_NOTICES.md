@@ -61,3 +61,31 @@ SOFTWARE.
 ## GPUI accessibility cache
 
 `vendor/gpui-pre/` is `gpui-pre` 0.3.12, distributed under Apache-2.0 (`vendor/gpui-pre/LICENSE-APACHE`). The local patch replays accessible nodes, focus mappings, bounds and action listeners together with cached view prepaint data. It preserves the accessible tree when a pane reuses its rendering cache. Window bounds reach the platform adapter with each accessible update. Text inputs with exposed values gain a synthetic text run so AT-SPI can read their content.
+
+## T3 Code interface
+
+Interface behavior, permission labels and descriptions are based on [T3 Code](https://github.com/pingdotgg/t3code/tree/24e77473ecf41bc1f7142529c7911c1c1aae1d76), including `apps/web/src/components/chat/runtimeModeConfig.ts` and `ComposerFooterControls.tsx`. T3 Code is distributed under the MIT License:
+
+```text
+MIT License
+
+Copyright (c) 2026 T3 Tools Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

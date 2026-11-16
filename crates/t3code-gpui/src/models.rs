@@ -63,18 +63,16 @@ pub fn instances(config: &Value) -> Vec<Instance> {
                 .and_then(Value::as_str)
                 .unwrap_or(&instance_id)
                 .to_string();
-            let runtime_modes = p
-                .get("supportedRuntimeModes")
-                .and_then(Value::as_array)
-                .map(|modes| {
-                    modes
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .filter(|m| RUNTIME_MODES.contains(m))
-                        .map(str::to_string)
-                        .collect()
+            let supported = p.get("supportedRuntimeModes").and_then(Value::as_array);
+            let runtime_modes = RUNTIME_MODES
+                .iter()
+                .filter(|mode| {
+                    supported.is_none_or(|modes| {
+                        modes.is_empty() || modes.iter().any(|value| value.as_str() == Some(**mode))
+                    })
                 })
-                .unwrap_or_else(|| RUNTIME_MODES.iter().map(|m| m.to_string()).collect());
+                .map(|mode| mode.to_string())
+                .collect();
             Instance {
                 name,
                 driver: text(p, "driver").to_string(),
@@ -331,6 +329,19 @@ mod tests {
             "6.1 Sol"
         );
         assert_eq!(short_name(&json!({"name":"GPT-5.4"}), "codex"), "GPT-5.4");
+    }
+
+    #[test]
+    fn runtime_modes_follow_the_reference_order_and_empty_means_all() {
+        for reported in [json!([]), json!(null)] {
+            let mut value = config(json!({}));
+            value["providers"][2]["supportedRuntimeModes"] = reported;
+            assert_eq!(instances(&value)[0].runtime_modes, RUNTIME_MODES);
+        }
+        let mut value = config(json!({}));
+        value["providers"][2]["supportedRuntimeModes"] =
+            json!(["full-access", "auto", "auto", "future"]);
+        assert_eq!(instances(&value)[0].runtime_modes, ["auto", "full-access"]);
     }
 
     #[test]

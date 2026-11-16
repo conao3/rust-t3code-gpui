@@ -10,8 +10,7 @@ use gpui_kit::component::{
     diff::{Diff, DiffFile, DiffMode, DiffParseOptions, DiffState},
     h_flex,
     input::{CursorBlink, Input, InputEvent, InputState, Position, Textarea, TextareaState},
-    menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu},
-    popover::Popover,
+    menu::{ContextMenuExt as _, DropdownMenu as _},
     text::{TextView, TextViewState},
     v_flex,
 };
@@ -30,6 +29,7 @@ use crate::drafts::{self, Drafts};
 use crate::explorer;
 use crate::keymap;
 use crate::models;
+use crate::permissions;
 use crate::projects::{self, ProjectGroup};
 use crate::row_view::{RowEvent, RowView};
 use crate::sidebar::{self, ThreadEntry, ThreadStatus};
@@ -153,8 +153,8 @@ struct PickModelAction {
 
 #[derive(Clone, Debug, PartialEq, Action)]
 #[action(namespace = t3code_gpui, no_json)]
-struct SetRuntimeModeAction {
-    mode: String,
+struct PickProjectAction {
+    key: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Action)]
@@ -398,7 +398,7 @@ pub struct Root {
     message: Option<String>,
     picker_open: bool,
     picker_instance: Option<String>,
-    permissions_menu: Option<Entity<PopupMenu>>,
+    permissions_menu: Option<Entity<permissions::Menu>>,
     permissions_subscription: Option<Subscription>,
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
@@ -3152,17 +3152,23 @@ impl Root {
             .update(cx, |state, cx| state.focus(window, cx));
     }
 
-    fn cancel(&mut self, cx: &mut Context<Self>) {
-        if self.picker_open {
-            self.picker_open = false;
+    fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.permissions_menu.take().is_some() {
+            self.permissions_subscription = None;
+            if self.picker_open {
+                self.model_picker
+                    .update(cx, |state, cx| state.focus(window, cx));
+            } else {
+                self.composer
+                    .update(cx, |state, cx| state.focus(window, cx));
+            }
             cx.notify();
             return;
         }
-        if self.draft.is_some() {
-            self.stash_composer(cx);
-            self.draft = None;
-            self.load_composer();
-            self.message = None;
+        if self.picker_open {
+            self.picker_open = false;
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
         }
     }
@@ -3315,9 +3321,10 @@ impl Root {
 
     fn ensure_permissions_menu(
         &mut self,
+        keyboard: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Option<Entity<PopupMenu>> {
+    ) -> Option<Entity<permissions::Menu>> {
         if let Some(menu) = &self.permissions_menu {
             return Some(menu.clone());
         }
@@ -3331,51 +3338,54 @@ impl Root {
             .find(|instance| instance.instance_id == instance_id)?
             .runtime_modes
             .clone();
-        let focus = self.model_picker.read(cx).focus_handle(cx);
-        let menu = PopupMenu::build(window, cx, move |mut menu, _, _| {
-            for mode in &modes {
-                let label = match mode.as_str() {
-                    "full-access" => "Full access",
-                    "approval-required" => "Supervised",
-                    "auto-accept-edits" => "Auto-accept edits",
-                    _ => "Auto",
-                };
-                menu = menu.menu_with_check(
-                    label,
-                    *mode == current,
-                    Box::new(SetRuntimeModeAction { mode: mode.clone() }),
-                );
-            }
-            menu.action_context(focus)
-        });
-        self.permissions_subscription =
-            Some(
-                cx.subscribe_in(&menu, window, |root, _, _: &DismissEvent, window, cx| {
-                    root.permissions_menu = None;
-                    root.permissions_subscription = None;
+        let menu = cx.new(|cx| permissions::Menu::new(modes, current, keyboard, window, cx));
+        self.permissions_subscription = Some(cx.subscribe_in(
+            &menu,
+            window,
+            |root, _, event: &permissions::Event, window, cx| {
+                if let permissions::Event::Select(mode) = event
+                    && root
+                        .composer_target()
+                        .is_some_and(|(_, _, current, _)| current != *mode)
+                {
+                    root.set_runtime_mode(mode.clone(), cx);
+                }
+                root.permissions_menu = None;
+                root.permissions_subscription = None;
+                if root.picker_open {
                     root.model_picker
                         .update(cx, |state, cx| state.focus(window, cx));
-                    cx.notify();
-                }),
-            );
+                } else {
+                    root.composer
+                        .update(cx, |state, cx| state.focus(window, cx));
+                }
+                cx.notify();
+            },
+        ));
         self.permissions_menu = Some(menu.clone());
-        menu.focus_handle(cx).focus(window, cx);
+        let focus = menu.focus_handle(cx);
+        window.on_next_frame(move |window, cx| focus.focus(window, cx));
         Some(menu)
     }
 
-    fn open_permissions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_permissions(&mut self, keyboard: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.composer_target().is_none() {
             return;
         }
         if self.permissions_menu.take().is_some() {
             self.permissions_subscription = None;
-            self.model_picker
-                .update(cx, |state, cx| state.focus(window, cx));
+            if self.picker_open {
+                self.model_picker
+                    .update(cx, |state, cx| state.focus(window, cx));
+            } else {
+                self.composer
+                    .update(cx, |state, cx| state.focus(window, cx));
+            }
         } else {
-            if !self.picker_open {
+            if keyboard && !self.picker_open {
                 self.toggle_model_picker(window, cx);
             }
-            self.ensure_permissions_menu(window, cx);
+            self.ensure_permissions_menu(keyboard, window, cx);
         }
         cx.notify();
     }
@@ -4154,18 +4164,10 @@ impl Root {
                         }))
                 })
             }));
-            let (runtime_mode, interaction_mode) = target
+            let interaction_mode = target
                 .as_ref()
-                .map(|(_, _, r, i)| (r.clone(), i.clone()))
+                .map(|(_, _, _, mode)| mode.as_str())
                 .unwrap_or_default();
-            let permissions_root = cx.entity().downgrade();
-            let permissions_content_root = permissions_root.clone();
-            let runtime_label = match runtime_mode.as_str() {
-                "full-access" => "Full access",
-                "approval-required" => "Supervised",
-                "auto-accept-edits" => "Auto-accept edits",
-                _ => "Auto",
-            };
             let weak = cx.entity().downgrade();
             let close = move |window: &mut Window, cx: &mut App| {
                 let _ = weak.update(cx, |root, cx| {
@@ -4426,53 +4428,7 @@ impl Root {
                                 )
                             },
                         )
-                        .child(
-                            Popover::new("permissions-popover")
-                                .appearance(false)
-                                .overlay_closable(false)
-                                .anchor(Anchor::BottomRight)
-                                .open(self.permissions_menu.is_some())
-                                .trigger(
-                                    Button::new("permissions")
-                                        .label(runtime_label)
-                                        .icon(match runtime_mode.as_str() {
-                                            "full-access" => gpui_kit::assets::IconName::ShieldOff,
-                                            "approval-required" => gpui_kit::assets::IconName::Lock,
-                                            "auto-accept-edits" => {
-                                                gpui_kit::assets::IconName::PenLine
-                                            }
-                                            _ => gpui_kit::assets::IconName::Sparkles,
-                                        })
-                                        .compact()
-                                        .ghost()
-                                        .text_size(px(12.))
-                                        .text_color(theme.muted_foreground),
-                                )
-                                .on_open_change(move |open, window, cx| {
-                                    let _ = permissions_root.update(cx, |root, cx| {
-                                        let was_open = root.permissions_menu.is_some();
-                                        if *open {
-                                            root.ensure_permissions_menu(window, cx);
-                                        } else {
-                                            root.permissions_menu = None;
-                                            root.permissions_subscription = None;
-                                        }
-                                        if was_open != root.permissions_menu.is_some() {
-                                            cx.notify();
-                                        }
-                                    });
-                                })
-                                .content(move |_, window, cx| {
-                                    permissions_content_root
-                                        .update(cx, |root, cx| {
-                                            root.ensure_permissions_menu(window, cx)
-                                        })
-                                        .ok()
-                                        .flatten()
-                                        .map(|menu| menu.into_any_element())
-                                        .unwrap_or_else(|| div().into_any_element())
-                                }),
-                        ),
+                        .child(self.render_permissions_control(true, cx)),
                 )
         });
         div()
@@ -4480,6 +4436,36 @@ impl Root {
             .w_full()
             .child(toolbar.child(self.composer_button(cx)))
             .children(picker)
+            .into_any_element()
+    }
+
+    fn render_permissions_control(&self, inside_picker: bool, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let runtime_mode = self
+            .composer_target()
+            .map(|(_, _, mode, _)| mode)
+            .unwrap_or_default();
+        let (runtime_label, description, icon) = permissions::presentation(&runtime_mode);
+        let trigger = Button::new("permissions")
+            .label(runtime_label)
+            .accessibility_label(format!("Permissions: {runtime_label}"))
+            .icon(icon)
+            .tooltip(format!("Permissions: {runtime_label}. {description}"))
+            .compact()
+            .ghost()
+            .text_size(px(12.))
+            .text_color(theme.muted_foreground)
+            .selected(self.permissions_menu.is_some())
+            .on_click(cx.listener(|root, _, window, cx| root.open_permissions(false, window, cx)));
+        gpui_kit::base::Popup::new("permissions-popover", trigger)
+            .anchor(Anchor::BottomRight)
+            .offset(px(4.))
+            .when_some(
+                self.permissions_menu
+                    .clone()
+                    .filter(|_| inside_picker == self.picker_open),
+                |popup, menu| popup.content(menu),
+            )
             .into_any_element()
     }
 
@@ -4537,7 +4523,7 @@ impl Root {
             .relative()
             .w_full()
             .max_w(px(736.))
-            .mb_5()
+            .when(self.draft.is_none(), |content| content.mb_5())
             .rounded(px(16.))
             .border_1()
             .border_color(theme.border)
@@ -4586,45 +4572,92 @@ impl Root {
         groups: &[ProjectGroup],
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let message = self.render_message(cx);
-        let theme = cx.theme();
-        let choices = groups.iter().enumerate().map(|(i, group)| {
-            let key = group.key.clone();
-            let hosts: Vec<&str> = group
-                .members
-                .iter()
-                .map(|m| m.environment.as_str())
-                .collect();
-            Button::new(("project", i))
-                .label(format!("{} · {}", group.title, hosts.join(", ")))
-                .compact()
-                .outline()
-                .selected(draft.group.as_ref() == Some(&group.key))
-                .on_click(cx.listener(move |root, _, _, cx| {
-                    if let Some(draft) = root.draft.as_mut() {
-                        draft.group = Some(key.clone());
-                    }
-                    cx.notify();
-                }))
-        });
+        let selected = groups
+            .iter()
+            .find(|group| draft.group.as_ref() == Some(&group.key));
+        let title = selected
+            .map(|group| group.title.clone())
+            .unwrap_or_else(|| "Choose a project".into());
+        let choices = groups.to_vec();
+        let selected_key = draft.group.clone();
+        let focus = self.focus.clone();
+        let project = Button::new("draft-project")
+            .child(
+                div()
+                    .text_size(px(30.))
+                    .line_height(px(36.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(title),
+            )
+            .accessibility_label("Choose project")
+            .ghost()
+            .compact()
+            .h(px(36.))
+            .px_0()
+            .text_size(px(30.))
+            .font_weight(FontWeight::MEDIUM)
+            .dropdown_menu(move |mut menu, _, _| {
+                for group in &choices {
+                    menu = menu.menu_with_check(
+                        group.title.clone(),
+                        selected_key.as_ref() == Some(&group.key),
+                        Box::new(PickProjectAction {
+                            key: group.key.clone(),
+                        }),
+                    );
+                }
+                menu.action_context(focus.clone())
+            });
+        let heading = h_flex()
+            .justify_center()
+            .items_center()
+            .flex_wrap()
+            .gap_2()
+            .text_size(px(30.))
+            .child(if selected.is_some() {
+                "What should we build in"
+            } else {
+                "Choose"
+            })
+            .child(
+                h_flex()
+                    .items_baseline()
+                    .child(project)
+                    .child(if selected.is_some() { "?" } else { " to start" }),
+            );
         v_flex()
             .flex_1()
             .h_full()
             .min_w_0()
+            .justify_center()
             .child(
-                div()
-                    .id("projects")
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .p_4()
-                    .child(h_flex().gap_1().flex_wrap().children(choices)),
-            )
-            .children(message)
-            .child(
-                div()
-                    .border_t_1()
-                    .border_color(theme.border)
-                    .child(self.render_composer(cx)),
+                v_flex()
+                    .relative()
+                    .w_full()
+                    .child(
+                        div()
+                            .absolute()
+                            .bottom_full()
+                            .w_full()
+                            .pb_4()
+                            .px_4()
+                            .child(heading),
+                    )
+                    .children(self.render_message(cx))
+                    .child(self.render_composer(cx))
+                    .child(
+                        h_flex().w_full().justify_center().px_4().child(
+                            h_flex()
+                                .w_full()
+                                .max_w(px(736.))
+                                .h(px(52.))
+                                .px_2()
+                                .items_start()
+                                .pt_1()
+                                .child(div().flex_1())
+                                .child(self.render_permissions_control(false, cx)),
+                        ),
+                    ),
             )
             .into_any_element()
     }
@@ -4674,7 +4707,15 @@ impl Root {
                 .px_4()
                 .flex()
                 .items_center()
+                .gap_3()
                 .text_sm()
+                .children(target.map(|label| {
+                    h_flex()
+                        .gap_3()
+                        .text_color(theme.muted_foreground)
+                        .child(label)
+                        .child("/")
+                }))
                 .child(
                     div()
                         .flex_1()
@@ -4686,7 +4727,6 @@ impl Root {
                             APP_NAME
                         }),
                 )
-                .children(target.map(|label| div().text_color(theme.muted_foreground).child(label)))
                 .into_any_element()
         } else {
             self.render_thread_header(cx)
@@ -5020,7 +5060,7 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.picker_open {
+        if self.draft.is_none() && !self.picker_open {
             self.permissions_menu = None;
             self.permissions_subscription = None;
         }
@@ -5105,7 +5145,7 @@ impl Render for Root {
                 .unwrap()
                 .iter()
                 .find(|group| draft.group.as_ref() == Some(&group.key))
-                .map(|group| format!("Starts on {}", group.target().environment))
+                .map(|group| group.title.clone())
                 .unwrap_or_else(|| "Pick a project".into())
         });
         let pane = match &self.draft {
@@ -5208,7 +5248,7 @@ impl Render for Root {
             )
             .on_action(cx.listener(|root, _: &Stop, _, cx| root.stop(cx)))
             .on_action(cx.listener(|root, _: &OpenPermissions, window, cx| {
-                root.open_permissions(window, cx)
+                root.open_permissions(true, window, cx)
             }))
             .on_action(cx.listener(|root, _: &CycleAppearance, _, cx| {
                 root.change_setting(
@@ -5227,18 +5267,21 @@ impl Render for Root {
             )
             .on_action(cx.listener(|root, _: &Settle, _, cx| root.settle(cx)))
             .on_action(cx.listener(|root, _: &NewThread, window, cx| root.new_thread(window, cx)))
-            .on_action(cx.listener(|root, _: &Cancel, _, cx| root.cancel(cx)))
+            .on_action(cx.listener(|root, _: &Cancel, window, cx| root.cancel(window, cx)))
             .on_action(cx.listener(|root, _: &ToggleModelPicker, window, cx| {
                 root.toggle_model_picker(window, cx)
+            }))
+            .on_action(cx.listener(|root, action: &PickProjectAction, _, cx| {
+                if let Some(draft) = root.draft.as_mut() {
+                    draft.group = Some(action.key.clone());
+                    cx.notify();
+                }
             }))
             .on_action(cx.listener(|root, action: &PickModelAction, _, cx| {
                 root.pick_model(action.instance_id.clone(), action.slug.clone(), cx)
             }))
             .on_action(cx.listener(|root, action: &SetModelOptionAction, _, cx| {
                 root.set_model_option(&action.id, action.value.clone(), cx)
-            }))
-            .on_action(cx.listener(|root, action: &SetRuntimeModeAction, _, cx| {
-                root.set_runtime_mode(action.mode.clone(), cx)
             }))
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)

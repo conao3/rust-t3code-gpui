@@ -8,6 +8,7 @@ mod explorer;
 mod keymap;
 mod models;
 mod navigation;
+mod permissions;
 mod projects;
 mod row_view;
 mod sidebar;
