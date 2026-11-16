@@ -55,3 +55,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+`vendor/gpui-pre-wgpu/` is `gpui-pre-wgpu` 0.3.12, distributed under Apache-2.0 (`vendor/gpui-pre-wgpu/LICENSE-APACHE`). The local patch passes the normal weight axis to Swash when rasterizing variable fonts, matching the normal weight used to load the cosmic-text font for shaping. This prevents CJK variable fonts whose default axis is Thin from rendering thin outlines with Regular layout metrics.
