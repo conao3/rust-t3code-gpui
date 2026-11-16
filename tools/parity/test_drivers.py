@@ -1,5 +1,6 @@
 import os
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -13,7 +14,7 @@ from urllib.error import URLError
 
 from audit_commands import reference_commands
 from cdp import Cdp
-from desktop_session import read_display, stop_process_group
+from desktop_session import read_display, require_free_ports, stop_process_group
 from fixture_validation import distinct, inspect_environments
 from PIL import Image
 from private_session import cleanup_bus_processes
@@ -21,6 +22,46 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    async def test_viewport_waits_for_both_accessible_and_x11_geometry_to_settle(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.window = "1"
+        app.focus = Mock()
+        app.xdo = Mock()
+        desired = {"width": 1400, "height": 900}
+        app.content_bounds = Mock(return_value=desired)
+        app.geometry = Mock(
+            side_effect=[{"WIDTH": "1400", "HEIGHT": "900"}]
+            + [{"WIDTH": "1442", "HEIGHT": "942"}] * 3
+        )
+        with patch("native.asyncio.sleep", new=AsyncMock()):
+            await app.viewport(1400, 900)
+        self.assertEqual(app.geometry.call_count, 4)
+        self.assertEqual(app.xdo.call_count, 1)
+
+    async def test_viewport_applies_the_content_delta_once_after_stable_observations(
+        self,
+    ):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.window = "1"
+        app.focus = Mock()
+        app.xdo = Mock()
+        app.content_bounds = Mock(
+            side_effect=[{"width": 1442, "height": 942}] * 3
+            + [{"width": 1400, "height": 900}] * 3
+        )
+        app.geometry = Mock(
+            side_effect=[{"WIDTH": "1484", "HEIGHT": "984"}] * 3
+            + [{"WIDTH": "1442", "HEIGHT": "942"}] * 3
+        )
+        with patch("native.asyncio.sleep", new=AsyncMock()):
+            await app.viewport(1400, 900)
+        self.assertEqual(app.xdo.call_args.args, ("windowsize", "1", 1442, 942))
+        self.assertEqual(app.xdo.call_count, 2)
+
     async def test_startup_waits_for_the_single_renderer_after_connection_refusal(self):
         page = Cdp("http://127.0.0.1:1")
         socket = Mock()
@@ -118,6 +159,17 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_a_new_desktop_cannot_reuse_a_port_before_its_previous_owner_stops(self):
+        with socket.socket() as owner:
+            owner.bind(("127.0.0.1", 0))
+            owner.listen()
+            port = owner.getsockname()[1]
+            with self.assertRaisesRegex(RuntimeError, "is in use"):
+                require_free_ports([port])
+        require_free_ports([port])
+        with self.assertRaisesRegex(ValueError, "must be distinct"):
+            require_free_ports([port, port])
+
     def test_only_removed_accessible_objects_are_retried(self):
         from native import stale_object
 

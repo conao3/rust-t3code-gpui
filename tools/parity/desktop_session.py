@@ -5,12 +5,25 @@ import json
 import os
 import select
 import signal
+import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 from fixture_validation import distinct
+
+
+def require_free_ports(ports):
+    if len(set(ports)) != len(ports):
+        raise ValueError("Reference and CDP ports must be distinct")
+    for port in ports:
+        with socket.socket() as probe:
+            probe.settimeout(1)
+            if probe.connect_ex(("127.0.0.1", port)) == 0:
+                raise RuntimeError(
+                    f"Test port {port} is in use; finish stopping its owner before launching"
+                )
 
 
 def read_display(read_fd, timeout=10):
@@ -72,6 +85,7 @@ def main():
         raise FileExistsError(
             "Use a fresh session directory and reference profile for each comparison"
         )
+    require_free_ports([args.reference_port, args.cdp_port])
     args.session.parent.mkdir(parents=True, exist_ok=True)
     children = []
     stopping = False

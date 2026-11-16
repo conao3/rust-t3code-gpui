@@ -208,17 +208,25 @@ class Native:
     async def viewport(self, width, height):
         self.focus()
         self.xdo("windowmove", self.window, 40, 40)
-        for _ in range(3):
+        await asyncio.sleep(0.5)
+        previous = None
+        stable = 0
+        for _ in range(40):
             bounds, geometry = self.content_bounds(), self.geometry()
-            if bounds["width"] == width and bounds["height"] == height:
-                return
-            self.xdo(
-                "windowsize",
-                self.window,
-                int(geometry["WIDTH"]) + width - bounds["width"],
-                int(geometry["HEIGHT"]) + height - bounds["height"],
-            )
-            await asyncio.sleep(0.5)
+            current = bounds, geometry
+            stable = stable + 1 if current == previous else 0
+            previous = current
+            if stable >= 2:
+                if bounds["width"] == width and bounds["height"] == height:
+                    return
+                self.xdo(
+                    "windowsize",
+                    self.window,
+                    int(geometry["WIDTH"]) + width - bounds["width"],
+                    int(geometry["HEIGHT"]) + height - bounds["height"],
+                )
+                previous, stable = None, 0
+            await asyncio.sleep(0.2)
         raise RuntimeError(
             f"Cannot set native content viewport: {self.content_bounds()}"
         )
