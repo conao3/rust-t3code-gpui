@@ -6819,6 +6819,7 @@ dependencies = [
  "async-channel",
  "clap",
  "gpui-kit",
+ "gpui-pre-wgpu",
  "humantime",
  "markdown",
  "notify-rust",

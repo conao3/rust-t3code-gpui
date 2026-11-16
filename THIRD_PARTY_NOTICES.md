@@ -56,7 +56,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-`vendor/gpui-pre-wgpu/` is `gpui-pre-wgpu` 0.3.12, distributed under Apache-2.0 (`vendor/gpui-pre-wgpu/LICENSE-APACHE`). The local patch passes the normal weight axis to Swash when rasterizing variable fonts, matching the normal weight used to load the cosmic-text font for shaping. This prevents CJK variable fonts whose default axis is Thin from rendering thin outlines with Regular layout metrics.
+`vendor/gpui-pre-wgpu/` is `gpui-pre-wgpu` 0.3.12, distributed under Apache-2.0 (`vendor/gpui-pre-wgpu/LICENSE-APACHE`). The local patch preserves each selected font's effective weight across shaping, metrics, fallback, rasterization and glyph-cache identities. Variable fonts use the requested weight within their supported axis range; static faces retain their actual weight.
+
+`crates/t3code-gpui/tests/fixtures/FiraMono-Medium.ttf` is copied from the `cosmic-text` 0.19.0 test fonts. It is distributed under the SIL Open Font License 1.1, included as `FiraMono-LICENSE` in that directory.
 
 ## GPUI accessibility cache
 
