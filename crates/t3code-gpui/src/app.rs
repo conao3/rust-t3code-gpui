@@ -759,6 +759,7 @@ impl Root {
             editor_picker_focus: cx.focus_handle(),
             details_pane: cx.new(|_| DetailsPane {
                 root: sidebar_root.clone(),
+                services: None,
             }),
             details_stamp: None,
             workspace_sender,
@@ -857,6 +858,9 @@ impl Root {
         }
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
+        if self.pr_guide_key(keystroke, window, cx) {
+            return true;
+        }
         if self.prompt_key(keystroke, window, cx) {
             return true;
         }
@@ -910,6 +914,9 @@ impl Root {
             platform: modifiers.platform,
             key: keystroke.key.clone(),
         };
+        if self.project_script_key(&typed, window, cx) {
+            return true;
+        }
         if let Some(command) = keymap::resolve(&self.key_rules, &typed, &|name| {
             self.key_context(name, window, cx)
         })

@@ -4,6 +4,7 @@ use super::*;
 pub(super) struct State {
     pub page: bool,
     pub page_panel_open: bool,
+    pub page_maximized: bool,
     pub selected: Option<String>,
     pub list_state: String,
     pub filters: HashMap<String, String>,
@@ -26,6 +27,12 @@ pub(super) struct Detail {
     comments: Vec<Entity<TextViewState>>,
     diff: Option<Entity<DiffState>>,
     tab: &'static str,
+    guide: Value,
+    guide_position: usize,
+    guide_rail: bool,
+    guide_seen: HashSet<usize>,
+    review: Option<Entity<ReviewComposer>>,
+    composer_open: bool,
     loading: bool,
     busy: bool,
     request: u64,
@@ -599,6 +606,12 @@ impl Root {
             comments: Vec::new(),
             diff: None,
             tab: "summary",
+            guide: Value::Null,
+            guide_position: 0,
+            guide_rail: false,
+            guide_seen: HashSet::new(),
+            review: None,
+            composer_open: false,
             loading: false,
             busy: false,
             request: 0,
@@ -623,12 +636,13 @@ impl Root {
         let runtime = self.runtime.clone();
         cx.spawn(async move |this, cx| {
             let result = on_runtime(&runtime, async move {
-                let (detail, activity, checks) = tokio::join!(
+                let (detail, activity, checks, guide) = tokio::join!(
                     connection.request("pullRequests.detail", reference.clone()),
                     connection.request("pullRequests.activity", reference.clone()),
-                    connection.request("pullRequests.checks", reference)
+                    connection.request("pullRequests.checks", reference.clone()),
+                    connection.request("pullRequests.reviewGuide", reference)
                 );
-                Ok((detail?, activity, checks))
+                Ok((detail?, activity, checks, guide))
             })
             .await;
             let _ = this.update(cx, |root, cx| {
@@ -640,8 +654,12 @@ impl Root {
                 }
                 view.loading = false;
                 match result {
-                    Ok((mut detail, activity, checks)) => {
+                    Ok((mut detail, activity, checks, guide)) => {
                         let mut errors = Vec::new();
+                        match guide {
+                            Ok(guide) => view.guide = guide,
+                            Err(error) => errors.push(format!("Review guide: {error:#}")),
+                        }
                         match checks {
                             Ok(checks) if !checks.is_null() => {
                                 detail["checks"] = checks["checks"].clone()
@@ -716,6 +734,13 @@ impl Root {
             return;
         };
         view.tab = tab;
+        if tab == "guide" && !view.guide["guide"].is_null() {
+            if self.pr_state.page {
+                self.pr_state.page_maximized = true;
+            } else {
+                self.right_panel.maximized = true;
+            }
+        }
         if tab == "code" && view.diff.is_none() {
             let reference = view.reference.clone();
             let environment = view.environment.clone();
@@ -947,6 +972,9 @@ impl Root {
                 .as_ref()
                 .and_then(|id| self.pr_state.views.get(id))
         {
+            if self.pr_state.page_maximized {
+                return self.render_pr_detail(view, cx);
+            }
             return h_flex()
                 .size_full()
                 .child(body.flex_1().w_0())
@@ -979,6 +1007,9 @@ impl Root {
             content = content.child(div().text_color(cx.theme().danger).child(error.clone()));
         }
         match view.tab {
+            "guide" => {
+                content = content.child(self.render_pr_guide(view, cx));
+            }
             "code" => {
                 if let Some(diff) = &view.diff {
                     content = content.child(Diff::new(diff));
@@ -1109,8 +1140,13 @@ impl Root {
             }
         }
         v_flex()
+            .id("pull-request-detail")
             .size_full()
             .min_h_0()
+            .when(self.pr_state.page, |body| {
+                body.role(accesskit::Role::Region)
+                    .aria_label(format!("Workspace panel: #{}", view.reference["number"]))
+            })
             .child(
                 h_flex()
                     .p_3()
@@ -1167,10 +1203,17 @@ impl Root {
                     .children(
                         [
                             ("summary", "Summary"),
+                            ("guide", "Guide"),
                             ("timeline", "Timeline"),
                             ("code", "Code"),
                         ]
                         .into_iter()
+                        .filter(|(tab, _)| {
+                            *tab != "guide"
+                                || self.config_of(&view.environment).is_some_and(|config| {
+                                    config["settings"]["reviewGuidesEnabled"] == true
+                                })
+                        })
                         .map(|(tab, label)| {
                             Button::new(label)
                                 .label(label)
@@ -1183,6 +1226,7 @@ impl Root {
                     ),
             )
             .child(content)
+            .child(self.render_pr_composer(view, cx))
             .into_any_element()
     }
 }
@@ -1617,5 +1661,658 @@ fn sort_icon(sort: &str) -> gpui_kit::assets::IconName {
         "oldest" => IconName::CalendarArrowUp,
         "largest" => IconName::Maximize2,
         _ => IconName::Minimize2,
+    }
+}
+
+impl Root {
+    fn step_pr_guide(&mut self, position: usize, cx: &mut Context<Self>) {
+        if let Some(view) = self
+            .pull_request_id()
+            .and_then(|id| self.pr_state.views.get_mut(&id))
+        {
+            let count = view.guide["guide"]["stops"].as_array().map_or(0, Vec::len);
+            if position > view.guide_position {
+                view.guide_seen.insert(view.guide_position);
+            }
+            view.guide_position = position.min(count.saturating_sub(1));
+            view.guide_rail = false;
+            self.panel_revision += 1;
+            cx.notify();
+        }
+    }
+
+    fn render_pr_guide(&self, view: &Detail, cx: &Context<Self>) -> AnyElement {
+        let guide = &view.guide["guide"];
+        let running = view.busy || view.guide["run"]["_tag"] == "Running";
+        let failed = view.guide["run"]["_tag"] == "Failed"
+            && view.guide["run"]["headSha"] == view.guide["currentHeadSha"];
+        if guide.is_null() {
+            return v_flex().size_full().justify_center().items_center().gap_2().child(
+                text!(if running { "Writing a review guide" } else if failed { "Could not write a review guide" } else { "No review guide yet" })
+            ).child(div().text_xs().text_color(cx.theme().muted_foreground).child(if running {
+                "An agent is reading the change. A large one takes a few minutes. You can leave; you will be told when it is ready."
+            } else if failed { "Check the review guide model in Settings → Source control." } else {
+                "A guide is a tour of the change: stops through the code in reading order, with the calls only a maintainer can make."
+            })).child(Button::new("write-guide").outline().label(if running { "Reading the change..." } else if failed { "Try again" } else { "Write guide" }).disabled(running).on_click(cx.listener(|root, _, _, cx| root.mutate_pr("pullRequests.generateReviewGuide", json!({}), cx))))
+            .into_any_element();
+        }
+        let stops = guide["stops"].as_array().cloned().unwrap_or_default();
+        let position = view.guide_position.min(stops.len().saturating_sub(1));
+        let wide = self.pr_state.page && self.pr_state.page_maximized || self.right_panel.maximized;
+        let mut body = v_flex().gap_4().flex_1().min_w_0();
+        if running || failed || guide["headSha"] != view.guide["currentHeadSha"] {
+            body = body.child(div().text_sm().child(if running { "Rewriting this guide. You will be told when the new one is ready." } else if failed { "Could not rewrite this guide. Check the review guide model in Settings → Source control." } else { "Written before the latest push." }));
+            if !running {
+                body = body.child(Button::new("rewrite-guide").label("Rewrite").on_click(
+                    cx.listener(|root, _, _, cx| {
+                        root.mutate_pr("pullRequests.generateReviewGuide", json!({}), cx)
+                    }),
+                ));
+            }
+        }
+        let Some(stop) = stops.get(position) else {
+            return body
+                .child(text!("This change has no files to tour."))
+                .into_any_element();
+        };
+        body = body.child(
+            h_flex()
+                .justify_between()
+                .child(if wide {
+                    div()
+                        .text_xs()
+                        .child(text!(format!("Stop {} of {}", position + 1, stops.len())))
+                        .into_any_element()
+                } else {
+                    Button::new("guide-stops")
+                        .ghost()
+                        .small()
+                        .label(format!("Stop {} of {}", position + 1, stops.len()))
+                        .on_click(cx.listener(|root, _, _, cx| {
+                            if let Some(view) = root
+                                .pull_request_id()
+                                .and_then(|id| root.pr_state.views.get_mut(&id))
+                            {
+                                view.guide_rail = !view.guide_rail;
+                            }
+                            root.panel_revision += 1;
+                            cx.notify();
+                        }))
+                        .into_any_element()
+                })
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            Button::new("guide-previous")
+                                .icon(IconName::ChevronUp)
+                                .accessibility_label("Previous stop")
+                                .outline()
+                                .small()
+                                .disabled(position == 0)
+                                .on_click(cx.listener(move |root, _, _, cx| {
+                                    root.step_pr_guide(position.saturating_sub(1), cx)
+                                })),
+                        )
+                        .child(
+                            Button::new("guide-next")
+                                .icon(IconName::ChevronDown)
+                                .accessibility_label("Next stop")
+                                .outline()
+                                .small()
+                                .disabled(position + 1 >= stops.len())
+                                .on_click(cx.listener(move |root, _, _, cx| {
+                                    root.step_pr_guide(position + 1, cx)
+                                })),
+                        ),
+                ),
+        );
+        let mut rail = v_flex()
+            .id("review-tour")
+            .role(accesskit::Role::Navigation)
+            .aria_label("Review tour")
+            .gap_2();
+        if wide {
+            rail = rail.child(text!(format!(
+                "{} of {} read",
+                view.guide_seen.len(),
+                stops.len()
+            )));
+        }
+        if view.guide_rail || wide {
+            for (index, stop) in stops.iter().enumerate() {
+                rail = rail.child(
+                    Button::new(("guide-stop", index))
+                        .ghost()
+                        .w_full()
+                        .h_auto()
+                        .py_2()
+                        .child(
+                            v_flex()
+                                .items_start()
+                                .gap_1()
+                                .child(format!(
+                                    "{} {}",
+                                    index + 1,
+                                    stop["title"].as_str().unwrap_or_default()
+                                ))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(
+                                            if stop["files"].as_array().is_none_or(Vec::is_empty) {
+                                                "Context, no code".to_string()
+                                            } else {
+                                                format!(
+                                                    "{} files",
+                                                    stop["files"].as_array().unwrap().len()
+                                                )
+                                            },
+                                        ),
+                                ),
+                        )
+                        .accessibility_label(format!(
+                            "{} {} {}{}",
+                            if view.guide_seen.contains(&index) {
+                                format!("Stop {}, read", index + 1)
+                            } else {
+                                (index + 1).to_string()
+                            },
+                            stop["title"].as_str().unwrap_or_default(),
+                            if stop["attention"].is_null() {
+                                ""
+                            } else {
+                                "Look closely "
+                            },
+                            if stop["files"].as_array().is_none_or(Vec::is_empty) {
+                                "Context, no code".to_string()
+                            } else {
+                                format!("{} files", stop["files"].as_array().unwrap().len())
+                            }
+                        ))
+                        .selected(index == position)
+                        .on_click(cx.listener(move |root, _, _, cx| root.step_pr_guide(index, cx))),
+                );
+            }
+        }
+        body = body
+            .child(
+                div()
+                    .id("guide-title")
+                    .role(accesskit::Role::Heading)
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(text!(
+                        stop["title"].as_str().unwrap_or_default().to_string()
+                    )),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(text!(
+                        stop["summary"].as_str().unwrap_or_default().to_string()
+                    )),
+            );
+        if let Some(kind) = stop["attention"]["kind"].as_str() {
+            let label = match kind {
+                "tradeoff" => "A tradeoff to weigh",
+                "contract" => "A contract to check",
+                "product" => "A product call",
+                "risk" => "A risk to judge",
+                "accessibility" => "An accessibility call",
+                _ => kind,
+            };
+            body = body.child(
+                v_flex()
+                    .gap_2()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded_lg()
+                    .p_3()
+                    .child(text!(label.to_string()))
+                    .child(text!(
+                        stop["attention"]["note"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .to_string()
+                    )),
+            );
+        }
+        for file in stop["files"].as_array().into_iter().flatten() {
+            let path = file["path"].as_str().unwrap_or_default().to_string();
+            body = body.child(
+                Button::new(SharedString::from(format!("guide-file-{path}")))
+                    .label(path)
+                    .ghost()
+                    .disabled(true)
+                    .tooltip("Guide excerpts are not implemented in T3 Code GPUI."),
+            );
+        }
+        body = body.child(
+            Button::new("ask-guide")
+                .ghost()
+                .label("Ask about this stop")
+                .disabled(true)
+                .tooltip("Guide questions are not implemented in T3 Code GPUI."),
+        );
+        body = body.child(if let Some(next) = stops.get(position + 1) {
+            Button::new("guide-continue")
+                .label(format!(
+                    "Next: {}",
+                    next["title"].as_str().unwrap_or_default()
+                ))
+                .on_click(cx.listener(move |root, _, _, cx| root.step_pr_guide(position + 1, cx)))
+        } else {
+            Button::new("guide-finish")
+                .label("Finish review")
+                .on_click(cx.listener(move |root, _, window, cx| {
+                    root.step_pr_guide(position + 1, cx);
+                    root.open_pr_composer(true, window, cx);
+                }))
+        });
+        if wide {
+            h_flex()
+                .items_start()
+                .gap_6()
+                .child(rail.w(px(256.)))
+                .child(body)
+                .into_any_element()
+        } else {
+            v_flex()
+                .when(view.guide_rail, |layout| layout.child(rail))
+                .child(body)
+                .into_any_element()
+        }
+    }
+
+    fn open_pr_composer(&mut self, review_mode: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.pull_request_id() else {
+            return;
+        };
+        let Some(view) = self.pr_state.views.get_mut(&id) else {
+            return;
+        };
+        if view.review.is_none() {
+            let verdicts = [
+                ("comment", "Comment"),
+                ("approve", "Approve"),
+                ("request-changes", "Request changes"),
+            ]
+            .into_iter()
+            .filter(|(value, _)| {
+                view.value["capabilities"]["review"]["verdicts"]
+                    .as_array()
+                    .is_some_and(|values| values.iter().any(|v| v == value))
+                    && view.value["viewerPermissions"]["verdicts"]
+                        .as_array()
+                        .is_some_and(|values| values.iter().any(|v| v == value))
+            })
+            .collect::<Vec<_>>();
+            let summary = cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .placeholder("Summarize your review or add line comments")
+            });
+            let comment =
+                cx.new(|cx| TextareaState::new(window, cx).placeholder("Leave a comment"));
+            let verdict = choice_select::state(&verdicts, "comment", window, cx);
+            let root = cx.entity().downgrade();
+            let environment = view.environment.clone();
+            let reference = view.reference.clone();
+            let require_summary = view.value["provider"] == "forgejo";
+            view.review = Some(cx.new(|cx| {
+                cx.observe(&summary, |_, _, cx| cx.notify()).detach();
+                cx.observe(&comment, |_, _, cx| cx.notify()).detach();
+                cx.observe(&verdict, |_, _, cx| cx.notify()).detach();
+                ReviewComposer {
+                    root,
+                    id,
+                    environment,
+                    reference,
+                    summary,
+                    comment,
+                    verdict,
+                    review_mode,
+                    require_summary,
+                    busy: false,
+                    error: None,
+                }
+            }));
+        }
+        view.composer_open = true;
+        view.review.as_ref().unwrap().update(cx, |editor, cx| {
+            editor.review_mode = review_mode;
+            editor
+                .input()
+                .update(cx, |input, cx| input.focus(window, cx));
+            cx.notify();
+        });
+        self.panel_revision += 1;
+        cx.notify();
+    }
+
+    fn render_pr_composer(&self, view: &Detail, cx: &Context<Self>) -> AnyElement {
+        if view.value["viewerPermissions"]["comment"] != true {
+            return div().into_any_element();
+        }
+        h_flex()
+            .relative()
+            .justify_end()
+            .p_2()
+            .child(
+                Button::new("pr-composer-trigger")
+                    .icon(gpui_kit::assets::IconName::MessageSquare)
+                    .accessibility_label("Comment on pull request")
+                    .ghost()
+                    .on_click(
+                        cx.listener(|root, _, window, cx| root.open_pr_composer(false, window, cx)),
+                    ),
+            )
+            .when(view.composer_open, |footer| {
+                footer.child(
+                    div()
+                        .absolute()
+                        .bottom(px(48.))
+                        .right(px(16.))
+                        .w(px(384.))
+                        .id("pr-composer-popup")
+                        .occlude()
+                        .rounded_lg()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .bg(cx.theme().popover)
+                        .on_mouse_down_out(cx.listener(|root, _, _, cx| {
+                            if let Some(view) = root
+                                .pull_request_id()
+                                .and_then(|id| root.pr_state.views.get_mut(&id))
+                            {
+                                view.composer_open = false;
+                            }
+                            root.panel_revision += 1;
+                            cx.notify();
+                        }))
+                        .children(view.review.clone()),
+                )
+            })
+            .into_any_element()
+    }
+}
+
+struct ReviewComposer {
+    root: WeakEntity<Root>,
+    id: String,
+    environment: String,
+    reference: Value,
+    summary: Entity<TextareaState>,
+    comment: Entity<TextareaState>,
+    verdict: Entity<choice_select::State>,
+    review_mode: bool,
+    require_summary: bool,
+    busy: bool,
+    error: Option<String>,
+}
+
+impl ReviewComposer {
+    fn input(&self) -> Entity<TextareaState> {
+        if self.review_mode {
+            self.summary.clone()
+        } else {
+            self.comment.clone()
+        }
+    }
+
+    fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let editor_input = self.input();
+        let body = editor_input.read(cx).value().to_string();
+        let verdict = if self.review_mode {
+            self.verdict
+                .read(cx)
+                .selected_value()
+                .copied()
+                .unwrap_or("comment")
+        } else {
+            "comment"
+        };
+        if self.busy || !review_can_submit(verdict, &body, 0, self.require_summary) {
+            return;
+        }
+        let Some((connection, runtime)) = self.root.upgrade().and_then(|root| {
+            root.update(cx, |root, _| {
+                root.connection(&self.environment)
+                    .map(|connection| (connection, root.runtime.clone()))
+            })
+        }) else {
+            return;
+        };
+        self.busy = true;
+        self.error = None;
+        let mut input = self.reference.clone();
+        input["body"] = json!(body);
+        let method = if self.review_mode {
+            input["verdict"] = json!(verdict);
+            input["comments"] = json!([]);
+            "pullRequests.submitReview"
+        } else {
+            "pullRequests.comment"
+        };
+        cx.spawn_in(window, async move |this, cx| {
+            let result = on_runtime(
+                &runtime,
+                async move { connection.request(method, input).await },
+            )
+            .await;
+            let _ = this.update_in(cx, |editor, window, cx| {
+                editor.busy = false;
+                match result {
+                    Ok(_) => {
+                        editor_input.update(cx, |input, cx| {
+                            if input.value().as_ref() == body {
+                                input.set_value("", window, cx);
+                            }
+                        });
+                        let _ = editor.root.update(cx, |root, cx| {
+                            if let Some(view) = root.pr_state.views.get_mut(&editor.id) {
+                                view.composer_open = false;
+                            }
+                            root.load_pull_request(editor.id.clone(), cx);
+                        });
+                    }
+                    Err(error) => {
+                        editor.error = Some(format!("The review could not be submitted: {error:#}"))
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+}
+
+impl Render for ReviewComposer {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::component::select::Select;
+        let verdict = if self.review_mode {
+            self.verdict
+                .read(cx)
+                .selected_value()
+                .copied()
+                .unwrap_or("comment")
+        } else {
+            "comment"
+        };
+        let disabled = self.busy
+            || !review_can_submit(
+                verdict,
+                &self.input().read(cx).value(),
+                0,
+                self.require_summary,
+            );
+        v_flex()
+            .id("pr-review-form")
+            .role(accesskit::Role::Dialog)
+            .aria_label("Pull request composer")
+            .on_key_down(cx.listener(|editor, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" {
+                    cx.stop_propagation();
+                    let _ = editor.root.update(cx, |root, cx| {
+                        if let Some(view) = root.pr_state.views.get_mut(&editor.id) {
+                            view.composer_open = false;
+                        }
+                        root.panel_focus.focus(window, cx);
+                        root.panel_revision += 1;
+                        cx.notify();
+                    });
+                }
+                if event.keystroke.key == "enter"
+                    && (event.keystroke.modifiers.control || event.keystroke.modifiers.platform)
+                {
+                    cx.stop_propagation();
+                    editor.submit(window, cx);
+                }
+            }))
+            .gap_3()
+            .p_3()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .child(
+                        Button::new("pr-mode-comment")
+                            .label("Comment")
+                            .ghost()
+                            .selected(!self.review_mode)
+                            .on_click(cx.listener(|editor, _, window, cx| {
+                                editor.review_mode = false;
+                                editor
+                                    .input()
+                                    .update(cx, |input, cx| input.focus(window, cx));
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("pr-mode-review")
+                            .label("Review")
+                            .ghost()
+                            .selected(self.review_mode)
+                            .on_click(cx.listener(|editor, _, window, cx| {
+                                editor.review_mode = true;
+                                editor
+                                    .input()
+                                    .update(cx, |input, cx| input.focus(window, cx));
+                                cx.notify();
+                            })),
+                    )
+                    .child(div().flex_1())
+                    .child(
+                        Button::new("close-pr-composer")
+                            .icon(IconName::Close)
+                            .accessibility_label("Close composer")
+                            .ghost()
+                            .on_click(cx.listener(|editor, _, _, cx| {
+                                let _ = editor.root.update(cx, |root, cx| {
+                                    if let Some(view) = root.pr_state.views.get_mut(&editor.id) {
+                                        view.composer_open = false;
+                                    }
+                                    root.panel_revision += 1;
+                                    cx.notify();
+                                });
+                            })),
+                    ),
+            )
+            .child(
+                Textarea::new(&self.input())
+                    .h(px(70.))
+                    .aria_label(if self.review_mode {
+                        "Review summary"
+                    } else {
+                        "Comment"
+                    }),
+            )
+            .children(
+                self.error
+                    .clone()
+                    .map(|error| div().text_color(cx.theme().danger).child(error)),
+            )
+            .child(
+                h_flex()
+                    .justify_end()
+                    .gap_2()
+                    .when(self.review_mode, |row| {
+                        row.child(
+                            Select::new(&self.verdict)
+                                .accessibility_label("Review verdict")
+                                .disabled(self.busy),
+                        )
+                    })
+                    .child(
+                        Button::new("submit-pr-review")
+                            .label(if self.busy {
+                                "Submitting..."
+                            } else if self.review_mode {
+                                "Submit review"
+                            } else {
+                                "Comment"
+                            })
+                            .disabled(disabled)
+                            .on_click(
+                                cx.listener(|editor, _, window, cx| editor.submit(window, cx)),
+                            ),
+                    ),
+            )
+    }
+}
+
+fn review_can_submit(verdict: &str, summary: &str, comments: usize, required: bool) -> bool {
+    if verdict == "request-changes" && required {
+        !summary.trim().is_empty()
+    } else {
+        verdict == "approve" || !summary.trim().is_empty() || comments > 0
+    }
+}
+
+impl Root {
+    pub(super) fn pr_guide_key(
+        &mut self,
+        key: &Keystroke,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if key.modifiers.control
+            || key.modifiers.platform
+            || key.modifiers.alt
+            || key.modifiers.shift
+            || self.key_context("editableFocus", window, cx)
+            || !matches!(key.key.as_str(), "j" | "k")
+        {
+            return false;
+        }
+        let Some(view) = self
+            .pull_request_id()
+            .and_then(|id| self.pr_state.views.get(&id))
+            .filter(|view| view.tab == "guide")
+        else {
+            return false;
+        };
+        let position = if key.key == "j" {
+            view.guide_position + 1
+        } else {
+            view.guide_position.saturating_sub(1)
+        };
+        self.step_pr_guide(position, cx);
+        true
+    }
+}
+
+#[cfg(test)]
+mod review_tests {
+    use super::review_can_submit;
+    #[test]
+    fn review_validation_matches_host_requirements() {
+        assert!(review_can_submit("approve", "", 0, false));
+        assert!(!review_can_submit("comment", " \n", 0, false));
+        assert!(review_can_submit("request-changes", "", 1, false));
+        assert!(!review_can_submit("request-changes", "", 1, true));
+        assert!(review_can_submit("request-changes", "Reason", 0, true));
     }
 }

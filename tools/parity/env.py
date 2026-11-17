@@ -438,6 +438,12 @@ def worker(slot_path):
     try:
         save("fixture")
         fixture(generation, options)
+        rpc_env = {}
+        if options.get("pr_rpc_fixture"):
+            rpc_env = {
+                "NODE_OPTIONS": "--require=" + str(TOOLS / "pr_rpc_fixture.cjs"),
+                "T3_PARITY_PR_FIXTURE": options["pr_rpc_fixture"],
+            }
         ports = state["ports"]
         require_free(ports, state["display"])
         launch(
@@ -478,7 +484,7 @@ def worker(slot_path):
                 "--no-browser",
                 str(generation / "native/workspace"),
             ],
-            {"T3CODE_HOME": str(generation / "native/home")},
+            rpc_env | {"T3CODE_HOME": str(generation / "native/home")},
         )
         launch(
             "reference-electron",
@@ -491,7 +497,8 @@ def worker(slot_path):
                 "--remote-debugging-address=127.0.0.1",
                 f"--remote-debugging-port={ports['cdp']}",
             ],
-            {
+            rpc_env
+            | {
                 "T3CODE_HOME": str(generation / "reference/home"),
                 "T3CODE_PORT": str(ports["reference"]),
                 "XDG_CONFIG_HOME": str(generation / "electron-profile"),
@@ -773,6 +780,7 @@ def main():
         type=Path,
         default=main_tree() / ".claude-dev/scratch/parity/reference",
     )
+    launch.add_argument("--pr-rpc-fixture", type=Path)
     launch.add_argument("--stream-ms", type=int, default=15000)
     args = parser.parse_args()
     if not 1 <= args.slot <= 100:
@@ -801,6 +809,10 @@ def main():
                     "reference_source",
                 ]
             }
+            if args.pr_rpc_fixture is not None:
+                options["pr_rpc_fixture"] = str(
+                    args.pr_rpc_fixture.resolve(strict=True)
+                )
             options.update(theme=args.theme, stream_ms=args.stream_ms)
             up(slot_path, args.slot, options)
         elif args.operation == "down":
