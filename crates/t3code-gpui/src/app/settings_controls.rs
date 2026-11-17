@@ -378,25 +378,54 @@ pub(super) fn request<T: 'static>(
 ) {
     let owner = root.upgrade().expect("settings root");
     let owner = owner.read(cx);
-    let connection = owner.connection(environment);
+    let connections = owner.settings_request_targets(environment, method);
     let runtime = owner.runtime.clone();
     cx.spawn(async move |this, cx| {
-        let result = if let Some(connection) = connection {
-            on_runtime(&runtime, async move {
-                connection.request(method, payload).await
-            })
-            .await
-        } else {
-            Err(anyhow::anyhow!(
-                "Connect an environment to change its settings."
-            ))
-        };
+        let result = on_runtime(&runtime, async move {
+            request_targets(connections, method, payload).await
+        })
+        .await;
         let _ = this.update(cx, |view, cx| {
             finish(view, result, cx);
             cx.notify();
         });
     })
     .detach();
+}
+
+pub(super) async fn request_targets(
+    connections: Vec<Arc<Connection>>,
+    method: &'static str,
+    payload: Value,
+) -> anyhow::Result<Value> {
+    request_operations(
+        connections
+            .into_iter()
+            .map(|connection| (connection, payload.clone()))
+            .collect(),
+        method,
+    )
+    .await
+}
+
+pub(super) async fn request_operations(
+    operations: Vec<(Arc<Connection>, Value)>,
+    method: &'static str,
+) -> anyhow::Result<Value> {
+    anyhow::ensure!(
+        !operations.is_empty(),
+        "Connect an environment to change its settings."
+    );
+    let mut result = Value::Null;
+    let mut errors = Vec::new();
+    for (connection, payload) in operations {
+        match connection.request(method, payload).await {
+            Ok(value) => result = value,
+            Err(error) => errors.push(format!("{}: {error:#}", connection.label())),
+        }
+    }
+    anyhow::ensure!(errors.is_empty(), "{}", errors.join("\n"));
+    Ok(result)
 }
 
 pub(super) fn text(value: impl Into<SharedString>) -> gpui::Stateful<gpui::Div> {
