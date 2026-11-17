@@ -249,6 +249,7 @@ impl PartialEq for MarkdownNode {
 pub struct MarkdownExtensions {
     enable_mdx: bool,
     enable_frontmatter: bool,
+    enable_math: bool,
     block_parsers: Vec<Arc<MarkdownBlockParserFn>>,
     block_renderers: HashMap<SharedString, Arc<MarkdownBlockRenderFn>>,
     inline_parsers: Vec<Arc<MarkdownInlineParserFn>>,
@@ -259,6 +260,12 @@ pub struct MarkdownExtensions {
 }
 
 impl MarkdownExtensions {
+    pub fn math(mut self, enabled: bool) -> Self {
+        self.enable_math = enabled;
+        self.bump_revision();
+        self
+    }
+
     /// Change this revision when parser captures or plugin configuration change.
     /// Reusing it allows equivalent registrations rebuilt during rendering to
     /// retain the parsed document. Renderer-only changes do not need a new value.
@@ -412,6 +419,7 @@ impl MarkdownExtensions {
         self.parser_revision == other.parser_revision
             && self.enable_mdx == other.enable_mdx
             && self.enable_frontmatter == other.enable_frontmatter
+            && self.enable_math == other.enable_math
             && self.block_parsers.len() == other.block_parsers.len()
             && self.block_renderers.len() == other.block_renderers.len()
             && self.inline_parsers.len() == other.inline_parsers.len()
@@ -457,11 +465,11 @@ impl MarkdownExtensions {
     pub(crate) fn parse_options(&self) -> ParseOptions {
         let mut options = ParseOptions::gfm();
         options.constructs.frontmatter = self.enable_frontmatter;
-        options.constructs.math_text = true;
+        options.constructs.math_text = self.enable_math;
         // Both fences or neither: with only `math_text` on, the inline
         // construct swallows a `$$` block, so a block plugin matching
         // `Node::Math` never fires and the formula renders inline.
-        options.constructs.math_flow = true;
+        options.constructs.math_flow = self.enable_math;
         if self.enable_mdx {
             options.constructs.html_flow = false;
             options.constructs.html_text = false;

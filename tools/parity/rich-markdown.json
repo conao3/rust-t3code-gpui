@@ -8,14 +8,10 @@
   "settle_ms": 500,
   "steps": [
     {
-      "action": "press",
-      "value": "ctrl+w"
-    },
-    {
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "Pane Alpha, UI parity"
+        "name": "Pane Alpha, Done, UI parity"
       }
     },
     {
@@ -30,9 +26,84 @@
       "action": "click",
       "selector": {
         "role": "button",
+        "name": "Show code",
+        "index": 1
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Show diagram"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Show diagram"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Copy code",
+        "index": 1
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Copy code"
+      },
+      "count": 2,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
         "name": "Expand diagram",
         "index": 1
       }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "region",
+        "name": "Mermaid diagram, zoomable image"
+      },
+      "count": 1
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "region",
+        "name": "Mermaid diagram, zoomable image"
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "press",
+      "value": "right"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "region",
+        "name": "Mermaid diagram, zoomable image"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "0"
     },
     {
       "action": "press",

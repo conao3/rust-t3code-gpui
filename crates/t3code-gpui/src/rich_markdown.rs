@@ -4,7 +4,7 @@ use std::{
 };
 
 use gpui_kit::component::{
-    ActiveTheme as _, WindowExt as _,
+    ActiveTheme as _, Selectable as _, WindowExt as _,
     button::{Button, ButtonVariants as _},
     text::{
         InlineElement, InlineRenderContext, MarkdownExtensions, MarkdownNode, MarkdownParseContext,
@@ -51,16 +51,21 @@ fn cached_graphic(
     graphic
 }
 
-pub fn extensions() -> MarkdownExtensions {
-    static EXTENSIONS: OnceLock<MarkdownExtensions> = OnceLock::new();
-    EXTENSIONS
-        .get_or_init(|| {
-            MarkdownExtensions::default()
-                .plugin(Equation(true))
-                .plugin(Equation(false))
-                .plugin(Diagram)
+pub fn extensions(math: bool) -> MarkdownExtensions {
+    static EXTENSIONS: OnceLock<[MarkdownExtensions; 2]> = OnceLock::new();
+    EXTENSIONS.get_or_init(|| {
+        std::array::from_fn(|index| {
+            let extensions = MarkdownExtensions::default()
+                .math(index == 1)
+                .plugin(Diagram);
+            if index == 1 {
+                extensions.plugin(Equation(true)).plugin(Equation(false))
+            } else {
+                extensions
+            }
         })
-        .clone()
+    })[usize::from(math)]
+    .clone()
 }
 
 fn equation(source: &str, block: bool) -> Result<Graphic, String> {
@@ -142,6 +147,7 @@ impl MarkdownPlugin for Equation {
     fn parse(&self, node: &Node, _: &MarkdownParseContext<'_>) -> Option<MarkdownNode> {
         let source = match (self.0, node) {
             (true, Node::Math(value)) => &value.value,
+            (true, Node::Code(value)) if value.lang.as_deref() == Some("math") => &value.value,
             (false, Node::InlineMath(value)) => &value.value,
             _ => return None,
         };
@@ -289,37 +295,331 @@ impl MarkdownPlugin for Diagram {
             cached_graphic(format!("mermaid:{}", code.value), render),
         ))
     }
-    fn render(&self, node: &MarkdownNode, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let Some(Ok(graphic)) = node.data::<Result<Graphic, String>>() else {
-            return render_graphic(node, cx, true, 1.);
-        };
-        let image = graphic.images[usize::from(cx.theme().mode.is_dark())].clone();
-        let ratio = graphic.width / graphic.height;
-        Button::new(ElementId::Name(node.as_text().to_string().into()))
-            .accessibility_label("Expand diagram")
-            .ghost()
-            .h_auto()
-            .p_0()
+    fn render(&self, node: &MarkdownNode, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let view = window.use_keyed_state(
+            (
+                "mermaid",
+                node.source_range().map_or(0, |range| range.start),
+            ),
+            cx,
+            |_, _| DiagramView {
+                node: node.clone(),
+                code: false,
+                copied: false,
+                wrapped: true,
+            },
+        );
+        view.update(cx, |view, _| view.node = node.clone());
+        view
+    }
+}
+
+struct DiagramView {
+    node: MarkdownNode,
+    code: bool,
+    copied: bool,
+    wrapped: bool,
+}
+
+impl Render for DiagramView {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let source = self.node.as_text().to_owned();
+        let graphic = self
+            .node
+            .data::<Result<Graphic, String>>()
+            .and_then(|value| value.as_ref().ok())
+            .cloned();
+        div()
+            .id("mermaid-block")
             .w_full()
-            .child(render_graphic(node, cx, true, 1.))
-            .on_click(move |_, window, cx| {
-                let image = image.clone();
-                window.open_dialog(cx, move |dialog, window, _| {
-                    dialog
-                        .title("Diagram")
-                        .accessibility_label("Diagram")
-                        .centered()
-                        .width(window.viewport_size().width * 0.9)
-                        .child(
-                            img(image.clone())
-                                .w_full()
-                                .aspect_ratio(ratio)
-                                .max_h(window.viewport_size().height * 0.8)
-                                .object_fit(ObjectFit::Contain),
-                        )
-                });
+            .rounded_lg()
+            .border_1()
+            .border_color(if self.code {
+                cx.theme().border
+            } else {
+                black().opacity(0.)
             })
-            .into_any_element()
+            .overflow_hidden()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .h(px(32.))
+                    .px_3()
+                    .gap_1()
+                    .when(self.code, |header| header.bg(cx.theme().muted))
+                    .child(div().flex_1().text_xs().when(self.code, |label| {
+                        label.child(
+                            div()
+                                .id("diagram-language")
+                                .role(accesskit::Role::Label)
+                                .aria_value("mermaid")
+                                .child("mermaid"),
+                        )
+                    }))
+                    .when(self.code, |header| {
+                        header.child(
+                            Button::new("diagram-wrap")
+                                .icon(gpui_kit::assets::IconName::TextWrap)
+                                .accessibility_label(if self.wrapped {
+                                    "Disable line wrap"
+                                } else {
+                                    "Wrap lines"
+                                })
+                                .selected(self.wrapped)
+                                .ghost()
+                                .compact()
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.wrapped = !view.wrapped;
+                                    cx.notify();
+                                })),
+                        )
+                    })
+                    .child(
+                        Button::new("diagram-code")
+                            .icon(gpui_kit::assets::IconName::Code)
+                            .ghost()
+                            .compact()
+                            .accessibility_label(if self.code {
+                                "Show diagram"
+                            } else {
+                                "Show code"
+                            })
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.code = !view.code;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("diagram-copy")
+                            .icon(gpui_kit::assets::IconName::Copy)
+                            .ghost()
+                            .compact()
+                            .accessibility_label(if self.copied { "Copied" } else { "Copy code" })
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(source.clone()));
+                                view.copied = true;
+                                cx.notify();
+                                cx.spawn(async move |this, cx| {
+                                    cx.background_executor()
+                                        .timer(std::time::Duration::from_millis(1200))
+                                        .await;
+                                    let _ = this.update(cx, |view, cx| {
+                                        view.copied = false;
+                                        cx.notify();
+                                    });
+                                })
+                                .detach();
+                            })),
+                    ),
+            )
+            .when(self.code, |body| {
+                body.child(
+                    div()
+                        .id("diagram-source")
+                        .role(accesskit::Role::Label)
+                        .aria_value(self.node.as_text().to_owned())
+                        .p_3()
+                        .text_size(px(13.))
+                        .font_family(cx.theme().mono_font_family.clone())
+                        .when(!self.wrapped, |code| code.whitespace_nowrap())
+                        .child(self.node.as_text().to_owned()),
+                )
+            })
+            .when(!self.code, |body| {
+                body.child(
+                    Button::new("expand-diagram")
+                        .accessibility_label("Expand diagram")
+                        .ghost()
+                        .h_auto()
+                        .p_0()
+                        .w_full()
+                        .child(render_graphic(&self.node, cx, true, 1.))
+                        .on_click(move |_, window, cx| {
+                            let Some(graphic) = graphic.clone() else {
+                                return;
+                            };
+                            let viewer = cx.new(|cx| DiagramImage {
+                                graphic,
+                                zoom: 1.,
+                                scroll: ScrollHandle::new(),
+                                drag: None,
+                                dragged: false,
+                                focus: cx.focus_handle(),
+                                viewport: None,
+                            });
+                            window.open_dialog(cx, move |dialog, window, _| {
+                                dialog
+                                    .accessibility_label("Expanded image preview")
+                                    .close_button(false)
+                                    .centered()
+                                    .p_0()
+                                    .border_0()
+                                    .bg(transparent_black())
+                                    .width(window.viewport_size().width * 0.92)
+                                    .child(
+                                        div()
+                                            .relative()
+                                            .h(window.viewport_size().height * 0.86)
+                                            .flex()
+                                            .flex_col()
+                                            .items_center()
+                                            .justify_center()
+                                            .gap_2()
+                                            .child(
+                                                Button::new("close-image")
+                                                    .absolute()
+                                                    .top_0()
+                                                    .right_0()
+                                                    .icon(gpui_kit::assets::IconName::X)
+                                                    .accessibility_label("Close image preview")
+                                                    .ghost()
+                                                    .on_click(|_, window, cx| {
+                                                        window.close_dialog(cx);
+                                                    }),
+                                            )
+                                            .child(viewer.clone())
+                                            .child(
+                                                div()
+                                                    .id("diagram-caption")
+                                                    .text_xs()
+                                                    .role(accesskit::Role::Label)
+                                                    .aria_value("Mermaid diagram")
+                                                    .child("Mermaid diagram"),
+                                            ),
+                                    )
+                            });
+                        }),
+                )
+            })
+    }
+}
+
+struct DiagramImage {
+    graphic: Graphic,
+    zoom: f32,
+    scroll: ScrollHandle,
+    drag: Option<(Point<Pixels>, Point<Pixels>)>,
+    dragged: bool,
+    focus: FocusHandle,
+    viewport: Option<Size<Pixels>>,
+}
+
+impl DiagramImage {
+    fn zoom(&mut self, value: f32, cx: &mut Context<Self>) {
+        self.zoom_at(value, None, cx);
+    }
+
+    fn zoom_at(&mut self, value: f32, position: Option<Point<Pixels>>, cx: &mut Context<Self>) {
+        let next = value.clamp(1., 8.);
+        let offset = self.scroll.offset();
+        let bounds = self.scroll.bounds();
+        let anchor = position
+            .map(|position| position - bounds.origin)
+            .unwrap_or_else(|| point(bounds.size.width / 2., bounds.size.height / 2.));
+        self.scroll
+            .set_offset(anchor - (anchor - offset) * (next / self.zoom));
+        self.zoom = next;
+        cx.notify();
+    }
+}
+
+impl Render for DiagramImage {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let viewport = window.viewport_size();
+        if self.viewport != Some(viewport) {
+            self.viewport = Some(viewport);
+            self.zoom = 1.;
+            self.scroll.set_offset(point(px(0.), px(0.)));
+        }
+        let width = (f32::from(viewport.width) * 0.92
+            - if viewport.width >= px(640.) { 96. } else { 0. })
+        .max(1.);
+        let height = (f32::from(viewport.height) * 0.86)
+            .min(f32::from(viewport.height) - 160.)
+            .max(1.);
+        let fit = (width / self.graphic.width).min(height / self.graphic.height);
+        div()
+            .id("diagram-zoom")
+            .role(accesskit::Role::Region)
+            .aria_label("Mermaid diagram, zoomable image")
+            .aria_description("Click to zoom in or return to fit. Pinch or Ctrl+scroll to zoom, scroll or drag to pan. Use Enter to toggle zoom, plus or minus to zoom, and 0 to fit.")
+            .track_focus(&self.focus)
+            .tab_index(0)
+            .w(px((self.graphic.width * fit * self.zoom).min(width)))
+            .h(px((self.graphic.height * fit * self.zoom).min(height)))
+            .overflow_scroll()
+            .track_scroll(&self.scroll)
+            .on_click(cx.listener(|view, _, window, cx| {
+                view.focus.focus(window, cx);
+                if !view.dragged {
+                    view.zoom(if view.zoom > 1. { 1. } else { 2. }, cx);
+                }
+            }))
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, _, cx| {
+                if event.keystroke.modifiers.control
+                    || event.keystroke.modifiers.platform
+                    || event.keystroke.modifiers.alt
+                {
+                    return;
+                }
+                match event.keystroke.key.as_str() {
+                    "enter" | "space" if !event.is_held => {
+                        view.zoom(if view.zoom > 1. { 1. } else { 2. }, cx)
+                    }
+                    "+" | "=" => view.zoom(view.zoom * 1.5, cx),
+                    "-" => view.zoom(view.zoom / 1.5, cx),
+                    "0" => view.zoom(1., cx),
+                    "left" | "right" | "up" | "down" if view.zoom > 1. => {
+                        let delta = match event.keystroke.key.as_str() {
+                            "left" => point(px(40.), px(0.)),
+                            "right" => point(px(-40.), px(0.)),
+                            "up" => point(px(0.), px(40.)),
+                            _ => point(px(0.), px(-40.)),
+                        };
+                        view.scroll.set_offset(view.scroll.offset() + delta);
+                        cx.notify();
+                    }
+                    _ => return,
+                }
+                cx.stop_propagation();
+            }))
+            .on_scroll(cx.listener(|view, event: &ScrollEvent, _, cx| {
+                if event.modifiers.control {
+                    view.zoom_at(
+                        view.zoom * (-f32::from(event.delta.pixel_delta(px(16.)).y) * 0.01).exp(),
+                        Some(event.position),
+                        cx,
+                    );
+                    cx.stop_propagation();
+                }
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|view, event: &MouseDownEvent, _, _| {
+                    view.dragged = false;
+                    view.drag = (view.zoom > 1.).then(|| (event.position, view.scroll.offset()));
+                }),
+            )
+            .on_mouse_move(cx.listener(|view, event: &MouseMoveEvent, _, cx| {
+                if event.pressed_button == Some(MouseButton::Left)
+                    && let Some((start, offset)) = view.drag
+                {
+                    let delta = event.position - start;
+                    view.dragged |= delta.x.abs() > px(4.) || delta.y.abs() > px(4.);
+                    view.scroll.set_offset(offset + delta);
+                    cx.notify();
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|view, _, _, _| view.drag = None),
+            )
+            .child(
+                img(self.graphic.images[usize::from(cx.theme().mode.is_dark())].clone())
+                    .w(px(self.graphic.width * fit * self.zoom))
+                    .h(px(self.graphic.height * fit * self.zoom)),
+            )
     }
 }
 

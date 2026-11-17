@@ -595,6 +595,14 @@ impl Root {
                     root.persisted_target = Some(target);
                     save = true;
                 }
+                for view in &root.conversation.row_views {
+                    view.update(cx, |view, cx| {
+                        view.set_math_enabled(
+                            root.settings.values["mathRenderingEnabled"] == true,
+                            cx,
+                        )
+                    });
+                }
                 if root.side_chat_parent.is_some()
                     && let Some((env, thread)) = root.current()
                     && let Some(connection) = root.connection(&env)

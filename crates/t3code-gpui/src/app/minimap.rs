@@ -6,6 +6,7 @@ pub(super) struct Minimap {
     pub active: Option<usize>,
     pub focus: FocusHandle,
     pub bounds: Bounds<Pixels>,
+    preview_height: f32,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -46,6 +47,7 @@ impl Minimap {
             active: None,
             focus,
             bounds: Bounds::default(),
+            preview_height: 0.,
             _subscriptions: subscriptions,
         }
     }
@@ -81,6 +83,7 @@ impl Render for Minimap {
             .unwrap_or("User message");
         let theme = cx.theme().colors;
         let measure = cx.entity().downgrade();
+        let preview_measure = cx.entity().downgrade();
         let positions: Vec<_> = self.items.iter().map(|(row, _, _)| *row).collect();
         let list = self.list.clone();
         let rail_height = height(count, f32::from(self.bounds.size.height));
@@ -160,7 +163,15 @@ impl Render for Minimap {
                                 Some(2) => 10.,
                                 _ => 8.,
                             };
-                            let color = if index == current {
+                            let in_view = index == current
+                                || positions
+                                    .get(index)
+                                    .and_then(|row| list.bounds_for_item(*row))
+                                    .is_some_and(|bounds| {
+                                        bounds.top() < list.viewport_bounds().bottom()
+                                            && bounds.bottom() > list.viewport_bounds().top()
+                                    });
+                            let color = if in_view {
                                 theme.foreground.opacity(0.55)
                             } else {
                                 theme.muted_foreground.opacity(if distance == Some(0) {
@@ -238,7 +249,10 @@ impl Render for Minimap {
                         v_flex()
                             .absolute()
                             .left(px(44.))
-                            .top(relative(0.4))
+                            .top(px((f32::from(self.bounds.size.height) - rail_height) / 2.
+                                + active.unwrap_or(0) as f32 / (count - 1) as f32
+                                    * rail_height
+                                - self.preview_height / 2.))
                             .w(px(320.))
                             .p_3()
                             .gap_1()
@@ -255,6 +269,22 @@ impl Render for Minimap {
                                     .max_h(px(60.))
                                     .overflow_hidden()
                                     .child(assistant.chars().take(1500).collect::<String>()),
+                            )
+                            .child(
+                                canvas(
+                                    move |bounds, _, cx| {
+                                        let _ = preview_measure.update(cx, |map, cx| {
+                                            let height = f32::from(bounds.size.height);
+                                            if map.preview_height != height {
+                                                map.preview_height = height;
+                                                cx.notify();
+                                            }
+                                        });
+                                    },
+                                    |_, _, _, _| {},
+                                )
+                                .absolute()
+                                .size_full(),
                             ),
                     )
                 },

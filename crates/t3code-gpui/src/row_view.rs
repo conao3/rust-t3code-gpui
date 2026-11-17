@@ -87,6 +87,7 @@ pub enum RowEvent {
 }
 
 pub struct RowView {
+    math_enabled: bool,
     images: images::Images,
     row: Row,
     summary: String,
@@ -108,6 +109,16 @@ pub struct RowView {
 impl EventEmitter<RowEvent> for RowView {}
 
 impl RowView {
+    pub fn set_math_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if self.math_enabled != enabled {
+            self.math_enabled = enabled;
+            for child in &self.children {
+                child.update(cx, |child, cx| child.set_math_enabled(enabled, cx));
+            }
+            cx.notify();
+        }
+    }
+
     pub fn new(row: Row, cx: &mut Context<Self>) -> Self {
         let timer = (row.kind == RowKind::Working).then(|| {
             cx.spawn(async move |this, cx| {
@@ -146,6 +157,7 @@ impl RowView {
             })
         });
         let mut view = Self {
+            math_enabled: false,
             images: images::Images::default(),
             row,
             summary,
@@ -383,7 +395,11 @@ impl RowView {
             if let Some(child) = self.children.get(index) {
                 child.update(cx, |child, cx| child.update(row.clone(), cx));
             } else {
-                self.children.push(cx.new(|cx| Self::new(row.clone(), cx)));
+                self.children.push(cx.new(|cx| {
+                    let mut child = Self::new(row.clone(), cx);
+                    child.set_math_enabled(self.math_enabled, cx);
+                    child
+                }));
             }
         }
         self.children.truncate(self.row.children.len());
@@ -698,7 +714,9 @@ impl Render for RowView {
                     .line_height(relative(1.625))
                     .child(
                         TextView::new(state)
-                            .markdown_extensions(crate::rich_markdown::extensions())
+                            .markdown_extensions(crate::rich_markdown::extensions(
+                                self.math_enabled,
+                            ))
                             .selectable(true)
                             .style(
                                 TextViewStyle::default()
@@ -829,7 +847,9 @@ impl Render for RowView {
                         .map(|detail| match &self.markdown {
                             Some(markdown) if self.row.kind == RowKind::Reasoning => detail.child(
                                 TextView::new(markdown)
-                                    .markdown_extensions(crate::rich_markdown::extensions())
+                                    .markdown_extensions(crate::rich_markdown::extensions(
+                                        self.math_enabled,
+                                    ))
                                     .selectable(true),
                             ),
                             _ => detail.child(text),
