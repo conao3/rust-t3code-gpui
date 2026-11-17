@@ -31,6 +31,7 @@ Redraws are batched: stream updates land in the client state as they arrive, and
 ## Layout
 
 - `crates/t3-client`: the RPC connection, the shell and thread projections, the live subscriptions with reconnect and `afterSequence` resume, and the command helpers. No UI dependency.
+- `crates/t3-terminal`: the terminal engine. It runs the Ghostty VT module (WebAssembly, through wasmtime), converts keyboard and mouse input, and attaches to terminal sessions on the server. No UI dependency.
 - `crates/t3code-gpui`: the window and the CLI.
 
 ## Setup
