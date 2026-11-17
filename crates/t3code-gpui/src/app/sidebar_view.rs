@@ -41,15 +41,18 @@ impl Root {
 
     pub(super) fn visible_entries(&self) -> Vec<ThreadEntry> {
         let groups = self.project_groups();
+        let scoped: Vec<_> = groups
+            .iter()
+            .filter(|group| self.sidebar_header.scope_keys.contains(&group.key))
+            .collect();
         let query = self.sidebar_header.query.to_lowercase();
         self.entries
             .iter()
             .filter(|entry| {
-                self.sidebar_header.scope_keys.is_empty()
-                    || groups.iter().any(|group| {
-                        self.sidebar_header.scope_keys.contains(&group.key)
-                            && group.contains(&entry.environment, &entry.project_id)
-                    })
+                scoped.is_empty()
+                    || scoped
+                        .iter()
+                        .any(|group| group.contains(&entry.environment, &entry.project_id))
             })
             .filter(|entry| {
                 query.is_empty()
@@ -57,11 +60,7 @@ impl Root {
                     || entry.project_title.to_lowercase().contains(&query)
                     || self.sidebar_header.matches.contains(&entry.key())
             })
-            .filter(|e| {
-                self.host_filter
-                    .as_ref()
-                    .is_none_or(|h| *h == e.environment)
-            })
+            .filter(|e| self.host_filter.is_empty() || self.host_filter.contains(&e.environment))
             .cloned()
             .collect()
     }
