@@ -20,7 +20,7 @@
         "role": "button",
         "name": "Edit queued message"
       },
-      "count": 3
+      "count": 2
     },
     {
       "action": "click",
@@ -50,7 +50,7 @@
         "role": "button",
         "name": "Edit queued message"
       },
-      "count": 3
+      "count": 2
     }
   ]
 }

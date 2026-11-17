@@ -1141,8 +1141,8 @@ impl Root {
             return None;
         }
         let theme = cx.theme();
-        let visible = if count > 4 && !self.conversation.queue_expanded {
-            3
+        let visible = if count > 3 && !self.conversation.queue_expanded {
+            2
         } else {
             count
         };
@@ -1296,7 +1296,7 @@ impl Root {
                                         )
                                 }),
                         )
-                        .when(count > 4, |view| {
+                        .when(count > 3, |view| {
                             view.child(
                                 Button::new("queue-expand")
                                     .label(if self.conversation.queue_expanded {

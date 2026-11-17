@@ -22,8 +22,13 @@ impl Root {
         {
             return;
         }
-        if let Some(run) = self.conversation.queued.last() {
+        if self.conversation.queue_edit.is_none()
+            && let Some(run) = self.conversation.queued.last()
+        {
             self.edit_queued(run.run_id.clone(), window, cx);
+            if self.conversation.queue_edit.is_some() {
+                self.conversation.queue_expanded = true;
+            }
         }
     }
     pub(super) fn steer_next_queued(&mut self, cx: &mut Context<Self>) {
