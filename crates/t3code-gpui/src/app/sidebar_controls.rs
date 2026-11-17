@@ -171,9 +171,7 @@ impl Root {
                 |row, icon| row.child(Icon::new(icon).size(px(12.))),
             )
             .child(settings_controls::text(age))
-            .when_some(duration, |row, duration| {
-                row.child(settings_controls::text(duration))
-            });
+            .when_some(duration, |row, duration| row.child(duration));
         let content = if unseen {
             let acknowledged_at = woke.clone().expect("unseen wake timestamp");
             let environment = entry.environment.clone();
