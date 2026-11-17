@@ -43,6 +43,7 @@ mod choice_select;
 mod composer;
 mod composer_controls;
 mod composer_prompts;
+mod composer_queue;
 mod diff;
 mod files;
 mod find;
@@ -81,6 +82,8 @@ actions!(
     t3code_gpui,
     [
         Send,
+        SteerQueuedMessage,
+        EditQueuedMessage,
         StashPrompt,
         PreviousWorktree,
         OpenComposerWorkspace,
@@ -132,6 +135,8 @@ actions!(
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
+        "thread.steerQueuedMessage" => Box::new(SteerQueuedMessage),
+        "thread.editQueuedMessage" => Box::new(EditQueuedMessage),
         "composer.stash" => Box::new(StashPrompt),
         "composer.previousWorktree" => Box::new(PreviousWorktree),
         "composer.workspace" => Box::new(OpenComposerWorkspace),
@@ -338,6 +343,7 @@ struct ComposerControlsStamp {
     draft: bool,
     status: Option<ThreadStatus>,
     delivery: Delivery,
+    queue_edit: Option<(String, bool)>,
     question: bool,
     empty: bool,
     attachments: bool,
@@ -433,6 +439,7 @@ pub struct Root {
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
     composer_sends: HashSet<String>,
+    queue_edit: Option<composer_queue::Edit>,
     prompts: composer_prompts::Prompts,
     composer_choices: composer_controls::Controls,
     queued: Vec<timeline::Queued>,
@@ -695,6 +702,7 @@ impl Root {
             model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
             composer_sends: HashSet::new(),
+            queue_edit: None,
             prompts: composer_prompts::Prompts {
                 store: prompt_store,
                 ..Default::default()
@@ -1138,6 +1146,10 @@ impl Render for Root {
             draft: self.draft.is_some(),
             status: self.open_entry().map(|entry| entry.status),
             delivery: self.composer_delivery(false),
+            queue_edit: self
+                .queue_edit
+                .as_ref()
+                .map(|edit| (edit.run_id.clone(), edit.saving)),
             question: self.pending_question().is_some(),
             empty: self.composer.read(cx).value().trim().is_empty(),
             attachments: !self.attachments.is_empty(),
@@ -1308,6 +1320,8 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &OpenComposerWorkspace, window, cx| root.open_composer_select(false, window, cx)))
             .on_action(cx.listener(|root, _: &PreviousWorktree, window, cx| root.use_previous_worktree(window, cx)))
             .on_action(cx.listener(|root, _: &StashPrompt, window, cx| root.stash_prompt(window, cx)))
+            .on_action(cx.listener(|root, _: &EditQueuedMessage, window, cx| root.edit_latest_queued(window, cx)))
+            .on_action(cx.listener(|root, _: &SteerQueuedMessage, _, cx| root.steer_next_queued(cx)))
             .on_action(cx.listener(|root, _: &SendAlternate, window, cx| root.send_intent(composer::SubmissionIntent::Alternate, window, cx)))
             .on_action(cx.listener(|root, _: &SendBackground, window, cx| {
                 if root.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }

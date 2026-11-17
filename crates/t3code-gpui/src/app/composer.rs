@@ -280,6 +280,9 @@ impl Root {
     /// Keeps the composer text as the draft of what the composer is for now. Call before the
     /// composer changes what it is for.
     pub(super) fn stash_composer(&mut self, cx: &mut Context<Self>) {
+        if self.queue_edit.is_some() {
+            return;
+        }
         let Some(key) = self.composer_key() else {
             return;
         };
@@ -291,6 +294,7 @@ impl Root {
 
     /// Puts the draft of what the composer is for now into it, at the next render.
     pub(super) fn load_composer(&mut self) {
+        self.abandon_queue_edit();
         self.prompts.history = None;
         self.prompts.open = false;
         self.hovered_message = None;
@@ -367,6 +371,10 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         if self.composer_composing(window, cx) {
+            return;
+        }
+        if self.queue_edit.is_some() {
+            self.save_queue_edit(window, cx);
             return;
         }
         if self.draft.is_some() {
@@ -560,6 +568,10 @@ impl Root {
     }
 
     pub(super) fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.queue_edit.is_some() {
+            self.cancel_queue_edit(window, cx);
+            return;
+        }
         if self.branch_anchor.take().is_some() {
             self.composer
                 .update(cx, |state, cx| state.focus(window, cx));
@@ -715,7 +727,7 @@ impl Root {
         ))
     }
 
-    fn dispatch_on_open(
+    pub(super) fn dispatch_on_open(
         &mut self,
         what: &'static str,
         cx: &mut Context<Self>,
@@ -978,6 +990,11 @@ impl Root {
         let rows = self.queued.iter().enumerate().map(|(i, queued)| {
             let steer_run = queued.run_id.clone();
             let cancel_run = queued.run_id.clone();
+            let edit_run = queued.run_id.clone();
+            let editing = self
+                .queue_edit
+                .as_ref()
+                .is_some_and(|edit| edit.run_id == queued.run_id);
             h_flex()
                 .gap_2()
                 .child(
@@ -996,7 +1013,8 @@ impl Root {
                 )
                 .child(
                     Button::new(("queue-steer", i))
-                        .label("Steer now")
+                        .disabled(editing)
+                        .label("Send now")
                         .compact()
                         .outline()
                         .on_click(cx.listener(move |root, _, _, cx| {
@@ -1004,8 +1022,48 @@ impl Root {
                         })),
                 )
                 .child(
+                    Button::new(("queue-edit", i))
+                        .icon(gpui_kit::assets::IconName::Pencil)
+                        .ghost()
+                        .compact()
+                        .accessibility_label(if editing {
+                            "Cancel editing queued message"
+                        } else {
+                            "Edit queued message"
+                        })
+                        .on_click(cx.listener(move |root, _, window, cx| {
+                            if editing {
+                                root.cancel_queue_edit(window, cx);
+                            } else {
+                                root.edit_queued(edit_run.clone(), window, cx);
+                            }
+                        })),
+                )
+                .child(
+                    Button::new(("queue-up", i))
+                        .icon(IconName::ArrowUp)
+                        .ghost()
+                        .compact()
+                        .disabled(i == 0)
+                        .accessibility_label("Move queued message up")
+                        .on_click(
+                            cx.listener(move |root, _, _, cx| root.move_queued(i, false, cx)),
+                        ),
+                )
+                .child(
+                    Button::new(("queue-down", i))
+                        .icon(IconName::ArrowDown)
+                        .ghost()
+                        .compact()
+                        .disabled(i + 1 == self.queued.len())
+                        .accessibility_label("Move queued message down")
+                        .on_click(cx.listener(move |root, _, _, cx| root.move_queued(i, true, cx))),
+                )
+                .child(
                     Button::new(("queue-cancel", i))
                         .label("Cancel")
+                        .accessibility_label("Remove queued message")
+                        .disabled(editing)
                         .compact()
                         .outline()
                         .on_click(cx.listener(move |root, _, _, cx| {
@@ -1023,7 +1081,7 @@ impl Root {
         )
     }
 
-    fn steer_queued(&mut self, run_id: String, cx: &mut Context<Self>) {
+    pub(super) fn steer_queued(&mut self, run_id: String, cx: &mut Context<Self>) {
         let Some((environment, thread_id)) = self.current() else {
             return;
         };
@@ -1032,8 +1090,9 @@ impl Root {
                 .and_then(Value::as_str)
                 .map(str::to_string)
         }) else {
-            self.message = Some("No run is active to steer.".into());
-            cx.notify();
+            self.dispatch_on_open("Starting queued message",cx,move |connection,thread_id| Box::pin(async move {
+                connection.dispatch(json!({"type":"queued-run.start","threadId":thread_id,"runId":run_id})).await
+            }));
             return;
         };
         self.dispatch_on_open("Steering", cx, move |connection, thread_id| {
@@ -1063,6 +1122,16 @@ impl Root {
     }
 
     fn composer_button(&self, cx: &Context<Self>) -> Button {
+        if let Some(edit) = &self.queue_edit {
+            return Button::new("save-queued-message")
+                .icon(IconName::Check)
+                .size(px(32.))
+                .rounded(px(16.))
+                .accessibility_label("Update queued message")
+                .tooltip("Update queued message")
+                .disabled(edit.saving)
+                .on_click(cx.listener(|root, _, window, cx| root.save_queue_edit(window, cx)));
+        }
         if self.draft.is_some() {
             return Button::new("launch")
                 .icon(IconName::ArrowUp)
@@ -1653,6 +1722,8 @@ impl Root {
             )
         });
         let content = v_flex()
+            .children(self.render_queue_attachments(cx))
+            .children(self.render_force_stop(cx))
             .children(self.render_prompt_stash(cx))
             .relative()
             .w_full()
@@ -1807,7 +1878,7 @@ impl Root {
 }
 
 /// Uploads the composer's attachments in order and returns what a message refers to them by.
-async fn upload_all(
+pub(super) async fn upload_all(
     connection: &Connection,
     pending: &[attachments::Pending],
 ) -> anyhow::Result<Vec<Value>> {
