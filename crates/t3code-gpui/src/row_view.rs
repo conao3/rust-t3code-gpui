@@ -692,43 +692,46 @@ impl Render for RowView {
                     .text_color(theme.foreground.opacity(0.9))
                     .line_height(relative(1.625))
                     .child(
-                        TextView::new(state).selectable(true).style(
-                            TextViewStyle::default()
-                                .paragraph_gap(rems(0.65))
-                                .code_block(
-                                    StyleRefinement::default()
-                                        .line_height(relative(1.375))
-                                        .bg(if theme.mode.is_dark() {
-                                            theme.input.opacity(0.32)
-                                        } else {
-                                            crate::appearance::code_background(cx)
-                                        })
-                                        .border_color(if theme.mode.is_dark() {
-                                            transparent_black()
-                                        } else {
-                                            theme.border.opacity(0.7)
-                                        }),
-                                )
-                                .table(
-                                    StyleRefinement::default()
-                                        .bg(theme.background)
-                                        .border_0()
-                                        .rounded_none(),
-                                )
-                                .table_head(
-                                    StyleRefinement::default()
-                                        .bg(theme.background)
-                                        .font_weight(FontWeight::SEMIBOLD),
-                                )
-                                .table_cell(
-                                    StyleRefinement::default()
-                                        .border_0()
-                                        .border_color(transparent_black())
-                                        .px_0()
-                                        .py_2()
-                                        .text_sm(),
-                                ),
-                        ),
+                        TextView::new(state)
+                            .markdown_extensions(crate::rich_markdown::extensions())
+                            .selectable(true)
+                            .style(
+                                TextViewStyle::default()
+                                    .paragraph_gap(rems(0.65))
+                                    .code_block(
+                                        StyleRefinement::default()
+                                            .line_height(relative(1.375))
+                                            .bg(if theme.mode.is_dark() {
+                                                theme.input.opacity(0.32)
+                                            } else {
+                                                crate::appearance::code_background(cx)
+                                            })
+                                            .border_color(if theme.mode.is_dark() {
+                                                transparent_black()
+                                            } else {
+                                                theme.border.opacity(0.7)
+                                            }),
+                                    )
+                                    .table(
+                                        StyleRefinement::default()
+                                            .bg(theme.background)
+                                            .border_0()
+                                            .rounded_none(),
+                                    )
+                                    .table_head(
+                                        StyleRefinement::default()
+                                            .bg(theme.background)
+                                            .font_weight(FontWeight::SEMIBOLD),
+                                    )
+                                    .table_cell(
+                                        StyleRefinement::default()
+                                            .border_0()
+                                            .border_color(transparent_black())
+                                            .px_0()
+                                            .py_2()
+                                            .text_sm(),
+                                    ),
+                            ),
                     )
                     .when_some(
                         self.row
@@ -813,9 +816,11 @@ impl Render for RowView {
                             detail.font_family(theme.mono_font_family.clone())
                         })
                         .map(|detail| match &self.markdown {
-                            Some(markdown) if self.row.kind == RowKind::Reasoning => {
-                                detail.child(TextView::new(markdown).selectable(true))
-                            }
+                            Some(markdown) if self.row.kind == RowKind::Reasoning => detail.child(
+                                TextView::new(markdown)
+                                    .markdown_extensions(crate::rich_markdown::extensions())
+                                    .selectable(true),
+                            ),
                             _ => detail.child(text),
                         })
                         .on_click(|_, _, cx| cx.stop_propagation())

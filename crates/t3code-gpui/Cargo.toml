@@ -28,6 +28,13 @@ tokio.workspace = true
 uuid.workspace = true
 icu_collator = "=2.4.0"
 
+ratex-parser = "=0.1.16"
+ratex-layout = "=0.1.16"
+ratex-types = "=0.1.16"
+ratex-svg = { version = "=0.1.16", features = ["embed-fonts"] }
+pelago = { git = "https://github.com/lazy-mutex/pelago", rev = "12676af43b6e9cd5046f5af0403a3666329eb001" }
+usvg = "=0.46.0"
+
 [features]
 gpui-fast = ["gpui-kit/gpui-fast"]
 

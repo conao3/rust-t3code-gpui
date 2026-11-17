@@ -52,7 +52,10 @@
             pname = "t3code-gpui";
             version = "0.1.0";
             src = lib.cleanSource ./.;
-            cargoLock.lockFile = ./Cargo.lock;
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+              outputHashes."pelago-0.1.0" = "15q4ppvwfxx6g9wkza74wzmq3pbkks07ihx12fi8nhl2gl3gs7za";
+            };
             cargoBuildFlags = [
               "--package"
               "t3code-gpui"
@@ -80,6 +83,7 @@
               install -Dm644 vendor/accesskit_atspi_common/LICENSE-MIT $out/share/doc/t3code-gpui/AccessKit-LICENSE-MIT
               install -Dm644 vendor/accesskit_atspi_common/LICENSE.chromium $out/share/doc/t3code-gpui/AccessKit-LICENSE.chromium
               install -Dm644 crates/t3code-gpui/assets/Inter-LICENSE.txt $out/share/doc/t3code-gpui/Inter-LICENSE.txt
+              install -m644 crates/t3code-gpui/assets/licenses/{RaTeX-MIT,KaTeX-fonts-NOTICE,SIL-OFL-1.1,Pelago-MIT}.txt $out/share/doc/t3code-gpui/
               install -Dm644 crates/t3code-gpui/assets/licenses/Unicode-3.0.txt $out/share/doc/t3code-gpui/Unicode-3.0.txt
               install -Dm644 crates/t3-terminal/assets/Ghostty-LICENSE $out/share/doc/t3code-gpui/Ghostty-LICENSE
               install -Dm644 crates/t3-terminal/assets/Ghostty-VERSION $out/share/doc/t3code-gpui/Ghostty-VERSION

@@ -14,6 +14,7 @@ mod navigation;
 mod permissions;
 mod projects;
 mod provider_display;
+mod rich_markdown;
 mod row_view;
 mod shell_presentation;
 mod sidebar;

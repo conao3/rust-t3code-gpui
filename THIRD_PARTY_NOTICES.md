@@ -121,3 +121,9 @@ The native Snooze state, preset scheduling, custom date/duration input and edito
 The thread cleanup undo plans, hosted reference escaping and current pull request selection in `crates/t3code-gpui/src/app/thread_commands.rs` derive from T3 Code at revision `24e77473ecf41bc1f7142529c7911c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.
 
 The minimap geometry in `crates/t3code-gpui/src/app/minimap.rs` follows T3 Code `MessagesTimeline.logic.ts` at revision `24e77473ecf41bc1f7142529c7911c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.
+
+## Mathematical and Mermaid diagrams
+
+RaTeX 0.1.16 (`ratex-parser`, `ratex-layout`, `ratex-types`, and `ratex-svg`) renders equations with embedded KaTeX glyph outlines. Its MIT license is retained in `crates/t3code-gpui/assets/licenses/RaTeX-MIT.txt`; the font notices and SIL Open Font License 1.1 are retained alongside it as `KaTeX-fonts-NOTICE.txt` and `SIL-OFL-1.1.txt`.
+
+Pelago 0.1.0 at revision `12676af43b6e9cd5046f5af0403a3666329eb001` renders Mermaid diagrams in Rust. It derives from Obsidian Pele; both copyright notices and its MIT license are retained in `crates/t3code-gpui/assets/licenses/Pelago-MIT.txt`.
