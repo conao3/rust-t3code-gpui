@@ -417,6 +417,11 @@ where
         cx.notify();
     }
 
+    pub fn open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_open(true, cx);
+        self.state.list.focus_handle(cx).focus(window, cx);
+    }
+
     fn toggle_menu(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         cx.stop_propagation();
 

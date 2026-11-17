@@ -1297,6 +1297,9 @@ impl Root {
                     .as_ref()
                     .and_then(|selection| models::option_value(selection, descriptor));
                 v_flex()
+                    .id("composer-reasoning")
+                    .role(accesskit::Role::RadioGroup)
+                    .aria_label("Reasoning")
                     .w(px(192.))
                     .h_full()
                     .border_l_1()
@@ -1323,6 +1326,31 @@ impl Root {
                                 let id = id.clone();
                                 h_flex()
                                     .id(SharedString::from(format!("reasoning-{value}")))
+                                    .role(accesskit::Role::RadioButton)
+                                    .aria_label(
+                                        option["label"].as_str().unwrap_or_default().to_string(),
+                                    )
+                                    .aria_toggled(if checked {
+                                        accesskit::Toggled::True
+                                    } else {
+                                        accesskit::Toggled::False
+                                    })
+                                    .when(checked, |row| {
+                                        row.track_focus(&self.composer_choices.effort_focus)
+                                    })
+                                    .on_key_down(cx.listener(
+                                        |root, event: &KeyDownEvent, window, cx| {
+                                            if matches!(event.keystroke.key.as_str(), "up" | "down")
+                                            {
+                                                root.step_effort(
+                                                    event.keystroke.key == "down",
+                                                    window,
+                                                    cx,
+                                                );
+                                                cx.stop_propagation();
+                                            }
+                                        },
+                                    ))
                                     .w_full()
                                     .h(px(34.))
                                     .px_2()
@@ -1758,7 +1786,7 @@ impl Root {
                                 .px_2()
                                 .items_start()
                                 .pt_1()
-                                .child(self.render_workspace_mode(cx))
+                                .child(self.render_composer_context(cx))
                                 .child(div().flex_1())
                                 .when(self.workspace_status.is_repo(), |row| {
                                     row.child(

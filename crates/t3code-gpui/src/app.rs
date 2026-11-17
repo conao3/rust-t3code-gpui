@@ -41,6 +41,7 @@ use crate::workspace;
 
 mod choice_select;
 mod composer;
+mod composer_controls;
 mod diff;
 mod files;
 mod find;
@@ -79,6 +80,13 @@ actions!(
     t3code_gpui,
     [
         Send,
+        PreviousWorktree,
+        OpenComposerWorkspace,
+        DecreaseEffort,
+        IncreaseEffort,
+        OpenEffort,
+        CycleComposerHost,
+        OpenComposerHost,
         SendAlternate,
         SendBackground,
         SendAndNewThread,
@@ -122,6 +130,13 @@ actions!(
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
+        "composer.previousWorktree" => Box::new(PreviousWorktree),
+        "composer.workspace" => Box::new(OpenComposerWorkspace),
+        "composer.decreaseEffort" => Box::new(DecreaseEffort),
+        "composer.increaseEffort" => Box::new(IncreaseEffort),
+        "composer.effort" => Box::new(OpenEffort),
+        "composer.cycleHost" => Box::new(CycleComposerHost),
+        "composer.host" => Box::new(OpenComposerHost),
         "terminal.toggle" => Box::new(ToggleTerminal),
         "terminal.split" => Box::new(SplitTerminal),
         "terminal.splitVertical" => Box::new(SplitTerminalVertical),
@@ -143,7 +158,6 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "composer.sendBackground" => Box::new(SendBackground),
         "composer.sendAndNewThread" => Box::new(SendAndNewThread),
         "composer.mode" => Box::new(OpenPermissions),
-        "composer.effort" => Box::new(ToggleModelPicker),
         "sidebar.toggle" => Box::new(ToggleSidebar),
         "thread.pin" => Box::new(TogglePin),
         "chat.find" => Box::new(Find),
@@ -416,6 +430,7 @@ pub struct Root {
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
     composer_sends: HashSet<String>,
+    composer_choices: composer_controls::Controls,
     queued: Vec<timeline::Queued>,
     thread_loading: bool,
     completion: Option<Completion>,
@@ -672,6 +687,7 @@ impl Root {
             model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
             composer_sends: HashSet::new(),
+            composer_choices: composer_controls::Controls::new(cx),
             queued: Vec::new(),
             thread_loading: false,
             completion: None,
@@ -1100,6 +1116,7 @@ impl Render for Root {
             self.composer
                 .update(cx, |state, cx| state.set_value(text, window, cx));
         }
+        self.sync_composer_controls(window, cx);
         let controls_stamp = ComposerControlsStamp {
             target: self.composer_target(),
             current: self.current(),
@@ -1268,6 +1285,13 @@ impl Render for Root {
             }))
             .on_action(cx.listener(|root, _: &CycleRuntimeMode, _, cx| root.cycle_runtime_mode(cx)))
             .on_action(cx.listener(|root, _: &Send, window, cx| root.send(window, cx)))
+            .on_action(cx.listener(|root, _: &OpenComposerHost, window, cx| root.open_composer_select(true, window, cx)))
+            .on_action(cx.listener(|root, _: &CycleComposerHost, window, cx| root.cycle_composer_host(window, cx)))
+            .on_action(cx.listener(|root, _: &OpenEffort, window, cx| root.open_effort(window, cx)))
+            .on_action(cx.listener(|root, _: &IncreaseEffort, window, cx| root.step_effort(true, window, cx)))
+            .on_action(cx.listener(|root, _: &DecreaseEffort, window, cx| root.step_effort(false, window, cx)))
+            .on_action(cx.listener(|root, _: &OpenComposerWorkspace, window, cx| root.open_composer_select(false, window, cx)))
+            .on_action(cx.listener(|root, _: &PreviousWorktree, window, cx| root.use_previous_worktree(window, cx)))
             .on_action(cx.listener(|root, _: &SendAlternate, window, cx| root.send_intent(composer::SubmissionIntent::Alternate, window, cx)))
             .on_action(cx.listener(|root, _: &SendBackground, window, cx| {
                 if root.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
