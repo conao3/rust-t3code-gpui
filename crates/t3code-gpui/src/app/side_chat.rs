@@ -40,6 +40,26 @@ impl Root {
         if current.is_none() {
             return Some("Side chats start after the first message.");
         }
+        if thread
+            .as_ref()
+            .is_some_and(|thread| thread["worktreePath"].is_null())
+            && self.open.as_ref().is_some_and(|open| {
+                open.watch
+                    .state()
+                    .lock()
+                    .expect("thread state")
+                    .list("runs")
+                    .iter()
+                    .any(|run| {
+                        matches!(
+                            run["status"].as_str(),
+                            Some("preparing" | "failed" | "interrupted")
+                        ) && run["workspacePreparation"]["type"] == "worktree"
+                    })
+            })
+        {
+            return Some("Available once the thread's worktree is set up.");
+        }
         None
     }
 
@@ -65,7 +85,7 @@ impl Root {
             let result = on_runtime(&runtime, async move {
                 connection.dispatch(json!({"type":"thread.fork","createdBy":"user","creationSource":"web","sourceThreadId":source,"targetThreadId":target_id,"sourcePoint":{"type":"latest_stable"},"sideChat":true,"title":"Side chat"})).await?;
                 let start = async {
-                    let shell = tokio::time::timeout(Duration::from_secs(10), async {
+                    let shell = tokio::time::timeout(Duration::from_secs(5), async {
                         loop {
                             let shell = connection.shell().lock().expect("shell lock").threads.iter().find(|t| t["id"] == target_id).cloned();
                             if let Some(shell) = shell { return shell; }
@@ -94,7 +114,6 @@ impl Root {
                         root.pane_layout.split(root.conversation.id, id, false);
                         root.with_conversation(id, |root| {
                             root.open_thread(environment, target.clone(), cx);
-
                         });
                         root.activate_panel(format!("side-chat:{target}"), cx);
                         root.save_conversations();
@@ -107,6 +126,20 @@ impl Root {
     }
 
     pub(super) fn render_side_chat_surface(&self, thread: &str) -> AnyElement {
+        if self
+            .right_panel_target
+            .as_ref()
+            .is_some_and(|(env, _)| self.thread_value(env, thread).is_none())
+        {
+            return div()
+                .id("side-chat-deleted")
+                .role(accesskit::Role::Label)
+                .aria_value("This side chat was deleted.")
+                .p_3()
+                .text_xs()
+                .child("This side chat was deleted.")
+                .into_any_element();
+        }
         std::iter::once(&self.conversation)
             .chain(self.panes.values())
             .find(|pane| {

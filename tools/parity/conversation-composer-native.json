@@ -54,7 +54,16 @@
         "role": "textbox",
         "name": "Message Pane Alpha"
       },
-      "value": ""
+      "reference": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": ""
+      }
     },
     {
       "action": "focus",
@@ -77,7 +86,16 @@
         "role": "textbox",
         "name": "Message Side chat"
       },
-      "value": ""
+      "reference": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": ""
+      }
     },
     {
       "action": "focus",
@@ -150,8 +168,17 @@
         "role": "textbox",
         "name": "Message Pane Alpha"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": ""
+      }
     },
     {
       "action": "focus",
@@ -170,8 +197,17 @@
         "role": "textbox",
         "name": "Message Side chat"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": ""
+      }
     },
     {
       "action": "focus",
@@ -194,8 +230,17 @@
         "role": "textbox",
         "name": "Message Pane Alpha"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": ""
+      }
     },
     {
       "action": "focus",
@@ -218,8 +263,17 @@
         "role": "textbox",
         "name": "Message Side chat"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": ""
+      }
     },
     {
       "action": "checkpoint",
@@ -321,8 +375,17 @@
         "role": "textbox",
         "name": "Message Pane Alpha"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": ""
+      }
     },
     {
       "action": "focus",
@@ -341,8 +404,17 @@
         "role": "textbox",
         "name": "Message Side chat"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": ""
+      }
     },
     {
       "action": "checkpoint",
