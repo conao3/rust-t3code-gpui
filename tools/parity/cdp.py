@@ -57,7 +57,9 @@ class Cdp:
             )
         self.page_url = pages[0]["url"]
         self.socket = await websockets.connect(
-            pages[0]["webSocketDebuggerUrl"], max_size=32 * 1024 * 1024
+            pages[0]["webSocketDebuggerUrl"],
+            max_size=32 * 1024 * 1024,
+            open_timeout=60,
         )
         try:
             try:
@@ -65,7 +67,9 @@ class Cdp:
             except TimeoutError:
                 await self.socket.close()
                 self.socket = await websockets.connect(
-                    pages[0]["webSocketDebuggerUrl"], max_size=32 * 1024 * 1024
+                    pages[0]["webSocketDebuggerUrl"],
+                    max_size=32 * 1024 * 1024,
+                    open_timeout=60,
                 )
                 await self.wait_document()
         except BaseException:

@@ -150,6 +150,7 @@ def main():
                 "dbus-run-session",
                 "--",
                 args.reference_binary,
+                "--force-device-scale-factor=1",
                 "--remote-debugging-address=127.0.0.1",
                 f"--remote-debugging-port={args.cdp_port}",
             ],
