@@ -339,6 +339,12 @@ impl NodeWrapper<'_> {
         if state.is_modal() {
             atspi_state.insert(State::Modal);
         }
+        if let Some(expanded) = state.data().is_expanded() {
+            atspi_state.insert(State::Expandable);
+            if expanded {
+                atspi_state.insert(State::Expanded);
+            }
+        }
         if let Some(selected) = state.is_selected() {
             if !state.is_disabled() {
                 atspi_state.insert(State::Selectable);
@@ -1946,6 +1952,29 @@ pub struct CacheNode {
 #[cfg(test)]
 mod disabled_control_tests {
     use super::*;
+
+    #[test]
+    fn expansion_is_exposed_for_both_open_and_closed_controls() {
+        for expanded in [None, Some(false), Some(true)] {
+            let mut node = accesskit::Node::new(Role::Button);
+            if let Some(expanded) = expanded {
+                node.set_expanded(expanded);
+            }
+            let tree = Tree::new(
+                accesskit::TreeUpdate {
+                    nodes: vec![(LocalNodeId(0), node)],
+                    tree: Some(accesskit::Tree::new(LocalNodeId(0))),
+                    tree_id: TreeId::ROOT,
+                    focus: LocalNodeId(0),
+                },
+                false,
+            );
+            let root = tree.state().root();
+            let state = NodeWrapper(&root).state(false);
+            assert_eq!(state.contains(State::Expandable), expanded.is_some());
+            assert_eq!(state.contains(State::Expanded), expanded == Some(true));
+        }
+    }
 
     #[test]
     fn disabled_controls_do_not_advertise_enabled_or_sensitive() {

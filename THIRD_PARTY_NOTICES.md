@@ -1,6 +1,6 @@
 # Third-party notices
 
-`vendor/accesskit_atspi_common/` is AccessKit's AT-SPI translation layer 0.19.1 at commit c88605b96d04431f9c3c792464a0f2f253480e94, used under Apache-2.0 or MIT. Its license files and Chromium-derived code notice are retained in that directory. The local patch keeps disabled buttons and menu items from reporting AT-SPI Enabled and Sensitive states.
+`vendor/accesskit_atspi_common/` is AccessKit's AT-SPI translation layer 0.19.1 at commit c88605b96d04431f9c3c792464a0f2f253480e94, used under Apache-2.0 or MIT. Its license files and Chromium-derived code notice are retained in that directory. The local patches keep disabled buttons and menu items from reporting AT-SPI Enabled and Sensitive states, and expose expandable controls with their actual expanded state.
 
 `crates/t3-client/src/{error,http,projection,rpc}.rs` and `crates/t3-client/src/rpc/` derive from [t3term](https://github.com/krishhgg/t3term) (commit d1d33e8), used under the MIT License:
 
@@ -98,7 +98,7 @@ SOFTWARE.
 
 ## GPUI component menus
 
-`vendor/gpui-component/` is `gpui-component` 0.9.1, distributed under Apache-2.0 (`vendor/gpui-component/LICENSE-APACHE`). Custom popup menu items expose an explicit accessible label alongside their custom content.
+`vendor/gpui-component/` is `gpui-component` 0.9.1, distributed under Apache-2.0 (`vendor/gpui-component/LICENSE-APACHE`). Custom popup menu items expose an explicit accessible label alongside their custom content. Buttons can expose expanded state and opt into an inset keyboard focus ring.
 
 The assistant message metadata and copy behavior in `crates/t3code-gpui/src/{timeline,row_view,markdown_directives,timestamp}.rs` derive from T3 Code `apps/web/src/components/chat/{TimelineAssistantRows,MessageCopyButton}.tsx`, `apps/web/src/timestampFormat.ts`, and `packages/shared/src/{codexMarkdownDirectives,codexFileCitations,codexArtifactTemplates}.ts` at source revision `24e77473ecf41bc1f7142529c7911c1c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.
 

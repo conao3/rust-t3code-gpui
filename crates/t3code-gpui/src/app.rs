@@ -39,6 +39,7 @@ use crate::timeline::{self, Pending, Row, RowKind};
 use crate::workspace;
 
 mod lineage;
+mod sidebar_controls;
 
 type CommandFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<u64>> + std::marker::Send>>;
@@ -463,6 +464,7 @@ pub struct Root {
     window_drag_pending: bool,
     history: crate::navigation::History,
     sidebar_pane: Entity<SidebarPane>,
+    sidebar_scroll: ScrollHandle,
     sidebar_stamp: Option<SidebarStamp>,
     runtime: Handle,
     connections: Vec<Arc<Connection>>,
@@ -658,6 +660,15 @@ impl Root {
         let mut terminal_store =
             crate::terminal::Store::load(drafts_path.with_file_name("terminals.json"));
         let terminal_error = terminal_store.error.take();
+        let collapsed = [
+            sidebar::Section::Working,
+            sidebar::Section::Snoozed,
+            sidebar::Section::Settled,
+        ]
+        .into_iter()
+        .zip(settings.shelf_expanded)
+        .filter_map(|(section, expanded)| (!expanded).then_some(section))
+        .collect();
         Self {
             lineage_data: crate::lineage::Details::default(),
             lineage_target: None,
@@ -699,6 +710,7 @@ impl Root {
             sidebar_pane: cx.new(|_| SidebarPane {
                 root: sidebar_root.clone(),
             }),
+            sidebar_scroll: ScrollHandle::new(),
             sidebar_stamp: None,
             runtime,
             connections,
@@ -761,7 +773,7 @@ impl Root {
             settings_open: false,
             sidebar_hidden: false,
             wake_scheduled: false,
-            collapsed: HashSet::from([sidebar::Section::Settled]),
+            collapsed,
             collapsed_families: HashSet::new(),
             window_active: window.is_window_active(),
             shell_dirty: false,
@@ -4125,29 +4137,13 @@ impl Root {
             lower_started |= lower;
             let collapsed = self.collapsed.contains(&section);
             if !matches!(section, sidebar::Section::Pinned | sidebar::Section::Active) {
-                rows.push(
-                    h_flex()
-                        .id(SharedString::from(format!("shelf-{}", section.label())))
-                        .px_2()
-                        .pt_2()
-                        .pb_1()
-                        .gap_1()
-                        .text_xs()
-                        .text_color(sidebar_muted)
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |root, _, _, cx| {
-                            if !root.collapsed.remove(&section) {
-                                root.collapsed.insert(section);
-                            }
-                            cx.notify();
-                        }))
-                        .when(bottom, |row| row.mt_auto())
-                        .child(section.label())
-                        .child(div().flex_1())
-                        .child(format!("{}", shelf.rows.len()))
-                        .child(if collapsed { "▸" } else { "▾" })
-                        .into_any_element(),
-                );
+                rows.push(self.render_shelf_toggle(
+                    section,
+                    shelf.rows.len(),
+                    bottom,
+                    rows.len(),
+                    cx,
+                ));
             }
             if collapsed && !matches!(section, sidebar::Section::Pinned | sidebar::Section::Active)
             {
@@ -4192,6 +4188,8 @@ impl Root {
                 let pinned = entry.pin_order.is_some();
                 let snoozed = section == sidebar::Section::Snoozed;
                 let settled = entry.status == ThreadStatus::Settled;
+                let scroll = self.sidebar_scroll.clone();
+                let child_index = rows.len();
                 rows.push(
                     v_flex()
                         .id(SharedString::from(format!(
@@ -4205,6 +4203,10 @@ impl Root {
                             accesskit::AriaCurrent::False
                         })
                         .focusable()
+                        .on_a11y_action(accesskit::Action::ScrollIntoView, move |_, window, _| {
+                            scroll.scroll_to_item(child_index);
+                            window.refresh();
+                        })
                         .w_full()
                         .pl(px(crate::appearance::ROW_INSET + 16. * depth as f32))
                         .pr_2()
@@ -4365,20 +4367,13 @@ impl Root {
             }
         }
         if !has_settled {
-            rows.push(
-                h_flex()
-                    .px_2()
-                    .py_2()
-                    .gap_2()
-                    .text_xs()
-                    .text_color(sidebar_muted)
-                    .when(!lower_started, |row| row.mt_auto())
-                    .child("Settled")
-                    .child(div().flex_1())
-                    .child("0")
-                    .child("▸")
-                    .into_any_element(),
-            );
+            rows.push(self.render_shelf_toggle(
+                sidebar::Section::Settled,
+                0,
+                !lower_started,
+                rows.len(),
+                cx,
+            ));
         }
         v_flex()
             .w(px(self.settings.sidebar_width))
@@ -4427,8 +4422,11 @@ impl Root {
             .child(
                 v_flex()
                     .id("threads")
+                    .role(accesskit::Role::ScrollView)
+                    .aria_label("Threads")
                     .flex_1()
                     .overflow_y_scroll()
+                    .track_scroll(&self.sidebar_scroll)
                     .p_2()
                     .children(rows),
             )

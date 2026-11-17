@@ -161,6 +161,14 @@ class Cdp:
                     ),
                     None,
                 ),
+                "expanded": next(
+                    (
+                        p["value"].get("value")
+                        for p in n.get("properties", [])
+                        if p["name"] == "expanded"
+                    ),
+                    None,
+                ),
             }
             for n in result["nodes"]
             if not n.get("ignored")

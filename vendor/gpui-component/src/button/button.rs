@@ -228,6 +228,7 @@ pub struct Button {
     loading: bool,
     loading_icon: Option<Icon>,
     focus_ring_enabled: bool,
+    inset_focus_ring: Option<(Pixels, Hsla)>,
     focus_handle: Option<FocusHandle>,
 
     tab_index: isize,
@@ -275,6 +276,7 @@ impl Button {
             tooltip_builder: None,
             on_click: None,
             focus_ring_enabled: true,
+            inset_focus_ring: None,
             focus_handle: None,
             on_hover: None,
             loading: false,
@@ -499,6 +501,22 @@ impl Button {
     /// accessibility focus state alike.
     pub fn track_focus(mut self, focus_handle: &FocusHandle) -> Self {
         self.focus_handle = Some(focus_handle.clone());
+        self
+    }
+
+    #[allow(missing_docs)]
+    pub fn inset_focus_ring(mut self, width: Pixels, color: Hsla) -> Self {
+        self.inset_focus_ring = Some((width, color));
+        self
+    }
+
+    #[allow(missing_docs)]
+    pub fn on_a11y_action(
+        mut self,
+        action: gpui::accesskit::Action,
+        listener: impl FnMut(Option<&gpui::accesskit::ActionData>, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.base = self.base.on_a11y_action(action, listener);
         self
     }
 
@@ -938,7 +956,20 @@ impl RenderOnce for Button {
             }
         })
         .when(is_focused && self.focus_ring_enabled, |this| {
-            focus_style(this, focus_line, window, cx)
+            if let Some((width, color)) = self.inset_focus_ring {
+                this.when(window.last_input_was_keyboard(), |this| {
+                    this.relative().child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .border(width)
+                            .border_color(color)
+                            .rounded(rounding),
+                    )
+                })
+            } else {
+                focus_style(this, focus_line, window, cx)
+            }
         })
     }
 }

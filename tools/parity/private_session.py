@@ -35,6 +35,8 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--session", type=Path, required=True)
     parser.add_argument("--binary", type=Path, default=Path("target/debug/t3code-gpui"))
+    parser.add_argument("--native-home", type=Path)
+    parser.add_argument("--native-state-home", type=Path)
     args = parser.parse_args()
     environments = inspect_environments(args.binary, args.config)
     args.session.parent.mkdir(parents=True, exist_ok=True)
@@ -71,8 +73,12 @@ def main():
             None,
         )
         env = os.environ.copy()
-        env["T3CODE_HOME"] = str((args.session.parent / "native-home").resolve())
-        env["XDG_STATE_HOME"] = str((args.session.parent / "native-state").resolve())
+        env["T3CODE_HOME"] = str(
+            (args.native_home or args.session.parent / "native-home").resolve()
+        )
+        env["XDG_STATE_HOME"] = str(
+            (args.native_state_home or args.session.parent / "native-state").resolve()
+        )
         env["T3CODE_GPUI_RENDERER_INFO"] = "1"
         with (args.session.parent / "native.log").open("w") as output:
             app = subprocess.Popen(
@@ -87,6 +93,8 @@ def main():
             "dbus_address": os.environ["DBUS_SESSION_BUS_ADDRESS"],
             "binary": str(args.binary.resolve()),
             "display": env["DISPLAY"],
+            "home": env["T3CODE_HOME"],
+            "state_home": env["XDG_STATE_HOME"],
             "environments": environments,
         }
         args.session.write_text(json.dumps(manifest, indent=2) + "\n")

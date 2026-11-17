@@ -68,6 +68,7 @@ def main():
     parser.add_argument("--reference-binary", required=True)
     parser.add_argument("--reference-home", type=Path, required=True)
     parser.add_argument("--reference-profile", type=Path, required=True)
+    parser.add_argument("--reuse-reference-profile", action="store_true")
     parser.add_argument("--reference-port", type=int, required=True)
     parser.add_argument("--cdp-port", type=int, required=True)
     parser.add_argument("--config", type=Path, required=True)
@@ -75,13 +76,19 @@ def main():
         "--native-binary", type=Path, default=Path("target/debug/t3code-gpui")
     )
     parser.add_argument("--session", type=Path, required=True)
+    parser.add_argument("--native-home", type=Path)
+    parser.add_argument("--native-state-home", type=Path)
     args = parser.parse_args()
     configuration = json.loads(args.config.read_text())
     distinct(
         f"http://127.0.0.1:{args.reference_port}",
         [{"origin": e["httpBaseUrl"]} for e in configuration["environments"]],
     )
-    if args.session.exists() or args.reference_profile.exists():
+    if (
+        args.session.exists()
+        or args.reference_profile.exists()
+        and not args.reuse_reference_profile
+    ):
         raise FileExistsError(
             "Use a fresh session directory and reference profile for each comparison"
         )
@@ -150,6 +157,7 @@ def main():
                 "dbus-run-session",
                 "--",
                 args.reference_binary,
+                "--password-store=basic",
                 "--force-device-scale-factor=1",
                 "--remote-debugging-address=127.0.0.1",
                 f"--remote-debugging-port={args.cdp_port}",
@@ -169,6 +177,16 @@ def main():
                 str(args.config.resolve()),
                 "--session",
                 str(args.session.resolve()),
+                *(
+                    ["--native-home", str(args.native_home.resolve())]
+                    if args.native_home
+                    else []
+                ),
+                *(
+                    ["--native-state-home", str(args.native_state_home.resolve())]
+                    if args.native_state_home
+                    else []
+                ),
             ],
             "native-session",
             env,

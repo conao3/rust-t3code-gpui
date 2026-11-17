@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import time
+from collections import Counter
 from pathlib import Path
 
 from cdp import Cdp
@@ -14,6 +15,34 @@ from PIL import Image, ImageChops, ImageStat
 from workspace_fixture import independent, observe
 
 logger = logging.getLogger(__name__)
+
+
+def assert_visible_regions(path, regions):
+    with Image.open(path).convert("RGB") as image:
+        for region in regions:
+            bounds = region["bounds"]
+            if (
+                len(bounds) != 4
+                or any(type(value) is not int for value in bounds)
+                or not 0 <= bounds[0] < bounds[2] <= image.width
+                or not 0 <= bounds[1] < bounds[3] <= image.height
+            ):
+                raise ValueError(f"Invalid visible image region: {bounds}")
+            minimum = region["minimum_pixels"]
+            if type(minimum) is not int or minimum <= 0:
+                raise ValueError(
+                    "A visible image assertion needs a positive pixel count"
+                )
+            pixels = list(image.crop(bounds).get_flattened_data())
+            background = Counter(pixels).most_common(1)[0][0]
+            contrasting = sum(
+                max(abs(a - b) for a, b in zip(pixel, background)) >= 64
+                for pixel in pixels
+            )
+            if contrasting < minimum:
+                raise AssertionError(
+                    f"Image region {bounds} has {contrasting} contrasting pixels; expected at least {region['minimum_pixels']}"
+                )
 
 
 async def invoke(app, method, *args):
@@ -130,6 +159,8 @@ async def execute(app, target, scenario, directory):
                     json.dumps(nodes, ensure_ascii=False, indent=2) + "\n"
                 )
                 await invoke(app, "screenshot", directory / f"{index:02d}.png")
+                if regions := step.get("visible_regions"):
+                    assert_visible_regions(directory / f"{index:02d}.png", regions)
             else:
                 raise ValueError(f"Unknown action: {action}")
             result["status"] = "passed"

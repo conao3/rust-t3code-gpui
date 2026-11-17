@@ -1,5 +1,11 @@
 # T3 behavioral and visual comparison
 
+`sidebar-shelves-empty.json` checks the empty Settled control. `sidebar-shelves.json` opens the completed fixture response and checks pointer, Enter and Space activation, expanded state and child visibility for populated Working, Snoozed and Settled shelves. Prepare one private fixture in each shelf and collapse all three before running it. `sidebar-shelves-restored.json` checks the expanded shelves after restarting both clients with their saved profiles.
+
+For restart comparisons, pass the same `--native-home` and `--native-state-home` to `desktop_session.py`, and explicitly use `--reuse-reference-profile` with the same reference profile. Session output directories must remain fresh. The isolated Electron profile uses `--password-store=basic` to avoid waiting for the desktop keyring service. Native focus and click preparation requests AT-SPI scrolling and rereads the target coordinates before sending pointer input.
+
+A checkpoint can specify `visible_regions`, with pixel `bounds` and `minimum_pixels`. This rejects blank captures by counting pixels that contrast with the region's most common color. It is independent of the full image comparison, whose thresholds remain unchanged.
+
 Run inside `nix develop`. The reference is the actual T3 Code Electron 0.1.9 desktop, with upstream source revision `24e77473ecf41bc1f7142529c7911c1c1aae1d76`. Keep reference source and test artifacts in `.claude-dev/`; neither belongs in the application distribution.
 
 `cdp.py` controls an isolated Electron renderer over a loopback Chrome DevTools Protocol endpoint. It locates controls through the accessibility tree and sends mouse/key/text input. `native.py` locates native controls through AT-SPI and sends X11 input. The scenario runner uses these same user input paths and observes the resulting accessible content and images.

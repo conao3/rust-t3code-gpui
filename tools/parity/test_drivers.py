@@ -18,10 +18,64 @@ from desktop_session import read_display, require_free_ports, stop_process_group
 from fixture_validation import distinct, inspect_environments
 from PIL import Image
 from private_session import cleanup_bus_processes
-from run import compare, matches, wait_for
+from run import (
+    assert_visible_regions,
+    compare,
+    matches,
+    wait_for,
+)
+
+
+class VisibleImageTests(unittest.TestCase):
+    def test_visibility_rejects_blank_regions_in_both_themes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "capture.png"
+            for background, foreground in [(0, 255), (255, 0)]:
+                image = Image.new("RGB", (12, 12), (background,) * 3)
+                image.save(path)
+                regions = [{"bounds": [0, 0, 12, 12], "minimum_pixels": 5}]
+                with self.assertRaisesRegex(AssertionError, "contrasting pixels"):
+                    assert_visible_regions(path, regions)
+                for x in range(5):
+                    image.putpixel((x, 1), (foreground,) * 3)
+                image.save(path)
+                assert_visible_regions(path, regions)
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    def test_native_click_scrolls_before_reading_pointer_coordinates(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.xdo = Mock()
+        app.atspi = SimpleNamespace(STATE_ENABLED="enabled", SCROLL_ANYWHERE="anywhere")
+        node = Mock()
+        node.name = "Settled 1"
+        node.getRoleName.return_value = "push button"
+        node.getState.return_value.contains.return_value = True
+        app.nodes = Mock(return_value=[node])
+        app.snapshot_controls = {("push button", "Settled 1"): [node]}
+        events = []
+        node.queryComponent.return_value.scrollTo.side_effect = lambda *_: (
+            events.append("scroll")
+        )
+
+        def bounds():
+            events.append("bounds")
+            return [
+                {
+                    "role": "push button",
+                    "name": "Settled 1",
+                    "bounds": {"x": 10, "y": 20, "width": 100, "height": 32},
+                }
+            ]
+
+        app.tree = bounds
+        app.click("push button", "Settled 1")
+        self.assertEqual(events, ["bounds", "scroll", "bounds"])
+        self.assertIn(unittest.mock.call("mousemove", 60, 36), app.xdo.call_args_list)
+
     async def test_focus_uses_the_selected_control_and_rejects_disabled_targets(self):
         app = Cdp("http://127.0.0.1:39991")
         app.call = AsyncMock()
@@ -54,7 +108,9 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         app.focus = Mock()
         app.xdo = Mock()
         app.atspi = SimpleNamespace(
-            STATE_ENABLED="enabled", STATE_FOCUSABLE="focusable"
+            STATE_ENABLED="enabled",
+            STATE_FOCUSABLE="focusable",
+            SCROLL_ANYWHERE="anywhere",
         )
         node = Mock(name="entry")
         node.name = "Message"
@@ -63,6 +119,8 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
             state == "enabled"
         )
         app.nodes = Mock(return_value=[node])
+        app.snapshot_controls = {("entry", "Message"): [node]}
+        app.tree = Mock(return_value=[{"role": "entry", "name": "Message"}])
         with self.assertRaisesRegex(RuntimeError, "cannot take focus"):
             app.focus_control("entry", "Message")
         node.queryComponent.assert_not_called()
@@ -70,6 +128,7 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         node.getState.return_value.contains.side_effect = None
         node.queryComponent.return_value.grabFocus.return_value = True
         app.focus_control("entry", "Message")
+        node.queryComponent.return_value.scrollTo.assert_called_once_with("anywhere")
         node.queryComponent.return_value.grabFocus.assert_called_once()
         app.xdo.assert_not_called()
 
@@ -438,6 +497,7 @@ class ComparisonTests(unittest.TestCase):
             ]
         )
         app.nodes = Mock(side_effect=RuntimeError("Stale accessibility object"))
+        app.reveal_control = Mock()
         app.xdo = Mock()
         with patch("native.time.sleep"):
             app.click("button", "Choose editor")

@@ -99,8 +99,11 @@ class Native:
 
     def snapshot(self):
         result = []
+        controls = {}
         for node in self.nodes():
             role = node.getRoleName()
+            name = node.name
+            controls.setdefault((role, name), []).append(node)
             try:
                 rect = node.queryComponent().getExtents(self.atspi.DESKTOP_COORDS)
                 bounds = {
@@ -122,7 +125,7 @@ class Native:
             result.append(
                 {
                     "role": role,
-                    "name": node.name,
+                    "name": name,
                     "value": value,
                     "focused": state.contains(self.atspi.STATE_FOCUSED),
                     "disabled": not state.contains(self.atspi.STATE_ENABLED),
@@ -135,10 +138,14 @@ class Native:
                         "radio button",
                     ]
                     else None,
+                    "expanded": state.contains(self.atspi.STATE_EXPANDED)
+                    if state.contains(self.atspi.STATE_EXPANDABLE)
+                    else None,
                     "bounds": bounds,
                     "states": [str(value) for value in state.getStates()],
                 }
             )
+        self.snapshot_controls = controls
         return result
 
     def focus(self):
@@ -148,26 +155,33 @@ class Native:
 
     def focus_control(self, role, name, index=0):
         self.focus()
+        node = self.reveal_control(role, name, index, require_focus=True)
+        if not node.queryComponent().grabFocus():
+            raise RuntimeError(f"Focus request failed: {role} {name!r}")
+
+    def reveal_control(self, role, name, index=0, *, require_focus=False):
         matches = [
             node
-            for node in self.nodes()
-            if node.getRoleName() == role and node.name == name
+            for node in self.tree()
+            if node["role"] == role and node["name"] == name
         ]
         if not 0 <= index < len(matches):
             raise RuntimeError(
                 f"Cannot find {role} {name!r} #{index}; matches={len(matches)}"
             )
-        node = matches[index]
+        node = self.snapshot_controls[(role, name)][index]
         state = node.getState()
         if not state.contains(self.atspi.STATE_ENABLED):
             raise RuntimeError(f"Target is disabled: {role} {name!r}")
-        if not state.contains(self.atspi.STATE_FOCUSABLE):
+        if require_focus and not state.contains(self.atspi.STATE_FOCUSABLE):
             raise RuntimeError(f"Target cannot take focus: {role} {name!r}")
-        if not node.queryComponent().grabFocus():
-            raise RuntimeError(f"Focus request failed: {role} {name!r}")
+        node.queryComponent().scrollTo(self.atspi.SCROLL_ANYWHERE)
+        time.sleep(0.1)
+        return node
 
     def click(self, role, name, index=0):
         self.focus()
+        self.reveal_control(role, name, index)
         matches = [
             node
             for node in self.tree()

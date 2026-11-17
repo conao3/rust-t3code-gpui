@@ -1,0 +1,18 @@
+{
+  "name": "empty-settled-shelf-keyboard-and-pointer",
+  "viewport": [1400, 900],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Settled 0", "expanded": false}, "count": 1, "visible_regions": [{"bounds": [12, 116, 180, 700], "minimum_pixels": 1000}]},
+    {"action": "focus", "selector": {"role": "button", "name": "Settled 0"}},
+    {"action": "press", "value": "enter"},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Settled 0", "expanded": true}, "count": 1, "visible_regions": [{"bounds": [12, 116, 180, 700], "minimum_pixels": 1000}]},
+    {"action": "press", "value": "space"},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Settled 0", "expanded": false}, "count": 1, "visible_regions": [{"bounds": [12, 116, 180, 700], "minimum_pixels": 1000}]},
+    {"action": "click", "selector": {"role": "button", "name": "Settled 0"}},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Settled 0", "expanded": true}, "count": 1, "visible_regions": [{"bounds": [12, 116, 180, 700], "minimum_pixels": 1000}]},
+    {"action": "click", "selector": {"role": "button", "name": "Settled 0"}},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Settled 0", "expanded": false}, "count": 1, "visible_regions": [{"bounds": [12, 116, 180, 700], "minimum_pixels": 1000}]}
+  ]
+}
