@@ -376,6 +376,18 @@ impl Root {
         } else {
             None
         };
+        let undo = self
+            .thread_value(&menu.environment, &menu.thread_id)
+            .and_then(|thread| thread_commands::undo_plan(&menu.op, &thread, &menu.thread_id))
+            .map(|(kind, commands)| thread_commands::UndoEntry {
+                environment: menu.environment.clone(),
+                thread: menu.thread_id.clone(),
+                kind,
+                commands,
+            });
+        self.thread_undos.retain(|entry| {
+            entry.environment != menu.environment || entry.thread != menu.thread_id
+        });
         let runtime = self.runtime.clone();
         let thread_id = menu.thread_id.clone();
         let op = menu.op.clone();
@@ -399,6 +411,9 @@ impl Root {
                 match result {
                     Err(error) => root.message = Some(format!("Thread update failed: {error:#}")),
                     Ok(sequence) => {
+                        if let Some(undo) = undo {
+                            root.remember_thread_undo(undo, cx);
+                        }
                         if let Some(mut plan) = plan {
                             plan.sequence = sequence;
                             root.park_plans.push(plan);

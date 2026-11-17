@@ -1,0 +1,46 @@
+{
+  "name": "thread-copy-settle-undo",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 150,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Pane Beta, UI parity"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+c"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Undo"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "ctrl+z"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Undo"
+      },
+      "count": 0
+    }
+  ]
+}

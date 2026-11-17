@@ -17,7 +17,10 @@ impl Root {
 
     pub(super) fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 17] = [
+        let commands: [(&str, Box<dyn Action>); 20] = [
+            (self.reference_label(), Box::new(CopyThreadReference)),
+            ("Regenerate thread title", Box::new(RegenerateTitle)),
+            ("Undo thread action", Box::new(UndoThreadAction)),
             ("Side chat", Box::new(OpenSideChat)),
             ("Split conversation right", Box::new(SplitConversation)),
             (

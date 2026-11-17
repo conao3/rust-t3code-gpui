@@ -56,6 +56,7 @@ mod sidebar_view;
 mod snooze_controls;
 mod snooze_options;
 mod terminal;
+mod thread_commands;
 #[path = "app/timeline.rs"]
 mod timeline_view;
 mod titlebar;
@@ -123,6 +124,9 @@ actions!(
         FocusNextWorkspace,
         FocusPreviousWorkspace,
         ReopenClosed,
+        CopyThreadReference,
+        RegenerateTitle,
+        UndoThreadAction,
     ]
 );
 
@@ -131,6 +135,9 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
         "workspace.focusNext" => Box::new(FocusNextWorkspace),
         "workspace.focusPrevious" => Box::new(FocusPreviousWorkspace),
+        "thread.copyReference" => Box::new(CopyThreadReference),
+        "thread.regenerateTitle" => Box::new(RegenerateTitle),
+        "thread.undo" => Box::new(UndoThreadAction),
         "view.reopenClosed" => Box::new(ReopenClosed),
         "terminal.toggle" => Box::new(ToggleTerminal),
         "terminal.split" => Box::new(SplitTerminal),
@@ -357,6 +364,9 @@ struct DetailsStamp {
 
 pub struct Root {
     conversation: ConversationState,
+    thread_undos: Vec<thread_commands::UndoEntry>,
+    thread_undo_epoch: u64,
+    thread_undo_claimed: bool,
     panes: HashMap<u64, ConversationState>,
     pane_layout: pane_layout::Layout,
     pane_closed: Vec<pane_layout::SavedPane>,
@@ -567,6 +577,9 @@ impl Root {
         .collect();
         Self {
             conversation: ConversationState::new(0, terminal_error, window, cx),
+            thread_undos: Vec::new(),
+            thread_undo_epoch: 0,
+            thread_undo_claimed: false,
             panes: HashMap::new(),
             pane_layout: pane_layout::Layout::Pane(0),
             pane_closed: Vec::new(),
@@ -689,6 +702,9 @@ impl Root {
         }
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
+        if !((modifiers.control || modifiers.platform) && keystroke.key == "z") {
+            self.thread_undo_claimed = false;
+        }
         if self.completion_key(keystroke, window, cx) {
             return true;
         }
@@ -782,6 +798,13 @@ impl Root {
             "modelPickerOpen" => self.picker_open,
             "rightPanelOpen" => self.file_panel.is_some() || self.explorer.is_some(),
             "composerFocus" => self.composer.read(cx).focus_handle(cx).is_focused(window),
+            "editableFocus"
+                if self.thread_undo_claimed
+                    && !self.sidebar_hidden
+                    && !self.thread_undos.is_empty() =>
+            {
+                false
+            }
             "editableFocus" => {
                 self.key_context("terminalFocus", window, cx)
                     || [
@@ -1106,6 +1129,9 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &CloseConversation, window, cx| root.close_conversation(window, cx)))
             .on_action(cx.listener(|root, _: &FocusNextWorkspace, window, cx| root.focus_workspace(true, window, cx)))
             .on_action(cx.listener(|root, _: &FocusPreviousWorkspace, window, cx| root.focus_workspace(false, window, cx)))
+            .on_action(cx.listener(|root, _: &CopyThreadReference, _, cx| root.copy_thread_reference(cx)))
+            .on_action(cx.listener(|root, _: &RegenerateTitle, _, cx| root.regenerate_thread_title(cx)))
+            .on_action(cx.listener(|root, _: &UndoThreadAction, _, cx| root.undo_thread_action(cx)))
             .on_action(cx.listener(|root, _: &ReopenClosed, window, cx| root.reopen_conversation(window, cx)))
             .on_action(cx.listener(|root, _: &NextDone, _, cx| root.next_done(true, cx)))
             .on_action(cx.listener(|root, _: &PreviousDone, _, cx| root.next_done(false, cx)))
@@ -1339,6 +1365,7 @@ impl Render for Root {
                     .children(self.render_explorer(cx))
                     .children(self.render_file_panel(cx)),
             )
+            .children(self.render_thread_undo(cx))
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))
             })
