@@ -13,22 +13,11 @@ pub(super) struct Archive {
     subscription: Option<Subscription>,
 }
 impl Archive {
-    pub(super) fn new(root: WeakEntity<Root>, environment: String, cx: &mut Context<Self>) -> Self {
-        let environments = root
-            .upgrade()
-            .map(|owner| {
-                let owner = owner.read(cx);
-                if owner.settings_environment.is_none() {
-                    owner
-                        .connections
-                        .iter()
-                        .map(|connection| connection.label().to_string())
-                        .collect()
-                } else {
-                    vec![environment]
-                }
-            })
-            .unwrap_or_default();
+    pub(super) fn new(
+        root: WeakEntity<Root>,
+        environments: Vec<String>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut view = Self {
             root: root.clone(),
             environments,

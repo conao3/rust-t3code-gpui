@@ -671,13 +671,21 @@ impl Root {
         if page == "archived" {
             let root = cx.entity().downgrade();
             let environment = environment.clone();
+            let environments = if self.settings_environment.is_none() {
+                self.connections
+                    .iter()
+                    .map(|connection| connection.label().to_string())
+                    .collect()
+            } else {
+                vec![environment.clone()]
+            };
             let panel = window.use_keyed_state(
                 SharedString::from(format!(
                     "settings-archive:{environment}:{:?}",
                     self.settings_environment
                 )),
                 cx,
-                |_, cx| settings_archive::Archive::new(root, environment, cx),
+                |_, cx| settings_archive::Archive::new(root, environments, cx),
             );
             content = content.child(panel);
         }
