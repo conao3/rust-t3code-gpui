@@ -1,0 +1,64 @@
+{
+  "name": "raw-shell-presentation-preserves-completed-thread-input-and-content",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Fixture response, UI parity",
+        "index": 0
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Fixture response"
+      },
+      "count": 1
+    },
+    {
+      "action": "pointer",
+      "kind": "move",
+      "x": 700,
+      "y": 400
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText"
+      },
+      "native": {
+        "role": "document frame",
+        "name": "Assistant message"
+      },
+      "text_contains": "Fixture output 199:"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "button",
+        "name": "Fixture response, UI parity",
+        "index": 0
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Fixture response"
+      },
+      "count": 1
+    }
+  ]
+}
