@@ -646,9 +646,12 @@ impl Root {
             .clone()
             .or_else(|| defaults.as_ref().map(|(m, _)| m.clone()))
             .and_then(|selected| {
-                config
-                    .as_ref()
-                    .and_then(|config| models::effective_selection(config, &selected))
+                config.as_ref().and_then(|config| {
+                    models::runnable_selection(
+                        &models::project_config(config, &project_id),
+                        &selected,
+                    )
+                })
             });
         let runtime_mode = draft
             .runtime_mode

@@ -46,6 +46,135 @@ fn default_model(provider: &Value) -> Option<String> {
         .map(|m| text(m, "slug").to_string())
 }
 
+pub fn project_provider_enabled(settings: &Value, project: Option<&str>, instance: &str) -> bool {
+    if let Some(enabled) = project.and_then(|id| {
+        settings["projectSettingsOverrides"][id]["providerInstances"][instance]["enabled"].as_bool()
+    }) {
+        return enabled;
+    }
+    let Some(config) = settings["providerInstances"].get(instance) else {
+        return matches!(instance, "codex" | "claudeAgent");
+    };
+    let enabled = config["enabled"].as_bool();
+    let nested = config["config"]["enabled"].as_bool();
+    if enabled == Some(false) || nested == Some(false) {
+        return false;
+    }
+    enabled.or(nested).unwrap_or_else(|| {
+        !matches!(
+            text(config, "driver"),
+            "cursor" | "grok" | "fx" | "kiro" | "muse" | "pi" | "opencode" | "antigravity"
+        )
+    })
+}
+
+pub fn project_config(config: &Value, project: &str) -> Value {
+    let mut scoped = config.clone();
+    if let Some(providers) = scoped["providers"].as_array_mut() {
+        for provider in providers {
+            provider["enabled"] = json!(project_provider_enabled(
+                &config["settings"],
+                Some(project),
+                text(provider, "instanceId")
+            ));
+        }
+    }
+    scoped
+}
+
+fn selectable_options(config: &Value, provider: &Value) -> Vec<Value> {
+    let settings = &config["settings"];
+    let instance = text(provider, "instanceId");
+    let mut options: Vec<_> = provider["models"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|model| model["isCustom"] != true)
+        .cloned()
+        .collect();
+    let mut seen: std::collections::HashSet<String> = options
+        .iter()
+        .map(|model| text(model, "slug").to_owned())
+        .collect();
+    if text(provider, "driver") != "antigravity" {
+        for custom in settings["providerInstances"][instance]["config"]["customModels"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let slug = custom
+                .as_str()
+                .unwrap_or_else(|| text(custom, "slug"))
+                .trim();
+            if slug.is_empty() || slug.encode_utf16().count() > 256 || !seen.insert(slug.to_owned())
+            {
+                continue;
+            }
+            let name = text(custom, "name").trim();
+            options.push(json!({"slug":slug,"name":if name.is_empty() {slug} else {name},"isCustom":true,"capabilities":custom["capabilities"]}));
+        }
+    }
+    let preferences = &settings["providerModelPreferences"][instance];
+    let hidden = preferences["hiddenModels"].as_array();
+    options.retain(|model| {
+        model["isCustom"] == true || !hidden.is_some_and(|hidden| hidden.contains(&model["slug"]))
+    });
+    if let Some(order) = preferences["modelOrder"].as_array() {
+        options.sort_by_key(|model| {
+            order
+                .iter()
+                .rposition(|slug| slug == &model["slug"])
+                .unwrap_or(usize::MAX)
+        });
+    }
+    options
+}
+
+fn resolve_model<'a>(provider: &str, value: &str, options: &'a [Value]) -> Option<&'a str> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let lower = value.to_lowercase();
+    let found = options
+        .iter()
+        .find(|option| text(option, "slug") == value)
+        .or_else(|| {
+            options
+                .iter()
+                .find(|option| text(option, "name").to_lowercase() == lower)
+        })
+        .or_else(|| {
+            options.iter().find(|option| {
+                option["aliases"].as_array().is_some_and(|aliases| {
+                    aliases.iter().any(|alias| {
+                        alias
+                            .as_str()
+                            .is_some_and(|alias| alias.to_lowercase() == lower)
+                    })
+                })
+            })
+        });
+    if let Some(found) = found {
+        return Some(text(found, "slug"));
+    }
+    let alias = match (provider, value) {
+        ("codex", "gpt-5-codex" | "5.4") => "gpt-5.4",
+        ("codex", "5.3" | "gpt-5.3") => "gpt-5.3-codex",
+        ("codex", "5.3-spark" | "gpt-5.3-spark") => "gpt-5.3-codex-spark",
+        ("cursor", "composer") => "composer-2",
+        ("cursor", "composer-1") => "composer-1.5",
+        ("cursor", "opus-4.6-thinking" | "opus-4.6") => "claude-opus-4-6",
+        ("cursor", "sonnet-4.6-thinking" | "sonnet-4.6") => "claude-sonnet-4-6",
+        ("cursor", "opus-4.5-thinking" | "opus-4.5") => "claude-opus-4-5",
+        _ => value,
+    };
+    options
+        .iter()
+        .find(|option| text(option, "slug") == alias)
+        .map(|option| text(option, "slug"))
+}
+
 /// The provider instances a thread can run on: enabled, installed and not reported unavailable.
 pub fn instances(config: &Value) -> Vec<Instance> {
     config
@@ -76,11 +205,7 @@ pub fn instances(config: &Value) -> Vec<Instance> {
             Instance {
                 name,
                 driver: text(p, "driver").to_string(),
-                models: p
-                    .get("models")
-                    .and_then(Value::as_array)
-                    .map(Vec::as_slice)
-                    .unwrap_or_default()
+                models: selectable_options(config, p)
                     .iter()
                     .map(|m| Model {
                         slug: text(m, "slug").to_string(),
@@ -97,7 +222,14 @@ pub fn instances(config: &Value) -> Vec<Instance> {
                             .unwrap_or_default(),
                     })
                     .collect(),
-                default_model: default_model(p),
+                default_model: {
+                    let options = selectable_options(config, p);
+                    options
+                        .iter()
+                        .find(|model| model["isDefault"] == true)
+                        .or_else(|| options.first())
+                        .map(|model| text(model, "slug").to_owned())
+                },
                 runtime_modes,
                 interaction_mode_toggle: p
                     .get("showInteractionModeToggle")
@@ -208,19 +340,72 @@ pub fn selection(instance_id: &str, model: &str) -> Value {
 }
 
 pub fn effective_selection(config: &Value, selected: &Value) -> Option<Value> {
-    let catalog = instances(config);
-    let instance = catalog
-        .iter()
-        .find(|instance| instance.instance_id == text(selected, "instanceId"))?;
-    let slug = text(selected, "model");
-    if instance.models.iter().any(|model| model.slug == slug)
-        || (!slug.is_empty() && matches!(instance.driver.as_str(), "opencode" | "antigravity"))
-    {
+    let provider = config["providers"].as_array().and_then(|providers| {
+        providers
+            .iter()
+            .find(|provider| text(provider, "instanceId") == text(selected, "instanceId"))
+    });
+    let Some(provider) = provider else {
         return Some(selected.clone());
-    }
+    };
+    let options = selectable_options(config, provider);
+    let driver = text(provider, "driver");
+    let slug = text(selected, "model").trim();
+    let hidden = config["settings"]["providerModelPreferences"][text(provider, "instanceId")]["hiddenModels"].as_array();
+    let raw = provider["models"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let dynamic = matches!(driver, "opencode" | "antigravity")
+        && !slug.is_empty()
+        && !(driver == "antigravity" && slug == "antigravity-default")
+        && !hidden.is_some_and(|hidden| hidden.iter().any(|model| model == slug))
+        && resolve_model(driver, slug, raw).is_none();
+    let model = (dynamic && !options.iter().any(|option| text(option, "slug") == slug))
+        .then_some(slug)
+        .or_else(|| resolve_model(driver, slug, &options))
+        .or_else(|| {
+            options
+                .iter()
+                .find(|option| option["isDefault"] == true)
+                .or_else(|| options.first())
+                .map(|option| text(option, "slug"))
+        });
     let mut resolved = selected.clone();
-    resolved["model"] = json!(instance.default_model.as_ref()?);
+    if let Some(model) = model {
+        resolved["model"] = json!(model);
+    }
     Some(resolved)
+}
+
+pub fn runnable_selection(config: &Value, selected: &Value) -> Option<Value> {
+    let providers = config["providers"].as_array()?;
+    let available = |provider: &&Value| {
+        provider["enabled"] == true && text(provider, "availability") != "unavailable"
+    };
+    let chosen = providers
+        .iter()
+        .find(|provider| {
+            available(provider) && text(provider, "instanceId") == text(selected, "instanceId")
+        })
+        .or_else(|| {
+            providers
+                .iter()
+                .find(|provider| available(provider) && text(provider, "status") == "ready")
+        })
+        .or_else(|| {
+            providers
+                .iter()
+                .find(|provider| available(provider) && text(provider, "status") != "error")
+        })?;
+    if text(chosen, "instanceId") == text(selected, "instanceId") {
+        effective_selection(config, selected)
+    } else {
+        effective_selection(
+            config,
+            &selection(text(chosen, "instanceId"), &default_model(chosen)?),
+        )
+    }
 }
 
 /// The model of the first instance a thread can run on, as upstream picks a provider default.
@@ -298,15 +483,35 @@ pub fn new_thread(
 ) -> Option<(Value, String)> {
     let empty = Value::Null;
     let settings = config.and_then(|c| c.get("settings")).unwrap_or(&empty);
-    let model = project_setting(settings, project, "defaultModelSelection")
-        .or(present(carry))
-        .cloned()
-        .or_else(|| config.and_then(provider_default))?;
+    let model = new_thread_override(
+        project_setting(settings, project, "defaultModelSelection"),
+        present(carry),
+        None,
+        "",
+    )
+    .or_else(|| {
+        config.and_then(|config| provider_default(&project_config(config, text(project, "id"))))
+    })?;
     let runtime_mode = project_setting(settings, project, "defaultRuntimeMode")
         .and_then(Value::as_str)
         .unwrap_or(DEFAULT_RUNTIME_MODE)
         .to_string();
     Some((model, runtime_mode))
+}
+
+pub fn new_thread_override(
+    project: Option<&Value>,
+    carry: Option<&Value>,
+    source: Option<&str>,
+    destination: &str,
+) -> Option<Value> {
+    present(project)
+        .or_else(|| {
+            (source != Some(destination))
+                .then(|| present(carry))
+                .flatten()
+        })
+        .cloned()
 }
 
 /// The usage windows a provider instance reports (label and percent used), as the composer shows
@@ -353,7 +558,47 @@ pub fn label(catalog: &[Instance], selection: &Value) -> String {
 mod tests {
     use super::*;
 
-    fn config(settings: Value) -> Value {
+    #[test]
+    fn selections_match_the_original_typescript_table() {
+        let oracle: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/model-selection-oracle.json"
+        ))
+        .unwrap();
+        for case in oracle["enabled"].as_array().unwrap() {
+            assert_eq!(
+                json!(project_provider_enabled(
+                    &case["settings"],
+                    case["project"].as_str(),
+                    case["instance"].as_str().unwrap()
+                )),
+                case["expected"],
+                "{case}"
+            );
+        }
+        for case in oracle["selections"].as_array().unwrap() {
+            assert_eq!(
+                effective_selection(&case["config"], &case["selection"]).unwrap(),
+                case["expected"],
+                "{case}"
+            );
+        }
+        for case in oracle["overrides"].as_array().unwrap() {
+            let input = &case["input"];
+            assert_eq!(
+                json!(new_thread_override(
+                    Some(&input["projectDefaultSelection"]),
+                    Some(&input["carrySelection"]),
+                    input["carrySourceDraftId"].as_str(),
+                    input["destinationDraftId"].as_str().unwrap()
+                )),
+                case["expected"],
+                "{case}"
+            );
+        }
+    }
+
+    fn config(mut settings: Value) -> Value {
+        settings["providerInstances"] = json!({"off":{"driver":"codex","enabled":false},"gone":{"driver":"codex","enabled":true},"claude_conao3":{"driver":"claudeAgent","enabled":true}});
         json!({
             "providers": [
                 {"instanceId": "off", "driver": "codex", "enabled": false, "models": [{"slug": "x", "name": "X", "isCustom": false}]},
@@ -405,7 +650,7 @@ mod tests {
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "Claude conao3");
         assert_eq!(list[0].default_model.as_deref(), Some("claude-sonnet-5-5"));
-        assert_eq!(list[0].models[1].name, "Opus 5.5");
+        assert_eq!(list[0].models[0].name, "Opus 5.5");
         assert_eq!(list[0].runtime_modes, ["approval-required", "full-access"]);
         assert!(list[0].interaction_mode_toggle);
         assert_eq!(
@@ -496,7 +741,10 @@ mod tests {
         assert_eq!(resolved["options"], requested["options"]);
         let current = selection("claude_conao3", "claude-opus-5-5");
         assert_eq!(effective_selection(&config, &current), Some(current));
-        assert_eq!(effective_selection(&config, &selection("off", "x")), None);
+        assert_eq!(
+            effective_selection(&config, &selection("off", "x")),
+            Some(selection("off", "x"))
+        );
     }
 
     #[test]
