@@ -267,6 +267,13 @@ impl Root {
         cx.notify();
     }
 
+    pub(super) fn invalidate_panel_diff(&mut self, cx: &mut Context<Self>) {
+        self.right_panel.files.remove("diff");
+        if self.right_panel.active.as_deref() == Some("diff") {
+            self.refresh_diff(cx);
+        }
+    }
+
     pub(super) fn panel_width(&self, viewport: f32) -> f32 {
         let sidebar = if self.sidebar_hidden {
             0.

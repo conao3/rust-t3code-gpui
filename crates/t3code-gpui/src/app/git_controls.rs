@@ -256,6 +256,7 @@ impl Root {
                         match event {
                             Ok(event) => match event["kind"].as_str() {
                                 Some("action_finished") => {
+                                    root.invalidate_panel_diff(cx);
                                     root.git_state.result = Some(
                                         event
                                             .pointer("/result/toast/title")

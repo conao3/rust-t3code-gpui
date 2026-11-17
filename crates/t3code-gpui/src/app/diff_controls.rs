@@ -260,15 +260,22 @@ impl Root {
                         value: Value::Null,
                     })),
             ];
-            items.extend(self.branch_refs.iter().map(|reference| {
-                CommandItem::new()
-                    .label(reference["name"].as_str().unwrap_or_default().to_string())
-                    .checked(reference["name"].as_str() == self.diff_view.base_ref.as_deref())
-                    .action(Box::new(WorkspaceAction {
-                        kind: "diff-base".into(),
-                        value: reference["name"].clone(),
-                    }))
-            }));
+            items.extend(
+                self.branch_refs
+                    .iter()
+                    .filter(|reference| reference["name"].as_str() != Some(head))
+                    .map(|reference| {
+                        CommandItem::new()
+                            .label(reference["name"].as_str().unwrap_or_default().to_string())
+                            .checked(
+                                reference["name"].as_str() == self.diff_view.base_ref.as_deref(),
+                            )
+                            .action(Box::new(WorkspaceAction {
+                                kind: "diff-base".into(),
+                                value: reference["name"].clone(),
+                            }))
+                    }),
+            );
             popup = popup.content(
                 v_flex()
                     .w(px(288.))
