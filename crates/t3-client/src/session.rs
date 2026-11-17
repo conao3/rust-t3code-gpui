@@ -190,8 +190,12 @@ impl Connection {
             .call("orchestration.dispatchCommand", command, DISPATCH_TIMEOUT)
             .await
             .map_err(|e| match e {
-                RpcError::Failed { message, .. } => {
-                    anyhow!("T3 rejected {command_type}: {message}")
+                RpcError::Failed { error, message, .. } => {
+                    let detail = error["detail"]
+                        .as_str()
+                        .or_else(|| error["message"].as_str())
+                        .unwrap_or(&message);
+                    anyhow!(detail.to_owned()).context(format!("T3 rejected {command_type}"))
                 }
                 other => other.into(),
             })?;

@@ -73,6 +73,7 @@ mod settings_tasks;
 mod sidebar_branding;
 mod sidebar_controls;
 mod sidebar_header;
+mod sidebar_notice;
 mod sidebar_projects;
 mod sidebar_view;
 mod snooze_controls;
@@ -476,6 +477,7 @@ pub struct Root {
     panel_pane: Entity<right_panel::Pane>,
     conversation: ConversationState,
     thread_undos: Vec<thread_commands::UndoEntry>,
+    sidebar_notices: Vec<Entity<sidebar_notice::Notice>>,
     thread_undo_epoch: u64,
     thread_undo_claimed: bool,
     panes: HashMap<u64, ConversationState>,
@@ -733,6 +735,7 @@ impl Root {
                 cx,
             ),
             thread_undos: Vec::new(),
+            sidebar_notices: Vec::new(),
             thread_undo_epoch: 0,
             thread_undo_claimed: false,
             panes: HashMap::new(),
@@ -1670,6 +1673,7 @@ impl Render for Root {
             .when(self.settings_open, |root_el| {
                 root_el.child(self.render_settings(window,cx))
             })
+            .child(self.render_sidebar_notices(cx))
             .when(self.file_picker_open, |root_el| {
                 root_el.child(self.render_file_picker(cx))
             })

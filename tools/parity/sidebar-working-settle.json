@@ -5,7 +5,7 @@
     1400,
     900
   ],
-  "settle_ms": 700,
+  "settle_ms": 200,
   "steps": [
     {
       "action": "click",
@@ -45,6 +45,66 @@
     {
       "action": "press",
       "value": "enter"
+    },
+    {
+      "action": "pointer",
+      "kind": "move",
+      "x": 1160,
+      "y": 120
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Failed to settle thread"
+      },
+      "count": 1,
+      "screenshot": true
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "name": "Thread 66666666-1111-4111-8111-000000000004 is still running. Stop it before settling.",
+        "role": "label"
+      },
+      "reference": {
+        "role": "StaticText",
+        "name": "Thread 66666666-1111-4111-8111-000000000004 is still running. Stop it before settling."
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Copy error"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Copied error"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Dismiss notification"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Failed to settle thread"
+      },
+      "count": 0,
+      "screenshot": false
     },
     {
       "action": "checkpoint",

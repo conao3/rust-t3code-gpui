@@ -430,7 +430,18 @@ impl Root {
                 root.parking.remove(&parking_key);
                 match result {
                     Err(error) => {
-                        root.conversation.message = Some(format!("Thread update failed: {error:#}"))
+                        let title = match menu.op {
+                            ThreadOp::Settle => "Failed to settle thread",
+                            ThreadOp::Unsettle => "Failed to un-settle thread",
+                            ThreadOp::Pin => "Failed to pin thread",
+                            ThreadOp::Unpin => "Failed to unpin thread",
+                            ThreadOp::Snooze(_) | ThreadOp::SnoozeUntil(_) => {
+                                "Failed to snooze thread"
+                            }
+                            ThreadOp::Unsnooze => "Failed to wake thread",
+                            ThreadOp::Archive => "Failed to archive thread",
+                        };
+                        root.show_sidebar_error(title, error.root_cause().to_string(), cx);
                     }
                     Ok(sequence) => {
                         if let Some(undo) = undo {
@@ -564,8 +575,8 @@ impl Root {
                 let row_focused =
                     window.last_input_was_keyboard() && row_focus.row.is_focused(window);
                 let row_key_focus = row_focus.row.clone();
-                let actions_focused = window.last_input_was_keyboard()
-                    && (row_focus.snooze.is_focused(window) || row_focus.settle.is_focused(window));
+                let actions_focused =
+                    row_focus.snooze.is_focused(window) || row_focus.settle.is_focused(window);
                 let actions_visible = actions_focused || row_focus.menu_open;
                 let selected = open.as_ref().is_some_and(|(env, id)| entry.is(env, id));
                 let woke = crate::snooze::woke_at(&entry.presentation, &now_iso());
