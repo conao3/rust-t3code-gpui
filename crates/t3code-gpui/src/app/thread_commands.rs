@@ -440,8 +440,10 @@ impl Root {
         Some(
             h_flex()
                 .id("thread-undo-notice")
-                .flex_1()
-                .min_w_0()
+                .absolute()
+                .left(px(80.))
+                .bottom(px(4.))
+                .w(px(self.settings.sidebar_width - 88.))
                 .h(px(24.))
                 .justify_end()
                 .overflow_hidden()

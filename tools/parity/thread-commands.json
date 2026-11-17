@@ -28,7 +28,8 @@
         "role": "button",
         "name": "Ctrl+Z to undo"
       },
-      "count": 1
+      "count": 1,
+      "screenshot": false
     },
     {
       "action": "press",

@@ -168,7 +168,8 @@ async def execute(app, target, scenario, directory):
                 (directory / f"{index:02d}.json").write_text(
                     json.dumps(nodes, ensure_ascii=False, indent=2) + "\n"
                 )
-                await invoke(app, "screenshot", directory / f"{index:02d}.png")
+                if step.get("screenshot", True) or step.get("visible_regions"):
+                    await invoke(app, "screenshot", directory / f"{index:02d}.png")
                 if regions := step.get("visible_regions"):
                     assert_visible_regions(directory / f"{index:02d}.png", regions)
             else:
