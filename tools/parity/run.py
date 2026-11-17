@@ -288,7 +288,9 @@ async def main():
         )
     comparisons = []
     for index, step in enumerate(scenario["steps"]):
-        if step["action"] != "checkpoint":
+        if step["action"] != "checkpoint" or not (
+            step.get("screenshot", True) or step.get("visible_regions")
+        ):
             continue
         left, right = [
             args.output / target / f"{index:02d}.png"
@@ -318,7 +320,7 @@ async def main():
         "visual": comparisons,
         "status": "passed"
         if all(r["status"] == "passed" for rows in reports.values() for r in rows)
-        and comparisons
+        and any(step["action"] == "checkpoint" for step in scenario["steps"])
         and all(r["status"] == "passed" for r in comparisons)
         else "failed",
     }

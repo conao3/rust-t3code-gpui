@@ -584,7 +584,12 @@ impl Root {
         let model = draft
             .model
             .clone()
-            .or_else(|| defaults.as_ref().map(|(m, _)| m.clone()));
+            .or_else(|| defaults.as_ref().map(|(m, _)| m.clone()))
+            .and_then(|selected| {
+                config
+                    .as_ref()
+                    .and_then(|config| models::effective_selection(config, &selected))
+            });
         let runtime_mode = draft
             .runtime_mode
             .clone()
@@ -804,7 +809,16 @@ impl Root {
         let model = thread
             .get("modelSelection")
             .cloned()
-            .filter(|m| !m.is_null());
+            .filter(|m| !m.is_null())
+            .or_else(|| {
+                let project = self.project_value(&environment, &get("projectId"))?;
+                models::new_thread(self.config_of(&environment).as_ref(), &project, None)
+                    .map(|(model, _)| model)
+            })
+            .and_then(|selected| {
+                self.config_of(&environment)
+                    .and_then(|config| models::effective_selection(&config, &selected))
+            });
         Some((
             environment,
             model,

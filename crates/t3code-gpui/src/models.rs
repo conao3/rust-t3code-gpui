@@ -207,11 +207,66 @@ pub fn selection(instance_id: &str, model: &str) -> Value {
     json!({"instanceId": instance_id, "model": model})
 }
 
+pub fn effective_selection(config: &Value, selected: &Value) -> Option<Value> {
+    let catalog = instances(config);
+    let instance = catalog
+        .iter()
+        .find(|instance| instance.instance_id == text(selected, "instanceId"))?;
+    let slug = text(selected, "model");
+    if instance.models.iter().any(|model| model.slug == slug)
+        || (!slug.is_empty() && matches!(instance.driver.as_str(), "opencode" | "antigravity"))
+    {
+        return Some(selected.clone());
+    }
+    let mut resolved = selected.clone();
+    resolved["model"] = json!(instance.default_model.as_ref()?);
+    Some(resolved)
+}
+
 /// The model of the first instance a thread can run on, as upstream picks a provider default.
 pub fn provider_default(config: &Value) -> Option<Value> {
-    instances(config)
-        .into_iter()
-        .find_map(|i| i.default_model.map(|m| selection(&i.instance_id, &m)))
+    let providers = config.get("providers")?.as_array()?;
+    let mut drivers = Vec::new();
+    for provider in providers {
+        let driver = text(provider, "driver");
+        if !drivers.contains(&driver) {
+            drivers.push(driver);
+        }
+    }
+    let mut ordered: Vec<_> = providers.iter().collect();
+    ordered.sort_by_key(|provider| {
+        (
+            drivers
+                .iter()
+                .position(|driver| *driver == text(provider, "driver")),
+            text(provider, "instanceId") != text(provider, "driver"),
+        )
+    });
+    fn choose<'a>(entries: &[&'a Value]) -> Option<&'a Value> {
+        let available = |provider: &&Value| {
+            provider["enabled"] == true && text(provider, "availability") != "unavailable"
+        };
+        entries
+            .iter()
+            .copied()
+            .find(|provider| available(provider) && text(provider, "status") == "ready")
+            .or_else(|| {
+                entries
+                    .iter()
+                    .copied()
+                    .find(|provider| available(provider) && text(provider, "status") != "error")
+            })
+    }
+    let first: Vec<_> = ordered
+        .iter()
+        .copied()
+        .filter(|provider| Some(&text(provider, "driver")) == drivers.first())
+        .collect();
+    let provider = choose(&first).or_else(|| choose(&ordered))?;
+    Some(selection(
+        text(provider, "instanceId"),
+        &default_model(provider)?,
+    ))
 }
 
 /// A project-scoped server setting: the project's override, then the project's own field (until
@@ -407,6 +462,41 @@ mod tests {
             "Claude conao3 · Opus 5.5"
         );
         assert_eq!(label(&instances(&c), &selection("other", "m")), "other · m");
+    }
+
+    #[test]
+    fn default_provider_prefers_the_first_driver_then_ready_and_default_instances() {
+        let mut config = json!({"providers":[
+            {"instanceId":"custom","driver":"codex","enabled":true,"status":"starting","models":[{"slug":"custom-model"}]},
+            {"instanceId":"claudeAgent","driver":"claudeAgent","enabled":true,"status":"ready","models":[{"slug":"claude-model"}]},
+            {"instanceId":"codex","driver":"codex","enabled":true,"status":"ready","models":[{"slug":"default-model"}]}
+        ]});
+        assert_eq!(
+            provider_default(&config),
+            Some(selection("codex", "default-model"))
+        );
+        config["providers"][2]["enabled"] = json!(false);
+        assert_eq!(
+            provider_default(&config),
+            Some(selection("custom", "custom-model"))
+        );
+        config["providers"][0]["status"] = json!("error");
+        assert_eq!(
+            provider_default(&config),
+            Some(selection("claudeAgent", "claude-model"))
+        );
+    }
+
+    #[test]
+    fn missing_catalog_models_resolve_to_the_provider_default_with_options_preserved() {
+        let config = config(json!({}));
+        let requested = json!({"instanceId":"claude_conao3","model":"removed-model","options":[{"id":"reasoningEffort","value":"high"}]});
+        let resolved = effective_selection(&config, &requested).unwrap();
+        assert_eq!(resolved["model"], "claude-sonnet-5-5");
+        assert_eq!(resolved["options"], requested["options"]);
+        let current = selection("claude_conao3", "claude-opus-5-5");
+        assert_eq!(effective_selection(&config, &current), Some(current));
+        assert_eq!(effective_selection(&config, &selection("off", "x")), None);
     }
 
     #[test]

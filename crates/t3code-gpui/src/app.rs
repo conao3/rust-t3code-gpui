@@ -72,6 +72,8 @@ mod settings_providers;
 mod settings_tasks;
 mod sidebar_branding;
 mod sidebar_controls;
+mod sidebar_header;
+mod sidebar_projects;
 mod sidebar_view;
 mod snooze_controls;
 mod snooze_options;
@@ -384,6 +386,11 @@ struct NewThreadDraft {
 
 #[derive(PartialEq)]
 struct SidebarStamp {
+    search: (String, Vec<(String, String)>, bool),
+    project_filter: Vec<String>,
+    scope_open: bool,
+    search_error: Option<String>,
+    search_selected: usize,
     undo: Vec<(String, String, &'static str)>,
     catalog_revision: u64,
     pull_requests_page: bool,
@@ -504,6 +511,7 @@ pub struct Root {
     window_drag_pending: bool,
     history: crate::navigation::History,
     sidebar_pane: Entity<SidebarPane>,
+    sidebar_header: sidebar_header::State,
     sidebar_scroll: ScrollHandle,
     sidebar_stamp: Option<SidebarStamp>,
     runtime: Handle,
@@ -764,6 +772,7 @@ impl Root {
             sidebar_pane: cx.new(|_| SidebarPane {
                 root: sidebar_root.clone(),
             }),
+            sidebar_header: sidebar_header::State::new(window, cx),
             sidebar_scroll: ScrollHandle::new(),
             sidebar_stamp: None,
             runtime,
@@ -1212,6 +1221,19 @@ impl Render for Root {
             (f32::from(window.viewport_size().width) - 640.).max(208.),
         );
         let sidebar_stamp = SidebarStamp {
+            search: (
+                self.sidebar_header.query.clone(),
+                {
+                    let mut matches: Vec<_> = self.sidebar_header.matches.iter().cloned().collect();
+                    matches.sort();
+                    matches
+                },
+                self.sidebar_header.pending,
+            ),
+            project_filter: self.sidebar_header.scope_keys.clone(),
+            scope_open: self.sidebar_header.scope_open,
+            search_error: self.sidebar_header.error.clone(),
+            search_selected: self.sidebar_header.selected,
             undo: self
                 .thread_undos
                 .iter()
@@ -1610,6 +1632,9 @@ impl Render for Root {
                         )
                         .child(
                             div()
+                                .id("sidebar-resize")
+                                .role(accesskit::Role::Button)
+                                .aria_label("Resize Sidebar")
                                 .ml(px(-4.))
                                 .w(px(4.))
                                 .h_full()
@@ -1633,6 +1658,7 @@ impl Render for Root {
                         .child(self.panel_pane.clone().cached(if self.right_panel.maximized || f32::from(window.viewport_size().width) <= 980. { StyleRefinement::default().flex_1().h_full().min_w_0() } else { StyleRefinement::default().w(px(self.panel_width(f32::from(window.viewport_size().width)))).h_full().flex_none() }))),
             )
             .when(!self.sidebar_hidden, |root_el| root_el.children(self.render_thread_undo(cx)))
+            .when(self.sidebar_header.scope_open, |root_el| root_el.child(self.render_sidebar_scope(cx)))
             .when(self.project_search.open, |root_el| root_el.child(self.render_project_search(window, cx)))
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))

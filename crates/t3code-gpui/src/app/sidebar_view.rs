@@ -39,9 +39,24 @@ impl Root {
             .collect()
     }
 
-    fn visible_entries(&self) -> Vec<ThreadEntry> {
+    pub(super) fn visible_entries(&self) -> Vec<ThreadEntry> {
+        let groups = self.project_groups();
+        let query = self.sidebar_header.query.to_lowercase();
         self.entries
             .iter()
+            .filter(|entry| {
+                self.sidebar_header.scope_keys.is_empty()
+                    || groups.iter().any(|group| {
+                        self.sidebar_header.scope_keys.contains(&group.key)
+                            && group.contains(&entry.environment, &entry.project_id)
+                    })
+            })
+            .filter(|entry| {
+                query.is_empty()
+                    || entry.title.to_lowercase().contains(&query)
+                    || entry.project_title.to_lowercase().contains(&query)
+                    || self.sidebar_header.matches.contains(&entry.key())
+            })
             .filter(|e| {
                 self.host_filter
                     .as_ref()
@@ -489,56 +504,9 @@ impl Root {
         let sidebar_active = crate::appearance::sidebar_active(cx);
         let sidebar_hover = crate::appearance::sidebar_hover(cx);
         let sidebar_muted = crate::appearance::sidebar_muted(cx);
-        let statuses = v_flex()
-            .gap_0p5()
-            .p_2()
-            .children(self.connections.iter().map(|c| {
-                let (color, text) = match c.status() {
-                    ConnectionStatus::Connected => (theme.success, "connected".to_string()),
-                    ConnectionStatus::Connecting => (sidebar_muted, "connecting".to_string()),
-                    ConnectionStatus::Disconnected(reason) => (theme.danger, reason),
-                };
-                h_flex()
-                    .gap_2()
-                    .text_xs()
-                    .child(div().size_2().rounded_full().bg(color))
-                    .child(c.label().to_string())
-                    .child(div().text_color(sidebar_muted).truncate().child(text))
-            }));
-        let filters = (self.connections.len() > 1).then(|| {
-            let chip = |id: SharedString, label: String, value: Option<String>, selected: bool| {
-                Button::new(id)
-                    .label(label)
-                    .compact()
-                    .outline()
-                    .selected(selected)
-                    .on_click(cx.listener(move |root, _, _, cx| {
-                        root.host_filter = value.clone();
-                        cx.notify();
-                    }))
-            };
-            h_flex()
-                .px_2()
-                .gap_1()
-                .flex_wrap()
-                .child(chip(
-                    "host-all".into(),
-                    "All".into(),
-                    None,
-                    self.host_filter.is_none(),
-                ))
-                .children(self.connections.iter().map(|c| {
-                    let label = c.label().to_string();
-                    chip(
-                        SharedString::from(format!("host-{label}")),
-                        label.clone(),
-                        Some(label.clone()),
-                        self.host_filter.as_ref() == Some(&label),
-                    )
-                }))
-        });
         let open = self.current();
         let primary = self.connections.first().map(|c| c.label().to_string());
+        let searching = !self.sidebar_header.query.is_empty();
         let shelves = self.shelves_of(&self.visible_entries());
         let has_settled = shelves
             .iter()
@@ -554,8 +522,9 @@ impl Root {
             );
             let bottom = lower && !lower_started;
             lower_started |= lower;
-            let collapsed = self.collapsed.contains(&section);
-            if !matches!(section, sidebar::Section::Pinned | sidebar::Section::Active) {
+            let collapsed = !searching && self.collapsed.contains(&section);
+            if !searching && !matches!(section, sidebar::Section::Pinned | sidebar::Section::Active)
+            {
                 rows.push(self.render_shelf_toggle(
                     section,
                     shelf.rows.len(),
@@ -637,7 +606,7 @@ impl Root {
                 };
                 let accessible_label = [
                     entry.title.as_str(),
-                    status_label,
+                    if searching { "" } else { status_label },
                     entry.project_title.as_str(),
                 ]
                 .into_iter()
@@ -656,8 +625,15 @@ impl Root {
                         .id(SharedString::from(format!(
                             "thread:{environment}:{thread_id}"
                         )))
-                        .role(accesskit::Role::Button)
+                        .role(if searching {
+                            accesskit::Role::ListBoxOption
+                        } else {
+                            accesskit::Role::Button
+                        })
                         .aria_label(accessible_label)
+                        .when(searching, |row| {
+                            row.aria_selected(index - 1 == self.sidebar_header.selected)
+                        })
                         .aria_current(if selected {
                             accesskit::AriaCurrent::Page
                         } else {
@@ -686,7 +662,10 @@ impl Root {
                                     .border_color(theme.ring.opacity(0.7)),
                             )
                         })
-                        .when(selected, |row| row.bg(sidebar_active))
+                        .when(
+                            selected || searching && index - 1 == self.sidebar_header.selected,
+                            |row| row.bg(sidebar_active),
+                        )
                         .when(selected && self.settings.light_theme, |row| {
                             row.relative().child(
                                 div()
@@ -713,7 +692,12 @@ impl Root {
                                 sidebar_hover
                             })
                         })
-                        .on_click(cx.listener(move |root, _, _, cx| {
+                        .on_click(cx.listener(move |root, _, window, cx| {
+                            if searching {
+                                root.sidebar_header
+                                    .search
+                                    .update(cx, |input, cx| input.set_value("", window, cx));
+                            }
                             root.open_thread(environment.clone(), thread_id.clone(), cx);
                         }))
                         .on_key_down(cx.listener(move |root, event: &KeyDownEvent, window, cx| {
@@ -773,7 +757,7 @@ impl Root {
                                         .group_hover("sidebar-row", |title| {
                                             title.text_color(theme.sidebar_foreground)
                                         })
-                                        .child(entry.title.clone()),
+                                        .child(settings_controls::text(entry.title.clone())),
                                 )
                                 .when(!slim, |row| {
                                     row.children(self.render_sidebar_provider_stack(&entry, cx))
@@ -848,7 +832,7 @@ impl Root {
                 );
             }
         }
-        if !has_settled {
+        if !has_settled && self.sidebar_header.query.is_empty() {
             rows.push(self.render_shelf_toggle(
                 sidebar::Section::Settled,
                 0,
@@ -857,7 +841,27 @@ impl Root {
                 cx,
             ));
         }
+        if searching && rows.is_empty() {
+            rows.push(
+                div()
+                    .id("sidebar-search-status")
+                    .role(accesskit::Role::Status)
+                    .px_2()
+                    .py_6()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(if self.sidebar_header.pending {
+                        "Searching thread messages…"
+                    } else {
+                        "No threads found"
+                    })
+                    .into_any_element(),
+            );
+        }
         v_flex()
+            .id("sidebar-navigation")
+            .role(accesskit::Role::Navigation)
+            .aria_label("Threads")
             .w(px(self.settings.sidebar_width))
             .h_full()
             .flex_none()
@@ -865,47 +869,13 @@ impl Root {
             .border_color(theme.border)
             .bg(theme.sidebar)
             .text_color(theme.sidebar_foreground)
-            .child(
-                h_flex()
-                    .px_2()
-                    .py_1()
-                    .gap_2()
-                    .child(
-                        h_flex()
-                            .id("sidebar-search")
-                            .h_8()
-                            .px_2()
-                            .gap_2()
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_sm()
-                            .text_color(sidebar_muted)
-                            .hover(|row| row.bg(theme.list_hover))
-                            .flex_1()
-                            .child(IconName::Search)
-                            .child("Search")
-                            .on_click(
-                                cx.listener(|root, _, window, cx| root.toggle_palette(window, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("sidebar-new")
-                            .icon(gpui_kit::assets::IconName::SquarePen)
-                            .ghost()
-                            .size(px(24.))
-                            .tooltip("New thread")
-                            .accessibility_label("New thread")
-                            .on_click(
-                                cx.listener(|root, _, window, cx| root.new_thread(window, cx)),
-                            ),
-                    ),
-            )
-            .children(filters)
+            .child(self.render_sidebar_header(cx))
+            .children(self.sidebar_header.error.clone().map(|error| settings_controls::text(error).text_color(theme.danger)))
             .child(
                 v_flex()
                     .id("threads")
-                    .role(accesskit::Role::ScrollView)
-                    .aria_label("Threads")
+                    .role(if searching { accesskit::Role::ListBox } else { accesskit::Role::ScrollView })
+                    .aria_label(if searching { "Thread search results" } else { "" })
                     .flex_1()
                     .overflow_y_scroll()
                     .track_scroll(&self.sidebar_scroll)
@@ -913,7 +883,6 @@ impl Root {
                     .p_2()
                     .children(rows),
             )
-            .when(!self.pr_state.page, |sidebar| sidebar.child(statuses))
             .when(self.pr_state.page, |sidebar| {
                 sidebar.child(
                     h_flex().px_2().py_2().gap_1().child(
@@ -939,38 +908,27 @@ impl Root {
                 sidebar.child(
                     h_flex()
                         .px_2()
-                        .pt_1()
+                        .py_2()
                         .gap_1()
                         .child(
-                            Button::new("hosts")
-                                .icon(IconName::Globe)
-                                .tooltip("Connections")
-                                .accessibility_label("Connections")
-                                .compact()
+                            Button::new("settings")
+                                .icon(IconName::Settings)
+                                .tooltip("Settings")
+                                .accessibility_label("Settings")
+                                .size(px(32.))
                                 .ghost()
-                                .on_click(
-                                    cx.listener(|root, _, window, cx| {
-                                        root.toggle_hosts(window, cx)
-                                    }),
-                                ),
-                        )
-                        .child(
-                            Button::new("usage")
-                                .label("Usage")
-                                .compact()
-                                .ghost()
-                                .on_click(
-                                    cx.listener(|root, _, window, cx| {
-                                        root.toggle_usage(window, cx)
-                                    }),
-                                ),
+                                .on_click(cx.listener(|root, _, _, cx| {
+                                    root.usage_page = None;
+                                    root.settings_open = !root.settings_open;
+                                    cx.notify();
+                                })),
                         )
                         .child(
                             Button::new("pull-requests")
                                 .icon(gpui_kit::assets::IconName::GitPullRequest)
                                 .tooltip("Pull requests")
                                 .accessibility_label("Pull requests")
-                                .compact()
+                                .size(px(32.))
                                 .ghost()
                                 .on_click(cx.listener(|root, _, window, cx| {
                                     root.open_pull_requests(true, cx);
@@ -979,17 +937,25 @@ impl Root {
                                 })),
                         )
                         .child(
-                            Button::new("settings")
-                                .icon(IconName::Settings)
-                                .tooltip("Settings")
-                                .accessibility_label("Settings")
-                                .compact()
+                            Button::new("usage")
+                                .icon(gpui_kit::assets::IconName::ChartNoAxesColumn)
+                                .tooltip("Usage")
+                                .accessibility_label("Usage")
+                                .size(px(32.))
                                 .ghost()
-                                .on_click(cx.listener(|root, _, _, cx| {
-                                    root.usage_page = None;
-                                    root.settings_open = !root.settings_open;
-                                    cx.notify();
+                                .on_click(cx.listener(|root, _, window, cx| {
+                                    root.toggle_usage(window, cx)
                                 })),
+                        )
+                        .child(div().flex_1())
+                        .child(
+                            Button::new("updates")
+                                .icon(gpui_kit::assets::IconName::RefreshCw)
+                                .tooltip("Updates unavailable: Automatic updates are not available because no update feed is configured.")
+                                .accessibility_label("Updates unavailable: Automatic updates are not available because no update feed is configured.")
+                                .size(px(32.))
+                                .ghost()
+                                .disabled(true),
                         ),
                 )
             })

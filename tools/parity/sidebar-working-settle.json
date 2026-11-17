@@ -1,0 +1,87 @@
+{
+  "name": "working-thread-settle-rejection-preserves-the-run-and-current-thread",
+  "theme": "dark",
+  "viewport": [
+    1400,
+    900
+  ],
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Working 1",
+        "expanded": false
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Working transition fixture, Working, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Working transition fixture"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "button",
+        "name": "Settle thread",
+        "ancestor": {
+          "role": "button",
+          "name": "Working transition fixture, Working, UI parity"
+        }
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Working transition fixture"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Working 1",
+        "expanded": true
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Settled 0"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Working transition fixture, Working, UI parity"
+      },
+      "count": 1,
+      "screenshot": false
+    }
+  ]
+}

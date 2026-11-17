@@ -1,0 +1,49 @@
+{
+  "name": "sidebar-shell-model-defaults",
+  "theme": "dark",
+  "viewport": [
+    1400,
+    900
+  ],
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Model defaults fixture, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "GPT-6-Luna"
+      },
+      "count": 1,
+      "native": {
+        "role": "button",
+        "name": "6 Luna"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "GPT-6-Luna"
+      },
+      "count": 1,
+      "native": {
+        "role": "button",
+        "name": "6 Luna"
+      }
+    }
+  ]
+}

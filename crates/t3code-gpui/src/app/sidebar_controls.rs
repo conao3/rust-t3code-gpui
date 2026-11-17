@@ -170,8 +170,10 @@ impl Root {
                 icon.filter(|_| snoozed || unseen || !top.is_empty()),
                 |row, icon| row.child(Icon::new(icon).size(px(12.))),
             )
-            .child(age)
-            .when_some(duration, |row, duration| row.child(duration));
+            .child(settings_controls::text(age))
+            .when_some(duration, |row, duration| {
+                row.child(settings_controls::text(duration))
+            });
         let content = if unseen {
             let acknowledged_at = woke.clone().expect("unseen wake timestamp");
             let environment = entry.environment.clone();
@@ -301,7 +303,7 @@ impl Root {
                                 14.
                             })),
                         )
-                        .when(!slim, |row| row.child("Settle")),
+                        .when(!slim, |row| row.child(settings_controls::text("Settle"))),
                 )
                 .on_click(cx.listener(move |root, _, _, cx| {
                     cx.stop_propagation();
@@ -351,13 +353,17 @@ impl Root {
                     .line_height(px(16.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(color)
-                    .child(div().truncate().child(section.label()))
+                    .child(
+                        div()
+                            .truncate()
+                            .child(settings_controls::text(section.label())),
+                    )
                     .child(div().flex_1())
                     .child(
                         div()
                             .font_weight(FontWeight::NORMAL)
                             .font_features(FontFeatures(Arc::new(vec![("tnum".into(), 1)])))
-                            .child(count.to_string()),
+                            .child(settings_controls::text(count.to_string())),
                     )
                     .child(
                         Icon::new(if expanded {
