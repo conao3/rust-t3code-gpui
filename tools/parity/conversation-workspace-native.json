@@ -1,5 +1,5 @@
 {
-  "name": "independent-pane-workspace-selection",
+  "name": "side-chat-main-navigation-retains-independent-draft",
   "viewport": [
     1400,
     900
@@ -11,147 +11,76 @@
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "New thread"
+        "name": "Pane Alpha, UI parity"
       }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+b"
     },
     {
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "Toggle thread details panel"
+        "name": "Side chat S"
       }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Bring back"
+      },
+      "count": 1
     },
     {
       "action": "click",
-      "selector": {
-        "role": "button",
-        "name": "Split conversation horizontally"
-      }
-    },
-    {
-      "action": "focus",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread",
-        "index": 0
+        "name": "Message Side chat"
       }
     },
     {
       "action": "type",
-      "value": "Draft Alpha"
+      "value": "Side draft"
     },
     {
-      "action": "focus",
+      "action": "click",
       "selector": {
-        "role": "textbox",
-        "name": "Message New thread",
-        "index": 1
+        "role": "button",
+        "name": "Pane Beta, UI parity"
       }
     },
     {
-      "action": "type",
-      "value": "Draft Beta"
-    },
-    {
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread",
-        "index": 0
-      },
-      "value": "Draft Alpha"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "textbox",
-        "name": "Message New thread",
-        "index": 1
-      },
-      "value": "Draft Beta"
-    },
-    {
-      "action": "focus",
-      "selector": {
-        "role": "textbox",
-        "name": "Message New thread",
-        "index": 0
-      }
-    },
-    {
-      "action": "press",
-      "value": "ctrl+shift+x"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "menuitemradio",
-        "name": "New worktree"
+        "name": "Message Pane Beta"
       },
       "count": 1
     },
     {
       "action": "click",
       "selector": {
-        "role": "menuitemradio",
-        "name": "New worktree"
+        "role": "button",
+        "name": "Pane Alpha, UI parity"
       }
     },
     {
       "action": "checkpoint",
-      "selector": {
-        "role": "button",
-        "name": "New worktree"
-      },
-      "count": 1
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "button",
-        "name": "Current checkout"
-      },
-      "count": 1
-    },
-    {
-      "action": "focus",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread",
-        "index": 1
-      }
-    },
-    {
-      "action": "press",
-      "value": "ctrl+shift+x"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "menuitemradio",
-        "name": "Current checkout"
-      },
-      "count": 1
-    },
-    {
-      "action": "press",
-      "value": "escape"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "button",
-        "name": "New worktree"
+        "name": "Message Pane Alpha"
       },
       "count": 1
     },
     {
       "action": "checkpoint",
       "selector": {
-        "role": "button",
-        "name": "Current checkout"
+        "role": "textbox",
+        "name": "Message Side chat"
       },
-      "count": 1
+      "value": "Side draft"
     }
   ]
 }

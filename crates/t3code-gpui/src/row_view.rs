@@ -912,6 +912,51 @@ impl Render for RowView {
                     })
                     .into_any_element()
             }
+            RowKind::Fork if self.row.detail == "Context from" => base
+                .px(if window.viewport_size().width >= px(640.) {
+                    px(48.)
+                } else {
+                    px(12.)
+                })
+                .py_2()
+                .text_size(px(11.))
+                .text_color(theme.muted_foreground)
+                .child(
+                    h_flex()
+                        .gap_3()
+                        .child(div().h(px(1.)).flex_1().bg(theme.border.opacity(0.7)))
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .child(
+                                    Icon::new(gpui_kit::assets::IconName::MessagesSquare)
+                                        .size(px(12.)),
+                                )
+                                .child(
+                                    div()
+                                        .id("context-label")
+                                        .role(accesskit::Role::Label)
+                                        .aria_value("Context from")
+                                        .child("Context from"),
+                                )
+                                .child(
+                                    div()
+                                        .id("context-separator")
+                                        .role(accesskit::Role::Label)
+                                        .aria_value("·\u{a0}")
+                                        .child("·\u{a0}"),
+                                )
+                                .child(
+                                    div()
+                                        .id("context-title")
+                                        .role(accesskit::Role::Label)
+                                        .aria_value(self.row.text.clone())
+                                        .child(self.row.text.clone()),
+                                ),
+                        )
+                        .child(div().h(px(1.)).flex_1().bg(theme.border.opacity(0.7))),
+                )
+                .into_any_element(),
             RowKind::Fork => base
                 .py_2()
                 .text_size(px(11.))

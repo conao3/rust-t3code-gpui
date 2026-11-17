@@ -8,7 +8,9 @@ impl Render for SidebarPane {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
             .update(cx, |root, cx| {
-                root.render_sidebar(window, cx).into_any_element()
+                root.with_main_conversation(|root| {
+                    root.render_sidebar(window, cx).into_any_element()
+                })
             })
             .expect("sidebar root is alive")
     }
@@ -249,6 +251,20 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
+        if self.side_chat_parent.is_some()
+            && self.pane_context_depth == 0
+            && self
+                .thread_value(&environment, &thread_id)
+                .is_some_and(|thread| {
+                    let side_chat = &thread["lineage"]["sideChat"];
+                    side_chat.is_null() || side_chat == false
+                })
+        {
+            let id = self.main_conversation_id();
+            let mut pane = self.panes.remove(&id).expect("main conversation");
+            std::mem::swap(&mut self.conversation, &mut pane);
+            self.panes.insert(pane.id, pane);
+        }
         self.pr_state.page = false;
         self.history.visit((environment.clone(), thread_id.clone()));
         self.stash_composer(cx);
@@ -293,6 +309,11 @@ impl Root {
         self.entries
             .iter()
             .find(|e| e.is(&open.environment, open.watch.thread_id()))
+            .or_else(|| {
+                self.side_chat_entry
+                    .as_ref()
+                    .filter(|e| e.is(&open.environment, open.watch.thread_id()))
+            })
     }
 
     pub(super) fn settle(&mut self, cx: &mut Context<Self>) {
@@ -404,6 +425,7 @@ impl Root {
                 thread: menu.thread_id.clone(),
                 kind,
                 commands,
+                drafts: vec![],
             });
         self.thread_undos.retain(|entry| {
             entry.environment != menu.environment || entry.thread != menu.thread_id
@@ -860,6 +882,9 @@ impl Root {
         }
         v_flex()
             .id("sidebar-navigation")
+            .capture_any_mouse_down(cx.listener(|root, _, window, cx| {
+                root.activate_conversation(root.main_conversation_id(), window, cx, false);
+            }))
             .role(accesskit::Role::Navigation)
             .aria_label("Threads")
             .w(px(self.settings.sidebar_width))

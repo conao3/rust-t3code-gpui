@@ -2782,6 +2782,7 @@ impl Window {
     pub(crate) fn dispatch_keystroke_observers(
         &mut self,
         keystroke: &Keystroke,
+        is_held: bool,
         input_preference: InputPreference,
         action: Option<&dyn Action>,
         context_stack: Vec<KeyContext>,
@@ -2790,6 +2791,7 @@ impl Window {
         cx.keystroke_observers.clone().retain(move |callback| {
             (callback)(
                 &KeystrokeEvent {
+                    is_held,
                     keystroke: keystroke.clone(),
                     input_preference,
                     action: action.map(|action| action.boxed_clone()),
@@ -2804,6 +2806,7 @@ impl Window {
     pub(crate) fn dispatch_keystroke_interceptors(
         &mut self,
         keystroke: &Keystroke,
+        is_held: bool,
         input_preference: InputPreference,
         context_stack: Vec<KeyContext>,
         cx: &mut App,
@@ -2811,6 +2814,7 @@ impl Window {
         cx.keystroke_interceptors.clone().retain(move |callback| {
             (callback)(
                 &KeystrokeEvent {
+                    is_held,
                     keystroke: keystroke.clone(),
                     input_preference,
                     action: None,
@@ -6411,6 +6415,7 @@ impl Window {
         cx.propagate_event = true;
         self.dispatch_keystroke_interceptors(
             &keystroke,
+            event.downcast_ref::<KeyDownEvent>().is_some_and(|event| event.is_held),
             input_preference,
             self.context_stack(),
             cx,
@@ -6491,6 +6496,7 @@ impl Window {
                 if !cx.propagate_event {
                     self.dispatch_keystroke_observers(
                         &keystroke,
+                        event.downcast_ref::<KeyDownEvent>().is_some_and(|event| event.is_held),
                         input_preference,
                         Some(binding.action.as_ref()),
                         match_result.context_stack,
@@ -6577,7 +6583,7 @@ impl Window {
         }
 
         if let Some(keystroke) = recognized_keystroke {
-            self.dispatch_keystroke_observers(keystroke, input_preference, None, context_stack, cx);
+            self.dispatch_keystroke_observers(keystroke, event.downcast_ref::<KeyDownEvent>().is_some_and(|event| event.is_held), input_preference, None, context_stack, cx);
         }
     }
 
@@ -6782,6 +6788,7 @@ impl Window {
                 if !cx.propagate_event {
                     self.dispatch_keystroke_observers(
                         &replay.keystroke,
+                        false,
                         InputPreference::KeyBindings,
                         Some(binding.action.as_ref()),
                         Vec::default(),

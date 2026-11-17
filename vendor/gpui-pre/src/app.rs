@@ -3584,6 +3584,7 @@ pub enum InputPreference {
 /// A keystroke event, and potentially the associated action
 #[derive(Debug)]
 pub struct KeystrokeEvent {
+    pub is_held: bool,
     /// The keystroke that occurred
     pub keystroke: Keystroke,
 

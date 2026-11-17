@@ -12482,6 +12482,7 @@ mod tests {
                 state.set_value("hello world", window, cx);
                 state.select_all(window, cx);
                 cx.write_to_clipboard(ClipboardItem {
+                    mime_types: Vec::new(),
                     entries: vec![ClipboardEntry::Image(Image::from_bytes(
                         ImageFormat::Png,
                         vec![0x89, b'P', b'N', b'G'],

@@ -70,6 +70,7 @@ mod settings_controls;
 mod settings_keybindings;
 mod settings_providers;
 mod settings_tasks;
+mod side_chat;
 mod sidebar_branding;
 mod sidebar_controls;
 mod sidebar_header;
@@ -171,9 +172,6 @@ actions!(
         NewTerminal,
         CloseTerminal,
         OpenSideChat,
-        SplitConversation,
-        SplitConversationVertical,
-        CloseConversation,
         FocusNextWorkspace,
         FocusPreviousWorkspace,
         ReopenClosed,
@@ -478,11 +476,13 @@ pub struct Root {
     thread_undos: Vec<thread_commands::UndoEntry>,
     thread_undo_epoch: u64,
     thread_undo_claimed: bool,
+    thread_undo_held: Option<String>,
     panes: HashMap<u64, ConversationState>,
     pane_layout: pane_layout::Layout,
     pane_closed: Vec<pane_layout::SavedPane>,
     pane_restored: bool,
     pane_save_pending: bool,
+    pane_context_depth: usize,
     pane_next_id: u64,
     pane_resize: Option<(Vec<bool>, bool, Bounds<Pixels>)>,
     lineage_data: crate::lineage::Details,
@@ -735,11 +735,13 @@ impl Root {
             thread_undos: Vec::new(),
             thread_undo_epoch: 0,
             thread_undo_claimed: false,
+            thread_undo_held: None,
             panes: HashMap::new(),
             pane_layout: pane_layout::Layout::Pane(0),
             pane_closed: Vec::new(),
             pane_restored: false,
             pane_save_pending: false,
+            pane_context_depth: 0,
             pane_next_id: 1,
             pane_resize: None,
             lineage_data: crate::lineage::Details::default(),
@@ -856,6 +858,12 @@ impl Root {
             return false;
         }
         let keystroke = &event.keystroke;
+        if event.is_held && self.thread_undo_held.as_ref() == Some(&keystroke.key) {
+            return true;
+        }
+        if !event.is_held {
+            self.thread_undo_held = None;
+        }
         let modifiers = keystroke.modifiers;
         if self.prompt_key(keystroke, window, cx) {
             return true;
@@ -915,6 +923,15 @@ impl Root {
         })
         .map(str::to_string)
         {
+            if command == "thread.undo" {
+                if self.palette_open || self.picker_open || self.thread_undos.is_empty() {
+                    return false;
+                }
+                if event.is_held {
+                    return true;
+                }
+                self.thread_undo_held = Some(keystroke.key.clone());
+            }
             if self.picker_shortcut(&command, window, cx) {
                 return true;
             }
@@ -1282,7 +1299,7 @@ impl Render for Root {
             self.pr_comment
                 .update(cx, |state, cx| state.set_value("", window, cx));
         }
-        self.prepare_right_panel(window, cx);
+        self.with_main_conversation(|root| root.prepare_right_panel(window, cx));
         self.follow_explorer(cx);
         self.follow_workspace();
         self.follow_context_usage();
@@ -1344,6 +1361,9 @@ impl Render for Root {
         });
         self.reveal_project_match();
         let pane = self.render_conversations(window, cx);
+        let titlebar = self.with_main_conversation(|root| root.render_titlebar(window, target, cx));
+        let workspace_canvas =
+            self.with_main_conversation(|root| root.render_workspace_canvas(pane, cx));
         let terminal_drawer = self
             .terminal_key()
             .and_then(|key| self.terminal_drawers.get(&key))
@@ -1365,9 +1385,6 @@ impl Render for Root {
             .track_focus(&self.focus)
             .key_context("Root")
             .on_action(cx.listener(|root, _: &OpenSideChat, window, cx| root.open_side_chat(window, cx)))
-            .on_action(cx.listener(|root, _: &SplitConversation, window, cx| root.split_conversation(false, window, cx)))
-            .on_action(cx.listener(|root, _: &SplitConversationVertical, window, cx| root.split_conversation(true, window, cx)))
-            .on_action(cx.listener(|root, _: &CloseConversation, window, cx| root.close_conversation(window, cx)))
             .on_action(cx.listener(|root, _: &FocusNextWorkspace, window, cx| root.focus_workspace(true, window, cx)))
             .on_action(cx.listener(|root, _: &FocusPreviousWorkspace, window, cx| root.focus_workspace(false, window, cx)))
             .on_action(cx.listener(|root, _: &CopyThreadReference, _, cx| root.copy_thread_reference(cx)))
@@ -1550,7 +1567,10 @@ impl Render for Root {
                 cx.listener(|root, _: &PreviousThread, _, cx| root.adjacent_thread(false, cx)),
             )
             .on_action(cx.listener(|root, _: &Settle, _, cx| root.settle(cx)))
-            .on_action(cx.listener(|root, _: &NewThread, window, cx| root.new_thread(window, cx)))
+            .on_action(cx.listener(|root, _: &NewThread, window, cx| {
+                root.activate_conversation(root.main_conversation_id(), window, cx, false);
+                root.new_thread(window, cx);
+            }))
             .on_action(cx.listener(|root, _: &Cancel, window, cx| {if root.usage_page.is_some() {root.usage_page=None;root.conversation.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else if root.settings_open {root.settings_open=false;root.conversation.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else {root.cancel(window,cx);}}))
             .on_action(cx.listener(|root, _: &ToggleModelPicker, window, cx| {
                 root.toggle_model_picker(window, cx)
@@ -1615,7 +1635,7 @@ impl Render for Root {
                     }
                 }),
             )
-            .child(self.render_titlebar(window, target, cx))
+            .child(titlebar)
             .child(
                 h_flex()
                     .flex_1()
@@ -1650,7 +1670,7 @@ impl Render for Root {
                         )
                     })
                     .when(!self.pr_state.page && !(self.right_panel.open && (self.right_panel.maximized || f32::from(window.viewport_size().width) <= 980.)), |row| row.child(v_flex().flex_1().h_full().min_w_0().min_h_0()
-                        .child(div().flex_1().h_0().min_h_0().child(self.render_workspace_canvas(pane, cx)))
+                        .child(div().flex_1().h_0().min_h_0().child(workspace_canvas))
                         .children(terminal_drawer.map(|drawer| drawer.cached(StyleRefinement::default().w_full().h(px(terminal_height)).flex_none()).into_any_element()))))
                     .when(self.pr_state.page, |row| row.child(self.pr_pane.clone().cached(StyleRefinement::default().flex_1().h_full().min_w_0())))
                     .when(!self.pr_state.page && self.right_panel.open, |row| row

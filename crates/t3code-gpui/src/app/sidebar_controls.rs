@@ -262,6 +262,9 @@ impl Root {
             thread_id: entry.thread_id.clone(),
             op,
         };
+        let discard_target = (entry.environment.clone(), entry.thread_id.clone());
+        let has_draft = self.current().as_ref() != Some(&discard_target)
+            && self.has_thread_draft(&entry.environment, &entry.thread_id);
         h_flex()
             .h(px(height))
             .flex_none()
@@ -269,6 +272,31 @@ impl Root {
             .right_0()
             .top_0()
             .group_hover("sidebar-row", |actions| actions.relative())
+            .when(has_draft, |actions| {
+                actions.child(
+                    Button::new(SharedString::from(format!(
+                        "discard-draft:{}:{}",
+                        entry.environment, entry.thread_id
+                    )))
+                    .icon(IconName::Close)
+                    .accessibility_label("Discard draft")
+                    .tooltip("Discard draft")
+                    .ghost()
+                    .compact()
+                    .h(px(height))
+                    .opacity(if visible { 1. } else { 0. })
+                    .group_hover("sidebar-row", |button| button.opacity(1.))
+                    .focus_visible(|button| button.opacity(1.))
+                    .on_click(cx.listener(move |root, _, _, cx| {
+                        cx.stop_propagation();
+                        root.discard_thread_draft(
+                            discard_target.0.clone(),
+                            discard_target.1.clone(),
+                            cx,
+                        );
+                    })),
+                )
+            })
             .when(
                 !slim && crate::snooze::can_snooze(&entry.presentation, &now_iso()),
                 |actions| actions.child(self.render_snooze_button(entry, state, visible, cx)),

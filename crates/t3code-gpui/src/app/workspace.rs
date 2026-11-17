@@ -6,7 +6,9 @@ pub(super) struct DetailsPane {
 impl Render for DetailsPane {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
-            .update(cx, |root, cx| root.render_thread_details(cx))
+            .update(cx, |root, cx| {
+                root.with_main_conversation(|root| root.render_thread_details(cx))
+            })
             .expect("details root is alive")
     }
 }

@@ -194,9 +194,11 @@ for line in sys.stdin:
             "rateLimitResetCredits": None,
             "accountId": None,
         }
-    elif method in ["thread/start", "thread/resume"]:
+    elif method in ["thread/start", "thread/resume", "thread/fork"]:
         thread_id = (
-            str(uuid.uuid4()) if method == "thread/start" else params["threadId"]
+            str(uuid.uuid4())
+            if method in ["thread/start", "thread/fork"]
+            else params["threadId"]
         )
         result = replace(
             copy.deepcopy(responses["thread/start"]),

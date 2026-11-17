@@ -1,5 +1,5 @@
 {
-  "name": "native-conversation-split-focus-close-reopen",
+  "name": "side-chat-focus-and-empty-close",
   "viewport": [
     1400,
     900
@@ -11,21 +11,33 @@
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "New thread"
+        "name": "Pane Alpha, UI parity"
       }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+b"
     },
     {
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "Toggle thread details panel"
+        "name": "Side chat S"
       }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Bring back"
+      },
+      "count": 1
     },
     {
       "action": "click",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread"
+        "name": "Message Pane Alpha"
       }
     },
     {
@@ -35,19 +47,11 @@
     {
       "action": "click",
       "selector": {
-        "role": "button",
-        "name": "Split conversation horizontally"
+        "role": "textbox",
+        "name": "Message Side chat"
       }
     },
     {
-      "action": "checkpoint",
-      "selector": {
-        "role": "textbox",
-        "name": "Message New thread"
-      },
-      "count": 2
-    },
-    {
       "action": "type",
       "value": "Second pane draft"
     },
@@ -55,47 +59,32 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread",
-        "index": 1
+        "name": "Message Pane Alpha"
       },
-      "value": "Second pane draft"
-    },
-    {
-      "action": "press",
-      "value": "shift+F6"
-    },
-    {
-      "action": "press",
-      "value": "shift+F6"
-    },
-    {
-      "action": "type",
-      "value": " retained"
+      "value": "First pane draft"
     },
     {
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread",
-        "index": 0
+        "name": "Message Side chat"
       },
-      "value": "First pane draft retained"
+      "value": "Second pane draft"
     },
     {
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "Close side chat",
-        "index": 1
+        "name": "Close side chat"
       }
     },
     {
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread"
+        "name": "Message Side chat"
       },
-      "count": 1
+      "count": 0
     },
     {
       "action": "press",
@@ -105,42 +94,17 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread",
-        "index": 1
+        "name": "Message Side chat"
       },
-      "value": "Second pane draft"
-    },
-    {
-      "action": "click",
-      "selector": {
-        "role": "button",
-        "name": "Split conversation vertically",
-        "index": 1
-      }
+      "count": 0
     },
     {
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message New thread"
+        "name": "Message Pane Alpha"
       },
-      "count": 3
-    },
-    {
-      "action": "click",
-      "selector": {
-        "role": "button",
-        "name": "Close side chat",
-        "index": 2
-      }
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "textbox",
-        "name": "Message New thread"
-      },
-      "count": 2
+      "value": "First pane draft"
     }
   ]
 }

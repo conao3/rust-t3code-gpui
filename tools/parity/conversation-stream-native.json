@@ -1,5 +1,5 @@
 {
-  "name": "native-independent-thread-panes",
+  "name": "side-chat-independent-conversations",
   "viewport": [
     1400,
     900
@@ -15,25 +15,23 @@
       }
     },
     {
-      "action": "click",
-      "selector": {
-        "role": "button",
-        "name": "Toggle thread details panel"
-      }
+      "action": "press",
+      "value": "ctrl+alt+b"
     },
     {
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "Split conversation horizontally"
+        "name": "Side chat S"
       }
     },
     {
-      "action": "click",
+      "action": "checkpoint",
       "selector": {
         "role": "button",
-        "name": "Pane Beta, UI parity"
-      }
+        "name": "Bring back"
+      },
+      "count": 1
     },
     {
       "action": "checkpoint",
@@ -47,7 +45,7 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       },
       "count": 1
     }

@@ -127,6 +127,7 @@ impl<T: ReceiveData> DataOffer<T> {
             if let Some(bytes) = self.read_bytes(connection, mime_type) {
                 let id = hash(&bytes);
                 return Some(ClipboardItem {
+                    mime_types: Vec::new(),
                     entries: vec![ClipboardEntry::Image(Image { format, bytes, id })],
                 });
             }
@@ -174,7 +175,15 @@ impl Clipboard {
         self.self_mime.clone()
     }
 
-    pub fn send(&self, _mime_type: String, fd: OwnedFd) {
+    pub fn mime_types(&self) -> Vec<String> {
+        self.contents.as_ref().map(|item| item.mime_types.iter().map(|(mime, _)| mime.clone()).collect()).unwrap_or_default()
+    }
+
+    pub fn send(&self, mime_type: String, fd: OwnedFd) {
+        if let Some(bytes) = self.contents.as_ref().and_then(|item| item.mime_types.iter().find(|(mime, _)| *mime == mime_type).map(|(_, bytes)| bytes)) {
+            self.send_bytes(fd, bytes.clone());
+            return;
+        }
         if let Some(text) = self.contents.as_ref().and_then(|contents| contents.text()) {
             self.send_bytes(fd, text.as_bytes().to_owned());
         }

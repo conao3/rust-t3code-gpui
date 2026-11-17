@@ -4,7 +4,14 @@ pub struct ConversationState {
     pub(super) id: u64,
     pub(super) revision: u64,
     pub(super) draft_text: String,
-    view: Entity<ConversationPane>,
+    pub(super) view: Entity<ConversationPane>,
+    pub(super) side_chat_entry: Option<ThreadEntry>,
+    pub(super) side_chat_parent: Option<(String, String)>,
+    pub(super) side_chat_pending: bool,
+    pub(super) side_chat_closing: bool,
+    pub(super) side_chat_busy: bool,
+    pub(super) side_chat_width: f32,
+    pub(super) composer_gutter: f32,
     stamp: Option<String>,
     persisted_target: Option<String>,
     focus: FocusHandle,
@@ -192,13 +199,20 @@ impl ConversationState {
             find_open: false,
             find_hits: vec![],
             find_at: 0,
+            side_chat_entry: None,
+            side_chat_parent: None,
+            side_chat_pending: false,
+            side_chat_closing: false,
+            side_chat_busy: false,
+            side_chat_width: 540.,
+            composer_gutter: 32.,
             pending_composer: None,
             thread_dirty: false,
         }
     }
 }
 
-struct ConversationPane {
+pub(super) struct ConversationPane {
     root: WeakEntity<Root>,
     id: u64,
 }
@@ -219,12 +233,6 @@ impl Render for ConversationPane {
                         root.render_thread(cx)
                     };
                     let id = root.conversation.id;
-                    let multiple = root.pane_layout.ids().len() > 1;
-                    let title = root
-                        .current()
-                        .and_then(|(environment, thread)| root.thread_value(&environment, &thread))
-                        .and_then(|thread| thread["title"].as_str().map(str::to_owned))
-                        .unwrap_or_else(|| "New thread".into());
                     v_flex()
                         .id(("conversation", id))
                         .role(accesskit::Role::Region)
@@ -236,50 +244,9 @@ impl Render for ConversationPane {
                         .capture_any_mouse_down(cx.listener(move |root, _, window, cx| {
                             root.activate_conversation(id, window, cx, false);
                         }))
-                        .child(
-                            h_flex()
-                                .h(px(36.))
-                                .px_2()
-                                .gap_1()
-                                .border_b_1()
-                                .border_color(cx.theme().border)
-                                .child(div().flex_1().text_xs().truncate().child(title))
-                                .child(
-                                    Button::new("split-conversation")
-                                        .label("Split")
-                                        .ghost()
-                                        .compact()
-                                        .accessibility_label("Split conversation horizontally")
-                                        .on_click(cx.listener(move |root, _, window, cx| {
-                                            root.activate_conversation(id, window, cx, false);
-                                            root.split_conversation(false, window, cx);
-                                        })),
-                                )
-                                .child(
-                                    Button::new("split-conversation-vertical")
-                                        .label("Split vertically")
-                                        .ghost()
-                                        .compact()
-                                        .accessibility_label("Split conversation vertically")
-                                        .on_click(cx.listener(move |root, _, window, cx| {
-                                            root.activate_conversation(id, window, cx, false);
-                                            root.split_conversation(true, window, cx);
-                                        })),
-                                )
-                                .when(multiple, |bar| {
-                                    bar.child(
-                                        Button::new("close-conversation")
-                                            .icon(IconName::Close)
-                                            .ghost()
-                                            .compact()
-                                            .accessibility_label("Close side chat")
-                                            .on_click(cx.listener(move |root, _, window, cx| {
-                                                root.activate_conversation(id, window, cx, false);
-                                                root.close_conversation(window, cx);
-                                            })),
-                                    )
-                                }),
-                        )
+                        .when(root.side_chat_parent.is_some(), |pane| {
+                            pane.child(root.render_side_chat_header(cx))
+                        })
                         .child(body)
                         .into_any_element()
                 })
@@ -290,6 +257,19 @@ impl Render for ConversationPane {
 }
 
 impl Root {
+    pub(super) fn main_conversation_id(&self) -> u64 {
+        std::iter::once(&self.conversation)
+            .chain(self.panes.values())
+            .find(|pane| pane.side_chat_parent.is_none())
+            .expect("main conversation")
+            .id
+    }
+
+    pub(super) fn with_main_conversation<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.with_conversation(self.main_conversation_id(), f)
+            .expect("main conversation")
+    }
+
     pub(super) fn with_conversation<R>(
         &mut self,
         id: u64,
@@ -300,7 +280,12 @@ impl Root {
         }
         let mut pane = self.panes.remove(&id)?;
         std::mem::swap(&mut self.conversation, &mut pane);
+        let previous = pane.id;
+        self.panes.insert(previous, pane);
+        self.pane_context_depth += 1;
         let result = f(self);
+        self.pane_context_depth -= 1;
+        let mut pane = self.panes.remove(&previous).expect("previous conversation");
         std::mem::swap(&mut self.conversation, &mut pane);
         self.panes.insert(id, pane);
         if std::mem::take(&mut self.pane_save_pending) {
@@ -333,7 +318,7 @@ impl Root {
     }
 
     pub(super) fn save_conversations(&mut self) {
-        if self.pane_layout.ids().len() != self.panes.len() + 1 {
+        if self.pane_context_depth > 0 || self.pane_layout.ids().len() != self.panes.len() + 1 {
             self.pane_save_pending = true;
             return;
         }
@@ -345,6 +330,7 @@ impl Root {
                 .chain(self.panes.values())
                 .map(|pane| pane_layout::SavedPane {
                     id: pane.id,
+                    side_chat_parent: pane.side_chat_parent.clone(),
                     draft: pane.draft.clone(),
                     composer: pane.draft_text.clone(),
                     thread: pane
@@ -408,6 +394,7 @@ impl Root {
                 self.pane_closed = saved.closed;
                 for pane in saved.panes {
                     self.with_conversation(pane.id, |root| {
+                        root.side_chat_parent = pane.side_chat_parent;
                         if let Some((environment, thread)) = pane.thread {
                             root.open_thread(environment, thread, cx);
                         }
@@ -425,37 +412,6 @@ impl Root {
                     Some(format!("Cannot restore conversation layout: {error:#}"))
             }
         }
-    }
-
-    pub(super) fn split_conversation(
-        &mut self,
-        vertical: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let thread = self.current();
-        let draft = self.conversation.draft.clone();
-        let id = self.pane_next_id;
-        self.pane_next_id += 1;
-        let active = self.conversation.id;
-        self.pane_layout.split(active, id, vertical);
-        self.panes.insert(
-            id,
-            ConversationState::new(id, None, &self.drafts_path, window, cx),
-        );
-        self.activate_conversation(id, window, cx, false);
-        if let Some((environment, thread)) = thread {
-            self.open_thread(environment, thread, cx);
-        }
-        if let Some(mut draft) = draft {
-            draft.id = uuid::Uuid::new_v4().to_string();
-            self.conversation.draft = Some(draft);
-        }
-        self.save_conversations();
-        self.conversation
-            .composer
-            .update(cx, |state, cx| state.focus(window, cx));
-        cx.notify();
     }
 
     pub(super) fn close_conversation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -479,6 +435,7 @@ impl Root {
         }
         self.pane_closed.push(pane_layout::SavedPane {
             id,
+            side_chat_parent: self.side_chat_parent.clone(),
             draft: self.conversation.draft.clone(),
             thread: self.current(),
             composer: self.conversation.composer.read(cx).value().to_string(),
@@ -499,13 +456,33 @@ impl Root {
     }
 
     pub(super) fn reopen_conversation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(pane) = self.pane_closed.pop() {
+        while let Some(pane) = self.pane_closed.pop() {
+            if pane.side_chat_parent.is_some()
+                && pane
+                    .thread
+                    .as_ref()
+                    .is_some_and(|(env, thread)| self.thread_value(env, thread).is_none())
+            {
+                continue;
+            }
             let id = pane.id;
             self.pane_layout.split(self.conversation.id, id, false);
             self.panes.insert(
                 id,
                 ConversationState::new(id, None, &self.drafts_path, window, cx),
             );
+            let parent = pane.side_chat_parent.clone();
+            self.panes
+                .get_mut(&id)
+                .expect("reopened pane")
+                .side_chat_parent = parent.clone();
+            if let Some((environment, thread)) = parent.clone() {
+                self.with_main_conversation(|root| {
+                    if root.current() != Some((environment.clone(), thread.clone())) {
+                        root.open_thread(environment, thread, cx);
+                    }
+                });
+            }
             self.activate_conversation(id, window, cx, true);
             if let Some((environment, thread)) = pane.thread {
                 self.open_thread(environment, thread, cx);
@@ -516,7 +493,14 @@ impl Root {
             self.conversation.draft = pane.draft;
             self.load_composer();
             self.conversation.pending_composer = Some(pane.composer);
+            if parent.is_some() {
+                self.follow_right_panel(cx);
+                if let Some((_, thread)) = self.current() {
+                    self.activate_panel(format!("side-chat:{thread}"), cx);
+                }
+            }
             self.save_conversations();
+            break;
         }
     }
 
@@ -583,6 +567,15 @@ impl Root {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         self.restore_conversations(window, cx);
+        let closing: Vec<_> = std::iter::once(&self.conversation)
+            .chain(self.panes.values())
+            .filter(|pane| pane.side_chat_closing)
+            .map(|pane| pane.id)
+            .collect();
+        for id in closing {
+            self.activate_conversation(id, window, cx, false);
+            self.close_conversation(window, cx);
+        }
         let mut save = false;
         for id in self.pane_layout.ids() {
             self.with_conversation(id, |root| {
@@ -602,7 +595,25 @@ impl Root {
                     root.persisted_target = Some(target);
                     save = true;
                 }
+                if root.side_chat_parent.is_some()
+                    && let Some((env, thread)) = root.current()
+                    && let Some(connection) = root.connection(&env)
+                {
+                    let shell = connection.shell();
+                    let shell = shell.lock().expect("shell lock");
+                    root.side_chat_entry = shell
+                        .threads
+                        .iter()
+                        .find(|value| value["id"] == thread)
+                        .map(|thread| sidebar::conversation_entry(&env, &shell, thread));
+                }
                 root.follow_workspace();
+                root.side_chat_width = root.panel_width(f32::from(window.viewport_size().width));
+                root.composer_gutter = if window.viewport_size().width >= px(640.) {
+                    32.
+                } else {
+                    0.
+                };
                 root.sync_prompt_thumbnails(cx);
                 root.sync_composer_controls(window, cx);
                 let controls = ComposerControlsStamp {
@@ -722,6 +733,12 @@ impl Root {
                     root.conversation.branch_cursor,
                     root.conversation.branch_query
                 );
+                let stamp = format!(
+                    "{stamp}:{:?}:{}:{:?}",
+                    root.side_chat_parent,
+                    root.side_chat_busy,
+                    root.side_chat_bring_back_reason()
+                );
                 if controls_changed || root.stamp.as_ref() != Some(&stamp) {
                     root.stamp = Some(stamp);
                     window.mark_view_dirty(root.view.entity_id());
@@ -731,7 +748,14 @@ impl Root {
         if save {
             self.save_conversations();
         }
-        self.render_conversation_layout(&self.pane_layout.clone(), vec![], cx)
+        let mut layout = Some(self.pane_layout.clone());
+        for pane in std::iter::once(&self.conversation)
+            .chain(self.panes.values())
+            .filter(|pane| pane.side_chat_parent.is_some())
+        {
+            layout = layout.and_then(|layout| layout.remove(pane.id));
+        }
+        self.render_conversation_layout(&layout.expect("main conversation"), vec![], cx)
     }
 
     fn render_conversation_layout(
@@ -896,37 +920,6 @@ impl Root {
     {
         let pane = self.pane_root(cx);
         cx.spawn_in(window, async move |_, cx| f(pane, cx).await)
-    }
-}
-
-impl Root {
-    pub(super) fn open_side_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((environment, source)) = self.current() else {
-            return;
-        };
-        let Some(connection) = self.connection(&environment) else {
-            return;
-        };
-        let target = uuid::Uuid::new_v4().to_string();
-        let pane_id = self.conversation.id;
-        let runtime = self.runtime.clone();
-        cx.spawn_in(window, async move |this, cx| {
-            let target_id = target.clone();
-            let result = on_runtime(&runtime, async move {
-                connection.dispatch(json!({"type":"thread.fork","createdBy":"user","creationSource":"web","sourceThreadId":source,"targetThreadId":target_id,"sourcePoint":{"type":"latest_stable"},"sideChat":true,"title":"Side chat"})).await
-            }).await;
-            let _ = this.update_in(cx, |root, window, cx| {
-                match result {
-                    Ok(_) => {
-                        root.activate_conversation(pane_id, window, cx, false);
-                        root.split_conversation(false, window, cx);
-                        root.open_thread(environment, target, cx);
-                    }
-                    Err(error) => root.conversation.message = Some(format!("Could not start a side chat: {error:#}")),
-                }
-                cx.notify();
-            });
-        }).detach();
     }
 }
 
