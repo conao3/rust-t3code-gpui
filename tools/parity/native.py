@@ -138,7 +138,11 @@ class Native:
                     ],
                     "focused": state.contains(self.atspi.STATE_FOCUSED),
                     "disabled": not state.contains(self.atspi.STATE_ENABLED),
-                    "checked": state.contains(self.atspi.STATE_CHECKED)
+                    "checked": state.contains(
+                        self.atspi.STATE_PRESSED
+                        if role == "toggle button"
+                        else self.atspi.STATE_CHECKED
+                    )
                     if role
                     in [
                         "radio menu item",

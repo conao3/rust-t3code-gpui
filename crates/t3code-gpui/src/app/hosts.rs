@@ -2,10 +2,10 @@ use super::*;
 
 impl Root {
     pub(super) fn toggle_hosts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.hosts_open = !self.hosts_open;
-        if self.hosts_open {
-            self.host_inputs[0].update(cx, |state, cx| state.focus(window, cx));
-        }
+        self.settings_open = true;
+        self.settings_page = "connections";
+        self.hosts_open = false;
+        self.settings_focus.focus(window, cx);
         cx.notify();
     }
 
@@ -121,7 +121,7 @@ impl Root {
         self.refresh(window, cx);
     }
 
-    pub(super) fn render_hosts(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_host_content(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let rows = self
             .config
@@ -155,45 +155,28 @@ impl Root {
                         )
                     })
             });
-        div()
-            .absolute()
-            .top(px(80.))
-            .left_0()
-            .right_0()
-            .flex()
-            .justify_center()
+        v_flex()
+            .gap_3()
+            .child(v_flex().gap_1().children(rows))
+            .child(div().text_xs().text_color(theme.muted_foreground).child(
+                "Add an environment with a pairing URL, or its server URL and pairing code.",
+            ))
+            .children(
+                self.host_inputs
+                    .iter()
+                    .zip(["Environment name", "Server URL", "Pairing code or token"])
+                    .map(|(input, label)| Input::new(input).aria_label(label)),
+            )
             .child(
-                v_flex()
-                    .w(px(640.))
-                    .p_4()
-                    .gap_3()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.background)
-                    .shadow_lg()
-                    .child(h_flex().child(div().flex_1().child("Hosts")).child(
-                        Button::new("close-hosts")
-                            .label("Close")
-                            .compact()
-                            .outline()
-                            .on_click(cx.listener(|root, _, window, cx| root.toggle_hosts(window, cx))),
-                    ))
-                    .child(v_flex().gap_1().children(rows))
-                    .child(div().text_xs().text_color(theme.muted_foreground).child(
-                        "Add a host with the pairing URL from `t3 pair`, or its server URL and a pairing code or a token from `t3 auth session issue`. The first host is the primary one.",
-                    ))
-                    .children(self.host_inputs.iter().map(Input::new))
-                    .child(
-                        h_flex().justify_end().child(
-                            Button::new("add-host")
-                                .label("Add host")
-                                .compact()
-                                .primary()
-                                .on_click(cx.listener(|root, _, window, cx| root.add_host(window, cx))),
-                        ),
-                    ),
+                Button::new("add-host")
+                    .label("Add environment")
+                    .primary()
+                    .on_click(cx.listener(|root, _, window, cx| root.add_host(window, cx))),
             )
             .into_any_element()
+    }
+
+    pub(super) fn render_hosts(&self, cx: &Context<Self>) -> AnyElement {
+        self.render_host_content(cx)
     }
 }

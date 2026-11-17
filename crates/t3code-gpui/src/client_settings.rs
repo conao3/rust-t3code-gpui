@@ -12,6 +12,7 @@ pub enum SendShortcut {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClientSettings {
+    pub values: Value,
     pub send_shortcut: SendShortcut,
     pub steer_follow_ups: bool,
     pub desktop_notifications: bool,
@@ -46,6 +47,7 @@ impl ClientSettings {
         };
         let notification_mode = text("notificationMode").unwrap_or("off");
         Self {
+            values: value.clone(),
             send_shortcut: match text("sendShortcut") {
                 Some("mod-enter") => SendShortcut::ModEnter,
                 Some("mod-enter-multiline") => SendShortcut::ModEnterMultiline,

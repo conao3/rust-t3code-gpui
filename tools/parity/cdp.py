@@ -178,7 +178,7 @@ class Cdp:
                     (
                         p["value"].get("value") in [True, "true"]
                         for p in n.get("properties", [])
-                        if p["name"] == "checked"
+                        if p["name"] in ("checked", "pressed")
                     ),
                     None,
                 ),

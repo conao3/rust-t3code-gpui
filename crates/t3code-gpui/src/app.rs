@@ -48,6 +48,11 @@ mod hosts;
 mod lineage;
 mod palette;
 mod settings;
+mod settings_catalog;
+mod settings_controls;
+mod settings_keybindings;
+mod settings_providers;
+mod settings_tasks;
 mod sidebar_branding;
 mod sidebar_controls;
 mod sidebar_view;
@@ -437,6 +442,10 @@ pub struct Root {
     settings: ClientSettings,
     settings_path: std::path::PathBuf,
     settings_open: bool,
+    settings_focus: FocusHandle,
+    settings_page: &'static str,
+    settings_environment: Option<String>,
+    settings_project: Option<String>,
     sidebar_hidden: bool,
     wake_task: Option<Task<()>>,
     inbox: crate::inbox::Tracker,
@@ -692,6 +701,10 @@ impl Root {
             settings,
             settings_path,
             settings_open: false,
+            settings_focus: cx.focus_handle(),
+            settings_page: "general",
+            settings_environment: None,
+            settings_project: None,
             sidebar_hidden: false,
             wake_task: None,
             inbox: crate::inbox::Tracker::default(),
@@ -822,7 +835,11 @@ impl Root {
             "rightPanelOpen" => self.file_panel.is_some() || self.explorer.is_some(),
             "composerFocus" => self.composer.read(cx).focus_handle(cx).is_focused(window),
             "editableFocus" => {
-                self.key_context("terminalFocus", window, cx)
+                window
+                    .context_stack()
+                    .iter()
+                    .any(|context| context.contains("Input"))
+                    || self.key_context("terminalFocus", window, cx)
                     || [
                         self.composer.read(cx).focus_handle(cx),
                         self.find_input.read(cx).focus_handle(cx),
@@ -1111,6 +1128,7 @@ impl Render for Root {
             && !self.palette_open
             && !self.file_picker_open
             && !self.hosts_open
+            && !self.settings_open
         {
             self.focus.focus(window, cx);
         }
@@ -1286,7 +1304,7 @@ impl Render for Root {
             )
             .on_action(cx.listener(|root, _: &Settle, _, cx| root.settle(cx)))
             .on_action(cx.listener(|root, _: &NewThread, window, cx| root.new_thread(window, cx)))
-            .on_action(cx.listener(|root, _: &Cancel, window, cx| root.cancel(window, cx)))
+            .on_action(cx.listener(|root, _: &Cancel, window, cx| {if root.settings_open {root.settings_open=false;root.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else {root.cancel(window,cx);}}))
             .on_action(cx.listener(|root, _: &ToggleModelPicker, window, cx| {
                 root.toggle_model_picker(window, cx)
             }))

@@ -274,6 +274,7 @@ impl Render for CustomSnoozeView {
                                 window.close_dialog(cx);
                                 let _ = view.root.update(cx, |root, cx| {
                                     root.settings_open = true;
+                                    root.settings_page = "threads";
                                     cx.notify();
                                 });
                             })),

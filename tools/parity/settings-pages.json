@@ -1,0 +1,197 @@
+{
+  "name": "settings-pages-and-persistence",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 900,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Settings"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Working section",
+        "checked": true
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Working section",
+        "checked": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "switch",
+        "name": "Working section"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Working section"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Working section",
+        "checked": false
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Working section",
+        "checked": false
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "switch",
+        "name": "Working section"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Working section"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Chat"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Chat"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Send shortcut"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "combobox",
+        "name": "Send shortcut"
+      }
+    },
+    {
+      "action": "press",
+      "value": "down"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Send shortcut"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Threads"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Threads"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "switch",
+        "name": "Snooze until limits reset"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Snooze until limits reset"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Snooze until limits reset",
+        "checked": true
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Snooze until limits reset",
+        "checked": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Keybindings"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Keybindings"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "searchbox",
+        "name": "Search keybindings"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Search keybindings"
+      }
+    },
+    {
+      "action": "type",
+      "value": "usage"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "searchbox",
+        "name": "Search keybindings"
+      },
+      "value": "usage",
+      "native": {
+        "role": "textbox",
+        "name": "Search keybindings"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Scheduled tasks"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Scheduled tasks"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "New task"
+      }
+    }
+  ]
+}
