@@ -428,6 +428,7 @@ impl Root {
                                             .size(px(12.))
                                             .child(
                                                 div()
+                                                    .size(px(12.))
                                                     .group_hover("panel-tab", |icon| {
                                                         icon.opacity(0.)
                                                     })
@@ -451,6 +452,7 @@ impl Root {
                                     )
                                     .ghost()
                                     .size(px(20.))
+                                    .p_0()
                                     .accessibility_label(format!("Close {label}"))
                                     .on_click(cx.listener(move |root, _, _, cx| {
                                         root.close_panel_tab(&close, cx)

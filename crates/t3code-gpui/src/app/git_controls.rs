@@ -570,17 +570,19 @@ impl Root {
                                 .accessibility_label("Script actions")
                                 .ghost()
                                 .compact()
-                                .dropdown_menu(move |mut menu, _, _| {
+                                .dropdown_menu(move |mut menu, _, cx| {
                                     for script in &scripts {
                                         let name =
                                             script["name"].as_str().unwrap_or_default().to_string();
                                         let edit = script.clone();
                                         let root = script_root.clone();
+                                        let popup = cx.entity().downgrade();
                                         menu =
                                             menu.item(
                                                 PopupMenuItem::element(move |_, _| {
                                                     let edit = edit.clone();
                                                     let root = root.clone();
+                                                    let popup = popup.clone();
                                                     h_flex()
                                                     .w_full()
                                                     .child(name.clone())
@@ -596,6 +598,9 @@ impl Root {
                                                         .size(px(24.))
                                                         .on_click(move |_, window, cx| {
                                                             cx.stop_propagation();
+                                                            let _ = popup.update(cx, |_, cx| {
+                                                                cx.emit(gpui::DismissEvent)
+                                                            });
                                                             let _ = root.update(cx, |root, cx| {
                                                                 root.open_script_editor(
                                                                     edit.clone(),
