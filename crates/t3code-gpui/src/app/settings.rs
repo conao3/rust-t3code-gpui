@@ -644,6 +644,38 @@ impl Root {
                     .child(section_rows),
             );
         }
+        if page == "snap-shot" {
+            let unavailable =
+                if cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_none() {
+                    "SnapShots require a Wayland session. X11 capture is not supported."
+                } else {
+                    "SnapShot capture is not implemented in this client."
+                };
+            content = content.child(
+                group().child(
+                    h_flex()
+                        .p_4()
+                        .gap_4()
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .gap_1()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child(settings_controls::text(
+                                    "Capture a window and attach it to your current draft.",
+                                ))
+                                .child(settings_controls::text(unavailable)),
+                        )
+                        .child(
+                            gpui_kit::component::switch::Switch::new("snapshot-enabled")
+                                .accessibility_label("Enable snapshots")
+                                .checked(false)
+                                .disabled(true),
+                        ),
+                ),
+            );
+        }
         if page == "threads" && self.settings_project.is_none() {
             let root = cx.entity().downgrade();
             let saved = self.snooze_settings(&environment);
