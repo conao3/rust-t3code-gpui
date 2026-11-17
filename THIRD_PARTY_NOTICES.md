@@ -119,3 +119,5 @@ The native Snooze state, preset scheduling, custom date/duration input and edito
 `vendor/gpui-base/` is GPUI Kit 0.9.1, distributed under Apache-2.0 with its original license retained. The local number-input patch leaves keyboard/accessibility focus with a supplied editable input, so the outer spinbutton and inner editor do not both claim the same focus. `AlertDialog` forwards its accessible label to the dialog root.
 
 The thread cleanup undo plans, hosted reference escaping and current pull request selection in `crates/t3code-gpui/src/app/thread_commands.rs` derive from T3 Code at revision `24e77473ecf41bc1f7142529c7911c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.
+
+The minimap geometry in `crates/t3code-gpui/src/app/minimap.rs` follows T3 Code `MessagesTimeline.logic.ts` at revision `24e77473ecf41bc1f7142529c7911c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.

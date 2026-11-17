@@ -47,6 +47,7 @@ mod files;
 mod find;
 mod hosts;
 mod lineage;
+mod minimap;
 mod palette;
 mod pane_layout;
 mod project_search;

@@ -1,0 +1,15 @@
+{
+  "name": "timeline-minimap-keyboard-navigation",
+  "viewport": [1400, 900],
+  "theme": "dark",
+  "settle_ms": 200,
+  "steps": [
+    {"action": "focus", "selector": {"role": "button", "name": "Jump to message: User message"}},
+    {"action": "press", "value": "home"},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Jump to message: First question: show an equation and a diagram."}, "count": 1},
+    {"action": "press", "value": "enter"},
+    {"action": "press", "value": "end"},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Jump to message: Second question: keep the same diagram."}, "count": 1},
+    {"action": "press", "value": "enter"}
+  ]
+}

@@ -105,9 +105,10 @@ impl ConversationState {
             draft: None,
             rows: vec![],
             row_views: vec![],
-            timeline_pane: cx.new(|_| TimelinePane {
+            timeline_pane: cx.new(|cx| TimelinePane {
                 views: vec![],
                 list: list_state.clone(),
+                minimap: cx.new(|cx| super::minimap::Minimap::new(list_state.clone(), window, cx)),
             }),
             row_subscriptions: HashMap::new(),
             list_state,

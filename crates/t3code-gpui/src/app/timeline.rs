@@ -3,6 +3,7 @@ use super::*;
 pub(super) struct TimelinePane {
     pub(super) views: Vec<Entity<RowView>>,
     pub(super) list: ListState,
+    pub(super) minimap: Entity<super::minimap::Minimap>,
 }
 
 impl Render for TimelinePane {
@@ -23,6 +24,15 @@ impl Render for TimelinePane {
                 .w_full()
                 .h_full()
                 .pt_4(),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .top_0()
+                    .bottom_0()
+                    .w(px(48.))
+                    .child(self.minimap.clone()),
             )
             .child(
                 gpui_kit::base::Scrollbar::vertical(&self.list)
@@ -128,8 +138,32 @@ impl Root {
                 });
             }
         }
+        let mut minimap_items: Vec<(usize, String, String)> = Vec::new();
+        for (index, row) in self.rows.iter().enumerate() {
+            if row.kind == RowKind::User {
+                minimap_items.push((
+                    index,
+                    row.text.split_whitespace().collect::<Vec<_>>().join(" "),
+                    String::new(),
+                ));
+            } else if row.kind == RowKind::Assistant
+                && let Some((_, _, text)) = minimap_items.last_mut()
+            {
+                text.extend(
+                    row.text
+                        .chars()
+                        .take(1500usize.saturating_sub(text.chars().count())),
+                );
+            }
+        }
         self.timeline_pane.update(cx, |pane, cx| {
             pane.views = self.row_views.clone();
+            pane.minimap.update(cx, |map, cx| {
+                if map.items != minimap_items {
+                    map.items = minimap_items;
+                    cx.notify();
+                }
+            });
             cx.notify();
         });
         self.row_subscriptions = kept;
