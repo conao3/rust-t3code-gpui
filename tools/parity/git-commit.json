@@ -1,0 +1,71 @@
+{
+  "name": "git-commit",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1200,
+  "steps": [
+    {
+      "action": "press",
+      "value": "ctrl+alt+b"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Git action options"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Commit"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Commit"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Commit changes"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "textbox",
+        "name": "Leave empty to auto-generate"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Add parity panel fixture"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Commit",
+        "ancestor": {
+          "role": "dialog",
+          "name": "Commit changes"
+        }
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Commit changes"
+      },
+      "count": 0
+    }
+  ]
+}

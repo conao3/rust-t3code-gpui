@@ -378,40 +378,42 @@ impl Root {
                 .flex_none()
                 .border_l_1()
                 .border_color(theme.border)
-                .child(
-                    h_flex()
-                        .px_3()
-                        .py_2()
-                        .gap_2()
-                        .border_b_1()
-                        .border_color(theme.border)
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .text_sm()
-                                .child(panel.path.clone()),
-                        )
-                        .child(
-                            Button::new("find-file")
-                                .label("Find")
-                                .compact()
-                                .outline()
-                                .on_click(cx.listener(|root, _, window, cx| {
-                                    root.open_file_find(window, cx)
-                                })),
-                        )
-                        .child(
-                            Button::new("close-file")
-                                .label("Close")
-                                .compact()
-                                .outline()
-                                .on_click(cx.listener(|root, _, window, cx| {
-                                    root.close_file_panel(window, cx)
-                                })),
-                        ),
-                )
+                .when(!matches!(&panel.body, PanelBody::Diff(_)), |view| {
+                    view.child(
+                        h_flex()
+                            .px_3()
+                            .py_2()
+                            .gap_2()
+                            .border_b_1()
+                            .border_color(theme.border)
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_sm()
+                                    .child(panel.path.clone()),
+                            )
+                            .child(
+                                Button::new("find-file")
+                                    .label("Find")
+                                    .compact()
+                                    .outline()
+                                    .on_click(cx.listener(|root, _, window, cx| {
+                                        root.open_file_find(window, cx)
+                                    })),
+                            )
+                            .child(
+                                Button::new("close-file")
+                                    .label("Close")
+                                    .compact()
+                                    .outline()
+                                    .on_click(cx.listener(|root, _, window, cx| {
+                                        root.close_file_panel(window, cx)
+                                    })),
+                            ),
+                    )
+                })
                 .when(self.file_find_open, |panel| {
                     panel.child(
                         h_flex()

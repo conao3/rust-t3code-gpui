@@ -1252,8 +1252,8 @@ impl Render for Root {
             .on_action(cx.listener(|root, action: &right_panel::TabAction, _, cx| root.panel_tab_action(action, cx)))
             .on_action(cx.listener(|root, _: &ToggleRightPanel, window, cx| root.toggle_right_panel(window, cx)))
             .on_action(cx.listener(|root, _: &NewRightPanel, window, cx| root.new_panel(window, cx)))
-            .on_action(cx.listener(|root, _: &MaximizeRightPanel, _, cx| {
-                if root.right_panel.open { root.right_panel.maximized = !root.right_panel.maximized; root.save_right_panel(); root.panel_revision += 1; cx.notify(); }
+            .on_action(cx.listener(|root, _: &MaximizeRightPanel, window, cx| {
+                if root.right_panel.open { root.panel_focus.focus(window, cx); root.right_panel.maximized = !root.right_panel.maximized; root.save_right_panel(); root.panel_revision += 1; cx.notify(); }
             }))
             .on_action(cx.listener(|root, _: &ToggleDiff, _, cx| root.toggle_diff(cx)))
             .on_action(cx.listener(|root, _: &OpenBranchPicker, window, cx| {
@@ -1466,7 +1466,7 @@ impl Render for Root {
                     .when(self.pr_state.page, |row| row.child(self.pr_pane.clone().cached(StyleRefinement::default().flex_1().h_full().min_w_0())))
                     .when(!self.pr_state.page && self.right_panel.open, |row| row
                         .child(div().w(px(4.)).h_full().cursor_col_resize().on_mouse_down(MouseButton::Left, cx.listener(|root, _, _, cx| { root.panel_resizing = true; cx.notify(); })))
-                        .child(self.panel_pane.clone().cached(StyleRefinement::default().w(px(self.panel_width(f32::from(window.viewport_size().width)))).h_full().flex_none()))),
+                        .child(self.panel_pane.clone().cached(if self.right_panel.maximized || f32::from(window.viewport_size().width) <= 980. { StyleRefinement::default().flex_1().h_full().min_w_0() } else { StyleRefinement::default().w(px(self.panel_width(f32::from(window.viewport_size().width)))).h_full().flex_none() }))),
             )
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))

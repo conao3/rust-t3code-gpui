@@ -39,6 +39,7 @@ impl Root {
                         let weak = weak.clone();
                         dialog
                             .title("Continue on default branch?")
+                            .footer(dialog_footer("Continue"))
                             .child("This action publishes changes from the default branch.")
                             .on_ok(move |_, _, cx| {
                                 let _ = weak.update(cx, |root, cx| {
@@ -57,7 +58,7 @@ impl Root {
 
     fn open_commit_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Commit message (optional)"));
+            cx.new(|cx| TextareaState::new(window, cx).placeholder("Leave empty to auto-generate"));
         let weak = cx.entity().downgrade();
         let changes = self.workspace_status.local["workingTree"].clone();
         window.open_dialog(cx, move |dialog, _, _| {
@@ -65,13 +66,15 @@ impl Root {
             let weak = weak.clone();
             dialog
                 .title("Commit changes")
+                .footer(dialog_footer("Commit"))
                 .accessibility_label("Commit changes")
                 .width(px(560.))
                 .child(div().child(format!(
                     "+{}  -{}",
                     changes["insertions"], changes["deletions"]
                 )))
-                .child(Input::new(&input))
+                .child("Commit message (optional)")
+                .child(Textarea::new(&input))
                 .on_ok(move |_, _, cx| {
                     let message = submit.read(cx).value().trim().to_string();
                     let _ = weak.update(cx, |root, cx| {
@@ -107,7 +110,7 @@ impl Root {
             let provider_submit = provider.clone();
             let visibility_submit = visibility.clone();
             let weak = weak.clone();
-            dialog.title("Publish repository")
+            dialog.title("Publish repository").footer(dialog_footer("Publish repository"))
                 .child(Select::new(&provider).title_prefix("Provider"))
                 .child(Input::new(&repository))
                 .child(Select::new(&visibility).title_prefix("Visibility"))
@@ -554,6 +557,28 @@ fn quick_action(local: &Value, remote: &Value, busy: bool) -> (String, &'static 
         return (format!("Create {term}"), "create_pr", true);
     }
     disabled
+}
+
+pub(super) fn dialog_footer(label: impl Into<SharedString>) -> AnyElement {
+    use gpui_kit::component::dialog::{DialogAction, DialogFooter};
+    DialogFooter::new()
+        .child(
+            Button::new("cancel-action")
+                .label("Cancel")
+                .outline()
+                .on_click(|_, window, cx| window.close_dialog(cx)),
+        )
+        .child(
+            div().w(px(180.)).h(px(36.)).child(
+                DialogAction::new().child(
+                    Button::new("confirm-action")
+                        .label(label)
+                        .primary()
+                        .w_full(),
+                ),
+            ),
+        )
+        .into_any_element()
 }
 
 #[cfg(test)]

@@ -23,12 +23,12 @@ pub(super) struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            scope: "working-tree".into(),
+            scope: "branch-range".into(),
             commit: None,
-            split: true,
-            wrap: false,
-            ignore_whitespace: false,
-            collapsed: false,
+            split: false,
+            wrap: true,
+            ignore_whitespace: true,
+            collapsed: true,
             loading: false,
             error: None,
             request: 0,
@@ -123,9 +123,20 @@ impl Root {
                             DiffMode::Unified
                         };
                         let state = cx.new(|cx| {
-                            DiffState::new(files, cx)
+                            let mut state = DiffState::new(files, cx)
                                 .with_mode(mode)
-                                .with_syntax_max_line_length(500)
+                                .with_syntax_max_line_length(500);
+                            if root.diff_view.collapsed {
+                                let paths = state
+                                    .files()
+                                    .iter()
+                                    .map(|file| file.path().to_string())
+                                    .collect::<Vec<_>>();
+                                for path in paths {
+                                    state.set_file_collapsed(&path, true, cx);
+                                }
+                            }
+                            state
                         });
                         let panel = FilePanel::new(
                             DIFF_TITLE.into(),

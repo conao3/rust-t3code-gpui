@@ -433,7 +433,9 @@ impl Root {
                 view.busy = false;
                 match result {
                     Ok(_) => {
-                        root.pr_state.submitted_comment = submitted;
+                        if root.pull_request_id().as_ref() == Some(&id) {
+                            root.pr_state.submitted_comment = submitted;
+                        }
                         root.load_pull_request(id, cx);
                     }
                     Err(error) => view.error = Some(format!("{error:#}")),
@@ -464,6 +466,7 @@ impl Root {
             let id = id.clone();
             dialog
                 .title(format!("{} pull request", action_label(action)))
+                .footer(git_controls::dialog_footer(action_label(action)))
                 .child("Confirm this action on the pull request host.")
                 .on_ok(move |_, _, cx| {
                     let _ = weak.update(cx, |root, cx| {
@@ -509,7 +512,11 @@ impl Root {
             .child(
                 h_flex()
                     .gap_2()
-                    .child(div().flex_1().child(Input::new(&self.pr_search)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Input::new(&self.pr_search).role(accesskit::Role::SearchInput)),
+                    )
                     .child(Button::new("pr-search").label("Search").on_click(
                         cx.listener(|root, _, _, cx| root.load_pull_requests(false, cx)),
                     )),
@@ -761,12 +768,7 @@ impl Root {
                             .label("Back")
                             .ghost()
                             .on_click(cx.listener(|root, _, _, cx| {
-                                root.pr_state.selected = None;
-                                if !root.pr_state.page {
-                                    root.activate_panel("pull-requests".into(), cx);
-                                }
-                                root.panel_revision += 1;
-                                cx.notify();
+                                root.open_pull_requests(root.pr_state.page, cx);
                             })),
                     )
                     .child(

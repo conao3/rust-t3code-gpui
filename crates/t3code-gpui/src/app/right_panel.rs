@@ -10,6 +10,8 @@ pub(super) struct State {
     pub pull_requests: HashMap<String, (String, Value)>,
     #[serde(skip)]
     files: HashMap<String, FilePanel>,
+    #[serde(skip)]
+    diff: diff_controls::State,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -85,6 +87,7 @@ impl Root {
             return;
         }
         self.park_panel_file();
+        self.right_panel.diff = std::mem::take(&mut self.diff_view);
         if let Some(previous) = self.right_panel_target.take() {
             self.right_panel_threads
                 .insert(previous, std::mem::take(&mut self.right_panel));
@@ -93,6 +96,9 @@ impl Root {
             .as_ref()
             .and_then(|target| self.right_panel_threads.remove(target))
             .unwrap_or_default();
+        self.diff_view = std::mem::take(&mut self.right_panel.diff);
+        self.diff_view.loading = false;
+        self.diff_view.request += 1;
         self.right_panel_target = target;
         self.explorer = None;
         if let Some(active) = self.right_panel.active.clone() {
@@ -292,8 +298,6 @@ impl Root {
         let theme = cx.theme();
         let tabs = h_flex()
             .id("panel-tabs")
-            .role(accesskit::Role::TabList)
-            .aria_label("Panel tabs")
             .h(px(40.))
             .gap_1()
             .px_2()
@@ -328,7 +332,6 @@ impl Root {
                             .label(label.clone())
                             .ghost()
                             .compact()
-                            .role(accesskit::Role::Tab)
                             .selected(self.right_panel.active.as_ref() == Some(id))
                             .on_click(cx.listener(move |root, _, _, cx| {
                                 root.activate_panel(select.clone(), cx);
@@ -369,7 +372,8 @@ impl Root {
                     })
                     .ghost()
                     .compact()
-                    .on_click(cx.listener(|root, _, _, cx| {
+                    .on_click(cx.listener(|root, _, window, cx| {
+                        root.panel_focus.focus(window, cx);
                         root.right_panel.maximized = !root.right_panel.maximized;
                         root.save_right_panel();
                         root.panel_revision += 1;
@@ -405,7 +409,13 @@ impl Root {
         v_flex()
             .id("workspace-panel")
             .role(accesskit::Role::Region)
-            .aria_label("Workspace panel")
+            .aria_label(
+                self.right_panel
+                    .active
+                    .as_deref()
+                    .map(|id| format!("Workspace panel: {}", panel_title(id)))
+                    .unwrap_or_else(|| "Workspace panel".into()),
+            )
             .track_focus(&self.panel_focus)
             .on_key_down(cx.listener(|root, event: &KeyDownEvent, window, cx| {
                 if root.right_panel.launcher || root.right_panel.active.is_none() {
@@ -490,6 +500,8 @@ impl Root {
         v_flex()
             .id("surface-launcher")
             .aria_label("Open a surface")
+            .h_full()
+            .items_center()
             .flex_1()
             .justify_center()
             .px_6()
@@ -505,10 +517,33 @@ impl Root {
                 .into_iter()
                 .map(|(label, key)| {
                     Button::new(label)
-                        .label(format!("{label}    {key}"))
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .gap_2()
+                                .child(
+                                    Icon::new(match key {
+                                        "F" => gpui_kit::assets::IconName::Files,
+                                        "D" => gpui_kit::assets::IconName::FileDiff,
+                                        "P" => gpui_kit::assets::IconName::GitPullRequest,
+                                        _ => gpui_kit::assets::IconName::Link2,
+                                    })
+                                    .size(px(14.)),
+                                )
+                                .child(label)
+                                .child(div().flex_1())
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .px_1()
+                                        .rounded_sm()
+                                        .bg(cx.theme().muted)
+                                        .child(key),
+                                ),
+                        )
                         .accessibility_label(label)
                         .ghost()
-                        .w_full()
+                        .w(px(320.))
                         .on_click(cx.listener(move |root, _, _, cx| {
                             if label == "Files" {
                                 root.toggle_explorer(cx);
