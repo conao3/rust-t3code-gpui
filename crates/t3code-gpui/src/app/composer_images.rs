@@ -1,5 +1,45 @@
 use super::*;
 
+#[derive(Default)]
+pub(super) struct DraftWriter {
+    next: std::sync::atomic::AtomicU64,
+    saved: std::sync::Mutex<u64>,
+}
+
+pub(super) struct DraftWrite {
+    writer: Arc<DraftWriter>,
+    revision: u64,
+    path: std::path::PathBuf,
+    drafts: HashMap<String, Vec<attachments::Pending>>,
+}
+
+impl DraftWriter {
+    pub(super) fn request(
+        self: &Arc<Self>,
+        path: std::path::PathBuf,
+        drafts: HashMap<String, Vec<attachments::Pending>>,
+    ) -> DraftWrite {
+        DraftWrite {
+            writer: self.clone(),
+            revision: self.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1,
+            path,
+            drafts,
+        }
+    }
+}
+
+impl DraftWrite {
+    pub(super) fn save(self) -> anyhow::Result<()> {
+        let mut saved = self.writer.saved.lock().expect("draft attachment writer");
+        if self.revision < *saved {
+            return Ok(());
+        }
+        save_attachment_drafts(&self.path, &self.drafts)?;
+        *saved = self.revision;
+        Ok(())
+    }
+}
+
 pub(super) fn attachment_drafts_path(path: &std::path::Path, pane: u64) -> std::path::PathBuf {
     path.with_file_name(format!("draft-attachments-{pane}.json"))
 }
@@ -97,9 +137,34 @@ impl Root {
 
 #[cfg(test)]
 mod tests {
-    use super::{attachment_drafts_path, load_attachment_drafts, save_attachment_drafts};
+    use super::{
+        DraftWriter, attachment_drafts_path, load_attachment_drafts, save_attachment_drafts,
+    };
     use crate::attachments;
     use std::collections::HashMap;
+    use std::sync::Arc;
+
+    #[test]
+    fn closing_a_pane_supersedes_its_pending_attachment_write() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("attachments.json");
+        let writer = Arc::new(DraftWriter::default());
+        let old = writer.request(path.clone(), HashMap::new());
+        let saved = HashMap::from([(
+            "thread".into(),
+            vec![
+                attachments::Pending::new(
+                    "note.txt".into(),
+                    "text/plain".into(),
+                    b"latest attachment".to_vec(),
+                )
+                .unwrap(),
+            ],
+        )]);
+        writer.request(path.clone(), saved.clone()).save().unwrap();
+        old.save().unwrap();
+        assert_eq!(load_attachment_drafts(&path).unwrap(), saved);
+    }
 
     #[test]
     fn attachment_drafts_survive_restart_and_removal_per_pane() {

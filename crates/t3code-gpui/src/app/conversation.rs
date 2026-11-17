@@ -42,6 +42,7 @@ pub struct ConversationState {
     pub(super) dictation: composer_dictation::Dictation,
     pub(super) composer_attachments: HashMap<String, Vec<attachments::Pending>>,
     pub(super) attachments_dirty: bool,
+    pub(super) attachment_writer: Arc<composer_images::DraftWriter>,
     pub(super) queue_edit: Option<composer_queue::Edit>,
     pub(super) queue_expanded: bool,
     pub(super) prompts: composer_prompts::Prompts,
@@ -175,6 +176,7 @@ impl ConversationState {
             dictation: composer_dictation::Dictation::default(),
             composer_attachments,
             attachments_dirty: false,
+            attachment_writer: Arc::new(composer_images::DraftWriter::default()),
             queue_edit: None,
             queue_expanded: false,
             prompts: composer_prompts::Prompts {
@@ -410,6 +412,7 @@ impl Root {
                             root.open_thread(environment, thread, cx);
                         }
                         root.conversation.draft = pane.draft;
+                        root.load_composer();
                         root.conversation.pending_composer = Some(pane.composer);
                     });
                 }
@@ -461,6 +464,19 @@ impl Root {
         }
         self.stash_composer(cx);
         let id = self.conversation.id;
+        if let Err(error) = self
+            .conversation
+            .attachment_writer
+            .request(
+                composer_images::attachment_drafts_path(&self.drafts_path, id),
+                self.conversation.composer_attachments.clone(),
+            )
+            .save()
+        {
+            self.conversation.message = Some(format!("Saving draft attachments failed: {error:#}"));
+            cx.notify();
+            return;
+        }
         self.pane_closed.push(pane_layout::SavedPane {
             id,
             draft: self.conversation.draft.clone(),
@@ -498,6 +514,7 @@ impl Root {
                 self.close_thread(cx);
             }
             self.conversation.draft = pane.draft;
+            self.load_composer();
             self.conversation.pending_composer = Some(pane.composer);
             self.save_conversations();
         }

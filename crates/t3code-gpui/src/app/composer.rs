@@ -383,8 +383,10 @@ impl Root {
                         pane.attachments_dirty = false;
                         (
                             pane.id,
-                            composer_images::attachment_drafts_path(&root.drafts_path, pane.id),
-                            pane.composer_attachments.clone(),
+                            pane.attachment_writer.request(
+                                composer_images::attachment_drafts_path(&root.drafts_path, pane.id),
+                                pane.composer_attachments.clone(),
+                            ),
                         )
                     })
                     .collect::<Vec<_>>()
@@ -396,12 +398,10 @@ impl Root {
                 .spawn(async move {
                     snapshots
                         .into_iter()
-                        .filter_map(|(id, path, attachments)| {
-                            composer_images::save_attachment_drafts(&path, &attachments)
-                                .err()
-                                .map(|error| {
-                                    (id, format!("Saving draft attachments failed: {error:#}"))
-                                })
+                        .filter_map(|(id, request)| {
+                            request.save().err().map(|error| {
+                                (id, format!("Saving draft attachments failed: {error:#}"))
+                            })
                         })
                         .collect::<Vec<_>>()
                 })
