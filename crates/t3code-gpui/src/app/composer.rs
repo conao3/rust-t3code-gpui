@@ -153,13 +153,20 @@ impl Root {
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(open) = self
+            .conversation
             .completion
             .as_mut()
             .filter(|c| !c.suggestions.is_empty())
         else {
             return false;
         };
-        if !self.composer.read(cx).focus_handle(cx).is_focused(window) {
+        if !self
+            .conversation
+            .composer
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
             return false;
         }
         let n = open.suggestions.len().min(8);
@@ -168,12 +175,12 @@ impl Root {
             "up" => open.selected = (open.selected + n - 1) % n,
             "escape" => self.completion = None,
             "enter" | "tab" if !keystroke.modifiers.control => {
-                let text = self.composer.read(cx).value().to_string();
+                let text = self.conversation.composer.read(cx).value().to_string();
                 let (value, at) =
                     completion::apply(&text, &open.trigger, &open.suggestions[open.selected]);
                 let (line, column) = completion::line_column(&value, at);
                 self.completion = None;
-                self.composer.update(cx, |state, cx| {
+                self.conversation.composer.update(cx, |state, cx| {
                     state.set_value(value, window, cx);
                     state.set_cursor_position(Position::new(line, column), window, cx);
                 });

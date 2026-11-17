@@ -683,7 +683,7 @@ impl Root {
                 return;
             }
             "host" => {
-                if let Some(draft) = self.draft.as_mut() {
+                if let Some(draft) = self.conversation.draft.as_mut() {
                     draft.environment = action.value.as_str().map(str::to_string);
                     draft.workspace_strategy = json!({"type":"root"});
                     draft.model = None;
@@ -721,7 +721,7 @@ impl Root {
                 return;
             }
             "mode" => {
-                if let Some(draft) = self.draft.as_mut() {
+                if let Some(draft) = self.conversation.draft.as_mut() {
                     draft.workspace_strategy = if action.value.as_str() == Some("worktree") {
                         json!({"type":"worktree","baseRef":self.workspace_status.branch().unwrap_or("HEAD"),"startFromOrigin":false})
                     } else {
@@ -748,7 +748,7 @@ impl Root {
         let Some(name) = reference["name"].as_str().map(str::to_string) else {
             return;
         };
-        if let Some(draft) = self.draft.as_mut()
+        if let Some(draft) = self.conversation.draft.as_mut()
             && draft.workspace_strategy["type"].as_str() == Some("worktree")
         {
             draft.workspace_strategy["baseRef"] = json!(name);
