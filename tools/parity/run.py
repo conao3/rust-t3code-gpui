@@ -30,15 +30,20 @@ def matches(nodes, selector):
         "combo box": "combobox",
         "landmark": "region",
     }
-    return [
+    index = selector.get("index")
+    if index is not None and (type(index) is not int or index < 0):
+        raise ValueError("Selector index must be a nonnegative integer")
+    found = [
         node
         for node in nodes
         if all(
             (roles.get(node["role"], node["role"]) if key == "role" else node.get(key))
             == value
             for key, value in selector.items()
+            if key != "index"
         )
     ]
+    return found if index is None else found[index : index + 1]
 
 
 async def wait_for(
@@ -84,7 +89,9 @@ async def execute(app, target, scenario, directory):
                         "combobox": "combo box",
                         "region": "landmark",
                     }.get(role, role)
-                await invoke(app, "click", role, selector["name"])
+                await invoke(
+                    app, "click", role, selector["name"], selector.get("index", 0)
+                )
             elif action in ["press", "type"]:
                 await invoke(app, action, step["value"])
             elif action == "checkpoint":
@@ -199,6 +206,12 @@ async def main():
             "Emulation.setEmulatedMedia",
             features=[{"name": "prefers-color-scheme", "value": scenario["theme"]}],
         )
+        reference_appearance = await reference.appearance()
+        if reference_appearance != scenario["theme"]:
+            raise ValueError(
+                f"Reference appearance is {reference_appearance!r}, expected {scenario['theme']!r}; "
+                "set its appearance through Settings before comparing"
+            )
         await reference.call(
             "Emulation.setDeviceMetricsOverride",
             width=width,
@@ -239,6 +252,7 @@ async def main():
             "reference": {
                 "origin": reference_origin,
                 "environment_id": descriptor["environmentId"],
+                "appearance": reference_appearance,
             },
             "native": native.session["environments"],
         },

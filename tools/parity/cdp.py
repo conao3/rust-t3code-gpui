@@ -87,6 +87,11 @@ class Cdp:
             )
         return result
 
+    async def appearance(self):
+        return await self.evaluate(
+            "getComputedStyle(document.documentElement).colorScheme"
+        )
+
     async def tree(self):
         result = await self.call("Accessibility.getFullAXTree")
         return [

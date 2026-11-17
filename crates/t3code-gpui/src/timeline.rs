@@ -60,10 +60,22 @@ pub enum Pending {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssistantMetadata {
+    pub message_id: String,
+    pub source_thread_id: String,
+    pub run_id: Option<String>,
+    pub updated_at: String,
+    pub status: String,
+    pub can_fork: bool,
+    pub can_copy: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MessagePart {
     pub first: bool,
     pub last: bool,
+    pub metadata: Option<AssistantMetadata>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -604,7 +616,96 @@ const TOOL_TYPES: &[&str] = &[
     "handoff",
 ];
 
+fn assistant_metadata(state: &ThreadState) -> HashMap<String, AssistantMetadata> {
+    let items = state.items();
+    let mut terminal = HashMap::new();
+    let mut user = 0;
+    for item in &items {
+        match text(item, "type") {
+            "user_message" => user += 1,
+            "assistant_message" => {
+                let run = text(item, "runId");
+                let response = if run.is_empty() {
+                    format!("unkeyed:{user}")
+                } else {
+                    format!("run:{run}")
+                };
+                terminal.insert(response, *item);
+            }
+            _ => {}
+        }
+    }
+    let active = state.active_run();
+    let mut active_ids = std::collections::HashSet::new();
+    if let Some(active) = active {
+        active_ids.insert(text(active, "id"));
+        let boundary = items
+            .iter()
+            .rposition(|item| text(item, "type") == "user_message")
+            .map_or(0, |index| index + 1);
+        for item in &items[boundary..] {
+            if !text(item, "runId").is_empty() {
+                active_ids.insert(text(item, "runId"));
+            }
+        }
+    }
+    terminal
+        .into_values()
+        .filter_map(|item| {
+            let run_id = text(item, "runId");
+            if item.get("streaming").and_then(Value::as_bool) == Some(true)
+                || (!run_id.is_empty() && active_ids.contains(run_id))
+                || (run_id.is_empty() && active.is_some())
+            {
+                return None;
+            }
+            let capabilities = state
+                .run(run_id)
+                .and_then(|run| run.get("providerSessionId"))
+                .and_then(Value::as_str)
+                .and_then(|id| {
+                    state
+                        .list("providerSessions")
+                        .iter()
+                        .find(|session| text(session, "id") == id)
+                })
+                .and_then(|session| session.get("capabilities"))
+                .filter(|value| !value.is_null());
+            let can_fork = !run_id.is_empty()
+                && text(item, "status") == "completed"
+                && capabilities.is_none_or(|caps| {
+                    (caps["threads"]["canForkThread"] == true
+                        && caps["threads"]["canForkFromTurn"] == true
+                        && caps["identity"]["nativeThreadIds"] == "strong")
+                        || caps["context"]["supportsFullThreadHandoff"] == true
+                });
+            let id = text(item, "id").to_string();
+            Some((
+                id.clone(),
+                AssistantMetadata {
+                    message_id: id,
+                    source_thread_id: if text(item, "threadId").is_empty() {
+                        state.thread_id().to_string()
+                    } else {
+                        text(item, "threadId").to_string()
+                    },
+                    run_id: (!run_id.is_empty()).then(|| run_id.to_string()),
+                    updated_at: item
+                        .get("updatedAt")
+                        .and_then(Value::as_str)
+                        .unwrap_or(text(item, "createdAt"))
+                        .to_string(),
+                    status: text(item, "status").to_string(),
+                    can_fork,
+                    can_copy: !text(item, "text").trim().is_empty(),
+                },
+            ))
+        })
+        .collect()
+}
+
 pub fn rows(state: &ThreadState) -> Vec<Row> {
+    let metadata = assistant_metadata(state);
     let mut rows = Vec::new();
     let mut open_plan: Option<(usize, String, String)> = None;
     for item in state.items() {
@@ -644,6 +745,7 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                         message_part: Some(MessagePart {
                             first: i == 0,
                             last: i == last,
+                            metadata: (i == last).then(|| metadata.get(id).cloned()).flatten(),
                         }),
                         key: format!("{id}#{i}"),
                         kind: RowKind::Assistant,
@@ -1063,6 +1165,66 @@ mod tests {
     }
 
     #[test]
+    fn only_the_completed_terminal_response_exposes_message_actions() {
+        let mut projection = state(vec![
+            json!({"id":"u1","type":"user_message"}),
+            json!({"id":"a1","type":"assistant_message","runId":"r1","status":"completed","text":"intermediate"}),
+            json!({"id":"a2","type":"assistant_message","runId":"r1","status":"completed","text":"final"}),
+            json!({"id":"u2","type":"user_message"}),
+            json!({"id":"a3","type":"assistant_message","runId":"r2","status":"completed","text":"working response"}),
+        ]);
+        projection.projection.insert(
+            "runs".into(),
+            json!([{"id":"r1","status":"completed"},{"id":"r2","status":"running"}]),
+        );
+        let metadata = assistant_metadata(&projection);
+        assert_eq!(metadata.keys().collect::<Vec<_>>(), vec!["a2"]);
+        assert!(metadata["a2"].can_fork);
+        projection.projection["runs"][1]["status"] = json!("completed");
+        let metadata = assistant_metadata(&projection);
+        assert_eq!(metadata.len(), 2);
+        assert!(metadata.contains_key("a3"));
+    }
+
+    #[test]
+    fn known_provider_capabilities_gate_fork_without_hiding_copy() {
+        let mut projection = state(vec![
+            json!({"id":"a","type":"assistant_message","runId":"r","status":"completed","text":"reply"}),
+        ]);
+        projection.projection.insert(
+            "runs".into(),
+            json!([{"id":"r","status":"completed","providerSessionId":"p"}]),
+        );
+        projection.projection.insert("providerSessions".into(), json!([{"id":"p","capabilities":{"threads":{"canForkThread":false,"canForkFromTurn":false},"identity":{"nativeThreadIds":"weak"},"context":{"supportsFullThreadHandoff":false}}}]));
+        let metadata = assistant_metadata(&projection);
+        assert!(!metadata["a"].can_fork);
+        assert!(metadata["a"].can_copy);
+        projection.projection["providerSessions"][0]["capabilities"]["context"]["supportsFullThreadHandoff"] =
+            json!(true);
+        assert!(assistant_metadata(&projection)["a"].can_fork);
+    }
+
+    #[test]
+    fn whitespace_tail_chunk_keeps_the_full_message_copy_action() {
+        let text = format!("{}\n\n  ", "x".repeat(BLOCK_BYTES));
+        let projection = state(vec![
+            json!({"id":"a","type":"assistant_message","status":"completed","text":text}),
+        ]);
+        let message = rows(&projection);
+        let last = message.last().unwrap();
+        assert!(last.text.trim().is_empty());
+        assert!(
+            last.message_part
+                .as_ref()
+                .unwrap()
+                .metadata
+                .as_ref()
+                .unwrap()
+                .can_copy
+        );
+    }
+
+    #[test]
     fn message_boundaries_survive_virtualization_chunks() {
         for body in ["short".to_string(), "paragraph\n\n".repeat(500)] {
             let state = state(vec![
@@ -1081,7 +1243,20 @@ mod tests {
                     row.message_part,
                     Some(MessagePart {
                         first: index == 0,
-                        last: index + 1 == message.len()
+                        last: index + 1 == message.len(),
+                        metadata: if index + 1 == message.len() {
+                            Some(AssistantMetadata {
+                                message_id: "m1".into(),
+                                source_thread_id: "t1".into(),
+                                run_id: None,
+                                updated_at: String::new(),
+                                status: String::new(),
+                                can_fork: false,
+                                can_copy: true,
+                            })
+                        } else {
+                            None
+                        },
                     })
                 );
             }

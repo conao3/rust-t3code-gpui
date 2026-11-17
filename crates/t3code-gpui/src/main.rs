@@ -6,6 +6,7 @@ mod completion;
 mod drafts;
 mod explorer;
 mod keymap;
+mod markdown_directives;
 mod models;
 mod navigation;
 mod permissions;
@@ -14,6 +15,7 @@ mod row_view;
 mod sidebar;
 mod tables;
 mod timeline;
+mod timestamp;
 mod workspace;
 
 use std::path::PathBuf;

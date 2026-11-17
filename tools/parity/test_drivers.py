@@ -22,6 +22,30 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    async def test_appearance_observes_the_applied_document_color_scheme(self):
+        app = Cdp("http://127.0.0.1:39991")
+        app.evaluate = AsyncMock(return_value="light")
+        self.assertEqual(await app.appearance(), "light")
+        app.evaluate.assert_awaited_once_with(
+            "getComputedStyle(document.documentElement).colorScheme"
+        )
+
+    def test_duplicate_controls_require_the_selected_occurrence(self):
+        nodes = [
+            {"role": "button", "name": "Copy message", "value": text}
+            for text in ["user", "assistant"]
+        ]
+        self.assertEqual(
+            matches(nodes, {"role": "button", "name": "Copy message", "index": 1}),
+            [nodes[1]],
+        )
+        self.assertEqual(
+            matches(nodes, {"role": "button", "name": "Copy message", "index": 2}), []
+        )
+        for index in [-1, True, "1"]:
+            with self.assertRaises(ValueError):
+                matches(nodes, {"role": "button", "index": index})
+
     async def test_rendered_text_checkpoint_checks_text_content(self):
         app = Mock()
         app.tree = AsyncMock(

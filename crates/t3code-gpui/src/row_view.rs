@@ -12,7 +12,7 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::timeline::{Draft, Pending, Question, Row, RowKind};
+use crate::timeline::{AssistantMetadata, Draft, Pending, Question, Row, RowKind};
 
 const DETAIL_LINES: usize = 400;
 
@@ -56,6 +56,17 @@ impl AccessibleBody {
 
 #[derive(Clone)]
 pub enum RowEvent {
+    CopyMessage {
+        message_id: String,
+    },
+    MessageHover {
+        message_id: String,
+        hovered: bool,
+    },
+    ForkResponse {
+        source_thread_id: String,
+        run_id: String,
+    },
     Respond {
         request_id: String,
         decision: String,
@@ -82,6 +93,10 @@ pub struct RowView {
     expanded: bool,
     drafts: HashMap<String, Draft>,
     responding: bool,
+    message_hovered: bool,
+    copied: bool,
+    forking: bool,
+    meta_focus: FocusHandle,
     children: Vec<Entity<RowView>>,
     _timer: Option<Task<()>>,
 }
@@ -136,6 +151,10 @@ impl RowView {
             expanded: false,
             drafts: HashMap::new(),
             responding: false,
+            message_hovered: false,
+            copied: false,
+            forking: false,
+            meta_focus: cx.focus_handle(),
             children: Vec::new(),
             _timer: timer,
         };
@@ -172,6 +191,153 @@ impl RowView {
             character_lengths: Arc::new(OnceLock::new()),
         });
         true
+    }
+
+    pub fn set_message_hovered(&mut self, hovered: bool, cx: &mut Context<Self>) {
+        if self.message_hovered != hovered {
+            self.message_hovered = hovered;
+            cx.notify();
+        }
+    }
+
+    pub fn set_forking(&mut self, forking: bool, cx: &mut Context<Self>) {
+        if self.forking != forking {
+            self.forking = forking;
+            cx.notify();
+        }
+    }
+
+    pub fn copied(&mut self, cx: &mut Context<Self>) {
+        self.copied = true;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1000))
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                view.copied = false;
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn render_assistant_meta(
+        &self,
+        metadata: &AssistantMetadata,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let (timestamp, tooltip) = crate::timestamp::display(&metadata.updated_at, cx);
+        let id = metadata.message_id.clone();
+        let copy = Button::new("copy-message")
+            .accessibility_label("Copy message")
+            .icon(
+                Icon::new(if self.copied {
+                    IconName::Check
+                } else {
+                    IconName::Copy
+                })
+                .size(px(12.)),
+            )
+            .ghost()
+            .h(px(24.))
+            .w(px(28.))
+            .p_0()
+            .rounded(px(6.))
+            .disabled(self.copied)
+            .tooltip("Copy message")
+            .on_click(cx.listener(move |_, _, _, cx| {
+                cx.emit(RowEvent::CopyMessage {
+                    message_id: id.clone(),
+                });
+            }));
+        h_flex()
+            .id("assistant-meta")
+            .relative()
+            .track_focus(&self.meta_focus)
+            .tab_index(-1)
+            .mt(px(6.))
+            .gap_2()
+            .text_size(px(12.))
+            .line_height(px(16.))
+            .font_features(FontFeatures(Arc::new(vec![("tnum".into(), 1)])))
+            .text_color(theme.muted_foreground)
+            .opacity(if self.message_hovered || self.copied {
+                1.
+            } else {
+                0.
+            })
+            .in_focus(|style| style.opacity(1.))
+            .when(
+                !metadata.status.is_empty() && metadata.status != "completed",
+                |row| {
+                    row.child(
+                        div()
+                            .px(px(6.))
+                            .py(px(2.))
+                            .rounded_full()
+                            .border_1()
+                            .border_color(theme.border.opacity(0.7))
+                            .text_size(px(10.))
+                            .line_height(px(14.))
+                            .child(metadata.status.clone()),
+                    )
+                },
+            )
+            .when(metadata.can_copy, |row| row.child(copy))
+            .when(metadata.can_fork, |row| {
+                let source = metadata.source_thread_id.clone();
+                let run = metadata
+                    .run_id
+                    .clone()
+                    .expect("forkable response has a run");
+                row.child(
+                    Button::new("fork-response")
+                        .accessibility_label("Fork from this response")
+                        .icon(Icon::new(IconName::GitFork).size(px(12.)))
+                        .ghost()
+                        .h(px(24.))
+                        .w(px(28.))
+                        .p_0()
+                        .rounded(px(6.))
+                        .disabled(self.forking)
+                        .tooltip("Fork from this response")
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            view.forking = true;
+                            cx.emit(RowEvent::ForkResponse {
+                                source_thread_id: source.clone(),
+                                run_id: run.clone(),
+                            });
+                            cx.notify();
+                        })),
+                )
+            })
+            .child(
+                div()
+                    .id("message-timestamp")
+                    .tooltip(move |window, cx| {
+                        gpui_kit::component::tooltip::Tooltip::new(tooltip.clone())
+                            .build(window, cx)
+                    })
+                    .child(timestamp),
+            )
+            .when(self.copied, |row| {
+                row.child(
+                    div()
+                        .absolute()
+                        .bottom_full()
+                        .left_0()
+                        .mb_1()
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .bg(theme.popover)
+                        .text_color(theme.popover_foreground)
+                        .child("Copied!"),
+                )
+            })
+            .into_any_element()
     }
 
     pub fn update(&mut self, row: Row, cx: &mut Context<Self>) {
@@ -489,17 +655,40 @@ impl Render for RowView {
                             }
                         }
                     })
-                    .px_1()
-                    .pt(px(if self.row.message_part.is_none_or(|part| part.first) {
-                        2.
-                    } else {
-                        0.
+                    .on_hover(cx.listener(|view, hovered, _, cx| {
+                        if let Some((id, _)) = view.row.key.rsplit_once('#') {
+                            cx.emit(RowEvent::MessageHover {
+                                message_id: id.to_string(),
+                                hovered: *hovered,
+                            });
+                        }
                     }))
-                    .pb(if self.row.message_part.is_none_or(|part| part.last) {
-                        px(2.)
-                    } else {
-                        rems(0.65).to_pixels(window.rem_size())
-                    })
+                    .px_1()
+                    .pt(px(
+                        if self.row.message_part.as_ref().is_none_or(|part| part.first) {
+                            2.
+                        } else {
+                            0.
+                        },
+                    ))
+                    .pb(
+                        if self.row.message_part.as_ref().is_none_or(|part| part.last) {
+                            px(
+                                if self
+                                    .row
+                                    .message_part
+                                    .as_ref()
+                                    .is_some_and(|part| part.metadata.is_some())
+                                {
+                                    18.
+                                } else {
+                                    10.
+                                },
+                            )
+                        } else {
+                            rems(0.65).to_pixels(window.rem_size())
+                        },
+                    )
                     .text_color(theme.foreground.opacity(0.9))
                     .line_height(relative(1.625))
                     .child(
@@ -540,6 +729,13 @@ impl Render for RowView {
                                         .text_sm(),
                                 ),
                         ),
+                    )
+                    .when_some(
+                        self.row
+                            .message_part
+                            .as_ref()
+                            .and_then(|part| part.metadata.as_ref()),
+                        |row, metadata| row.child(self.render_assistant_meta(metadata, cx)),
                     )
                     .into_any_element(),
                 None => base.into_any_element(),

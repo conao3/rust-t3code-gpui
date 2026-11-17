@@ -1,3 +1,4 @@
+use anyhow::Context as _;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -454,6 +455,7 @@ pub struct Root {
     row_subscriptions: HashMap<String, Subscription>,
     list_state: ListState,
     user_cursor: Option<usize>,
+    hovered_message: Option<String>,
     composer: Entity<TextareaState>,
     message: Option<String>,
     picker_open: bool,
@@ -675,6 +677,7 @@ impl Root {
             row_subscriptions: HashMap::new(),
             list_state,
             user_cursor: None,
+            hovered_message: None,
             composer,
             message: None,
             picker_open: false,
@@ -1373,7 +1376,7 @@ impl Root {
                     };
                     if matches!(
                         row.kind,
-                        RowKind::Request | RowKind::Plan | RowKind::Subagent
+                        RowKind::Request | RowKind::Plan | RowKind::Subagent | RowKind::Assistant
                     ) {
                         kept.insert(
                             row.key.clone(),
@@ -1411,6 +1414,20 @@ impl Root {
         }
         self.rows = rows;
         self.row_views = views;
+        for (row, view) in self.rows.iter().zip(&self.row_views) {
+            if let Some(metadata) = row
+                .message_part
+                .as_ref()
+                .and_then(|part| part.metadata.as_ref())
+            {
+                view.update(cx, |view, cx| {
+                    view.set_message_hovered(
+                        self.hovered_message.as_ref() == Some(&metadata.message_id),
+                        cx,
+                    )
+                });
+            }
+        }
         self.timeline_pane.update(cx, |pane, cx| {
             pane.views = self.row_views.clone();
             cx.notify();
@@ -1428,6 +1445,108 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match event {
+            RowEvent::MessageHover {
+                message_id,
+                hovered,
+            } => {
+                let old = self.hovered_message.clone();
+                if *hovered {
+                    self.hovered_message = Some(message_id.clone());
+                } else if self.hovered_message.as_ref() == Some(message_id) {
+                    self.hovered_message = None;
+                }
+                if old != self.hovered_message {
+                    for (row, view) in self.rows.iter().zip(&self.row_views) {
+                        if let Some(metadata) = row
+                            .message_part
+                            .as_ref()
+                            .and_then(|part| part.metadata.as_ref())
+                            && (Some(&metadata.message_id) == old.as_ref()
+                                || Some(&metadata.message_id) == self.hovered_message.as_ref())
+                        {
+                            view.update(cx, |view, cx| {
+                                view.set_message_hovered(
+                                    Some(&metadata.message_id) == self.hovered_message.as_ref(),
+                                    cx,
+                                )
+                            });
+                        }
+                    }
+                }
+            }
+            RowEvent::CopyMessage { message_id } => {
+                let text = self.open.as_ref().and_then(|open| {
+                    let state = open.watch.state();
+                    let state = state.lock().expect("thread lock");
+                    state
+                        .items()
+                        .into_iter()
+                        .find(|item| item["id"].as_str() == Some(message_id))
+                        .and_then(|item| item["text"].as_str())
+                        .map(str::to_string)
+                });
+                match text
+                    .context("message is not in the thread projection")
+                    .and_then(|text| crate::markdown_directives::for_copy(&text))
+                {
+                    Ok(text) => {
+                        cx.write_to_clipboard(ClipboardItem::new_string(text));
+                        view.update(cx, |view, cx| view.copied(cx));
+                    }
+                    Err(error) => {
+                        self.message = Some(format!("Failed to copy message: {error:#}"));
+                        cx.notify();
+                    }
+                }
+            }
+            RowEvent::ForkResponse {
+                source_thread_id,
+                run_id,
+            } => {
+                let Some((environment, _)) = self.current() else {
+                    return;
+                };
+                let Some(connection) = self.connection(&environment) else {
+                    return;
+                };
+                let source = source_thread_id.clone();
+                let run = run_id.clone();
+                let target = uuid::Uuid::new_v4().to_string();
+                let title = format!(
+                    "{} fork",
+                    self.open_entry()
+                        .map(|entry| entry.title.as_str())
+                        .unwrap_or("Thread")
+                );
+                let runtime = self.runtime.clone();
+                let view = view.clone();
+                cx.spawn(async move |this, cx| {
+                    let command = json!({
+                        "type": "thread.fork",
+                        "createdBy": "user",
+                        "creationSource": "web",
+                        "sourceThreadId": source,
+                        "targetThreadId": target,
+                        "sourcePoint": {"type": "run", "runId": run},
+                        "title": title,
+                    });
+                    let result =
+                        on_runtime(&runtime, async move { connection.dispatch(command).await })
+                            .await;
+                    let _ = this.update(cx, |root, cx| {
+                        view.update(cx, |view, cx| view.set_forking(false, cx));
+                        match result {
+                            Ok(_) => root.open_thread(environment, target, cx),
+                            Err(error) => {
+                                root.message =
+                                    Some(format!("Failed to fork this response: {error:#}"));
+                                cx.notify();
+                            }
+                        }
+                    });
+                })
+                .detach();
+            }
             RowEvent::Respond {
                 request_id,
                 decision,
@@ -1642,6 +1761,12 @@ impl Root {
             Ok(settings) => {
                 let (interface, code) = (settings.font_size_interface, settings.font_size_code);
                 self.settings = settings;
+                if key == "timestampFormat"
+                    && let Err(error) =
+                        crate::timestamp::change_format(self.settings.timestamp_format, cx)
+                {
+                    self.message = Some(format!("Timestamp format failed: {error:#}"));
+                }
                 if key == "gpuiAppearance" {
                     crate::appearance::apply(self.settings.light_theme, cx);
                 }
@@ -2887,6 +3012,7 @@ impl Root {
 
     /// Puts the draft of what the composer is for now into it, at the next render.
     fn load_composer(&mut self) {
+        self.hovered_message = None;
         let text = self
             .composer_key()
             .and_then(|key| self.drafts.get(&key).map(str::to_string))
@@ -6090,7 +6216,7 @@ impl Root {
             .children(message)
             .child(
                 div()
-                    .pt_9()
+                    .pt_6()
                     .children(self.render_queue(cx))
                     .child(self.render_composer(cx)),
             )
@@ -6460,6 +6586,8 @@ pub fn run(
         .with_assets(crate::appearance::Assets)
         .run(move |cx| {
             gpui_kit::init(cx);
+            crate::timestamp::initialize(settings.timestamp_format, cx)
+                .expect("initialize timestamp formatting");
             crate::appearance::apply(settings.light_theme, cx);
             Theme::update(cx, |theme| {
                 theme.font_family = UI_FONT.into();

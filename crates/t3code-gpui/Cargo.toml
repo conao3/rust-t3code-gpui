@@ -9,6 +9,12 @@ license.workspace = true
 anyhow.workspace = true
 async-channel.workspace = true
 clap.workspace = true
+chrono = "=0.4.45"
+html-escape = "=0.2.15"
+icu_calendar = "=2.4.0"
+icu_datetime = { version = "=2.4.0", default-features = false, features = ["compiled_data"] }
+icu_locale_core = "=2.4.0"
+sys-locale = "=0.3.2"
 gpui-kit = { version = "=0.9.1", features = ["syntect"] }
 humantime = "2.4"
 markdown = "1.0.0"
@@ -22,6 +28,7 @@ uuid.workspace = true
 gpui-fast = ["gpui-kit/gpui-fast"]
 
 [dev-dependencies]
+chrono-tz = "=0.10.4"
 tempfile.workspace = true
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]

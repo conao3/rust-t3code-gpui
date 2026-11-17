@@ -23,6 +23,7 @@ pub struct ClientSettings {
     pub sidebar_width: f32,
     pub light_theme: bool,
     pub preferred_editor: Option<String>,
+    pub timestamp_format: crate::timestamp::Format,
 }
 
 impl Default for ClientSettings {
@@ -61,6 +62,7 @@ impl ClientSettings {
             sidebar_width: number("gpuiSidebarWidth", 256.).max(208.),
             light_theme: text("gpuiAppearance") == Some("light"),
             preferred_editor: text("gpuiPreferredEditor").map(str::to_string),
+            timestamp_format: crate::timestamp::Format::from_setting(text("timestampFormat")),
         }
     }
 

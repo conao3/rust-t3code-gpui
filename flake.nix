@@ -73,7 +73,13 @@
               })
             ];
             buildInputs = buildLibs;
-            postInstall = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+            postInstall = ''
+              install -Dm644 LICENSE $out/share/doc/t3code-gpui/LICENSE
+              install -Dm644 THIRD_PARTY_NOTICES.md $out/share/doc/t3code-gpui/THIRD_PARTY_NOTICES.md
+              install -Dm644 crates/t3code-gpui/assets/Inter-LICENSE.txt $out/share/doc/t3code-gpui/Inter-LICENSE.txt
+              install -Dm644 crates/t3code-gpui/assets/licenses/Unicode-3.0.txt $out/share/doc/t3code-gpui/Unicode-3.0.txt
+            ''
+            + lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               install -Dm644 assets/t3code-gpui.svg $out/share/icons/hicolor/scalable/apps/t3code-gpui.svg
             '';
             postFixup = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''

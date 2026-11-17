@@ -1,0 +1,1085 @@
+{
+  "source": "pingdotgg/t3code@24e77473ecf41bc1f7142529c7911c1aae1d76/apps/web/src/timestampFormat.ts",
+  "cases": [
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "10:20 AM",
+      "tooltip": "10:20 AM, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "yesterday at 10:20 AM",
+      "tooltip": "10:20 AM, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/14 10:20 AM",
+      "tooltip": "10:20 AM, 14th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "11/14/2025 10:20 AM",
+      "tooltip": "10:20 AM, 14th November 2025",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "12:20 AM",
+      "tooltip": "12:20 AM, 19th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "12:20 AM",
+      "tooltip": "12:20 AM, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "12:20 PM",
+      "tooltip": "12:20 PM, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 2:40 PM",
+      "tooltip": "2:40 PM, 8th March 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 1:40 PM",
+      "tooltip": "1:40 PM, 1st November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "10:20 AM",
+      "tooltip": "10:20 AM, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "yesterday at 10:20 AM",
+      "tooltip": "10:20 AM, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/14 10:20 AM",
+      "tooltip": "10:20 AM, 14th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "11/14/2025 10:20 AM",
+      "tooltip": "10:20 AM, 14th November 2025",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "12:20 AM",
+      "tooltip": "12:20 AM, 19th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "12:20 AM",
+      "tooltip": "12:20 AM, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "12:20 PM",
+      "tooltip": "12:20 PM, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 2:40 PM",
+      "tooltip": "2:40 PM, 8th March 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 1:40 PM",
+      "tooltip": "1:40 PM, 1st November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "10:20",
+      "tooltip": "10:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "yesterday at 10:20",
+      "tooltip": "10:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/14 10:20",
+      "tooltip": "10:20, 14th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "11/14/2025 10:20",
+      "tooltip": "10:20, 14th November 2025",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "00:20",
+      "tooltip": "00:20, 19th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "00:20",
+      "tooltip": "00:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "12:20",
+      "tooltip": "12:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 14:40",
+      "tooltip": "14:40, 8th March 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 13:40",
+      "tooltip": "13:40, 1st November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "10:20",
+      "tooltip": "10:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "yesterday at 10:20",
+      "tooltip": "10:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/14 10:20",
+      "tooltip": "10:20, 14th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "2025/11/14 10:20",
+      "tooltip": "10:20, 14th November 2025",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "0:20",
+      "tooltip": "0:20, 19th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "0:20",
+      "tooltip": "0:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "12:20",
+      "tooltip": "12:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 14:40",
+      "tooltip": "14:40, 8th March 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 13:40",
+      "tooltip": "13:40, 1st November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "午前10:20",
+      "tooltip": "午前10:20, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "yesterday at 午前10:20",
+      "tooltip": "午前10:20, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/14 午前10:20",
+      "tooltip": "午前10:20, 14th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "2025/11/14 午前10:20",
+      "tooltip": "午前10:20, 14th November 2025",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "午前0:20",
+      "tooltip": "午前0:20, 19th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "午前0:20",
+      "tooltip": "午前0:20, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "午後0:20",
+      "tooltip": "午後0:20, 17th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 午後2:40",
+      "tooltip": "午後2:40, 8th March 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 午後1:40",
+      "tooltip": "午後1:40, 1st November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "10:20",
+      "tooltip": "10:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "yesterday at 10:20",
+      "tooltip": "10:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/14 10:20",
+      "tooltip": "10:20, 14th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "2025/11/14 10:20",
+      "tooltip": "10:20, 14th November 2025",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "0:20",
+      "tooltip": "0:20, 19th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "0:20",
+      "tooltip": "0:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "12:20",
+      "tooltip": "12:20, 17th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 14:40",
+      "tooltip": "14:40, 8th March 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "Asia/Tokyo",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 13:40",
+      "tooltip": "13:40, 1st November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "yesterday at 8:20 PM",
+      "tooltip": "8:20 PM, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "11/15 8:20 PM",
+      "tooltip": "8:20 PM, 15th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/13 8:20 PM",
+      "tooltip": "8:20 PM, 13th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "11/13/2025 8:20 PM",
+      "tooltip": "8:20 PM, 13th November 2025",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "10:20 AM",
+      "tooltip": "10:20 AM, 18th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "yesterday at 10:20 AM",
+      "tooltip": "10:20 AM, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "yesterday at 10:20 PM",
+      "tooltip": "10:20 PM, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 12:40 AM",
+      "tooltip": "12:40 AM, 8th March 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 12:40 AM",
+      "tooltip": "12:40 AM, 1st November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "yesterday at 8:20 PM",
+      "tooltip": "8:20 PM, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "11/15 8:20 PM",
+      "tooltip": "8:20 PM, 15th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/13 8:20 PM",
+      "tooltip": "8:20 PM, 13th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "11/13/2025 8:20 PM",
+      "tooltip": "8:20 PM, 13th November 2025",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "10:20 AM",
+      "tooltip": "10:20 AM, 18th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "yesterday at 10:20 AM",
+      "tooltip": "10:20 AM, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "yesterday at 10:20 PM",
+      "tooltip": "10:20 PM, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 12:40 AM",
+      "tooltip": "12:40 AM, 8th March 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 12:40 AM",
+      "tooltip": "12:40 AM, 1st November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "yesterday at 20:20",
+      "tooltip": "20:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "11/15 20:20",
+      "tooltip": "20:20, 15th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/13 20:20",
+      "tooltip": "20:20, 13th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "11/13/2025 20:20",
+      "tooltip": "20:20, 13th November 2025",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "10:20",
+      "tooltip": "10:20, 18th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "yesterday at 10:20",
+      "tooltip": "10:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "yesterday at 22:20",
+      "tooltip": "22:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 00:40",
+      "tooltip": "00:40, 8th March 2026",
+      "hour12": false
+    },
+    {
+      "locale": "en-US",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 00:40",
+      "tooltip": "00:40, 1st November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "yesterday at 20:20",
+      "tooltip": "20:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "11/15 20:20",
+      "tooltip": "20:20, 15th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/13 20:20",
+      "tooltip": "20:20, 13th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "2025/11/13 20:20",
+      "tooltip": "20:20, 13th November 2025",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "10:20",
+      "tooltip": "10:20, 18th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "yesterday at 10:20",
+      "tooltip": "10:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "yesterday at 22:20",
+      "tooltip": "22:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 0:40",
+      "tooltip": "0:40, 8th March 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "locale",
+      "zone": "America/New_York",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 0:40",
+      "tooltip": "0:40, 1st November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "yesterday at 午後8:20",
+      "tooltip": "午後8:20, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "11/15 午後8:20",
+      "tooltip": "午後8:20, 15th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/13 午後8:20",
+      "tooltip": "午後8:20, 13th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "2025/11/13 午後8:20",
+      "tooltip": "午後8:20, 13th November 2025",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "午前10:20",
+      "tooltip": "午前10:20, 18th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "yesterday at 午前10:20",
+      "tooltip": "午前10:20, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "yesterday at 午後10:20",
+      "tooltip": "午後10:20, 16th November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 午前0:40",
+      "tooltip": "午前0:40, 8th March 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "12-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 午前0:40",
+      "tooltip": "午前0:40, 1st November 2026",
+      "hour12": true
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T01:20:00Z",
+      "label": "yesterday at 20:20",
+      "tooltip": "20:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T01:20:00Z",
+      "label": "11/15 20:20",
+      "tooltip": "20:20, 15th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-14T01:20:00Z",
+      "label": "11/13 20:20",
+      "tooltip": "20:20, 13th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2025-11-14T01:20:00Z",
+      "label": "2025/11/13 20:20",
+      "tooltip": "20:20, 13th November 2025",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-18T15:20:00Z",
+      "label": "10:20",
+      "tooltip": "10:20, 18th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-16T15:20:00Z",
+      "label": "yesterday at 10:20",
+      "tooltip": "10:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-17T12:00:00Z",
+      "timestamp": "2026-11-17T03:20:00Z",
+      "label": "yesterday at 22:20",
+      "tooltip": "22:20, 16th November 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-03-09T04:20:00Z",
+      "timestamp": "2026-03-08T05:40:00Z",
+      "label": "yesterday at 0:40",
+      "tooltip": "0:40, 8th March 2026",
+      "hour12": false
+    },
+    {
+      "locale": "ja-JP",
+      "format": "24-hour",
+      "zone": "America/New_York",
+      "now": "2026-11-02T05:20:00Z",
+      "timestamp": "2026-11-01T04:40:00Z",
+      "label": "yesterday at 0:40",
+      "tooltip": "0:40, 1st November 2026",
+      "hour12": false
+    }
+  ]
+}

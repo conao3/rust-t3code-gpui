@@ -1,0 +1,1933 @@
+{
+  "source_revision": "24e77473ecf41bc1f7142529c7911c1c1aae1d76",
+  "cases": [
+    {
+      "source": ":codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}",
+      "expected": "[a.md](<資料/a.md#L12>)"
+    },
+    {
+      "source": "before :codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"} after",
+      "expected": "before [a.md](<資料/a.md#L12>) after"
+    },
+    {
+      "source": "日本語🙂 :codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}",
+      "expected": "日本語🙂 [a.md](<資料/a.md#L12>)"
+    },
+    {
+      "source": "`:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}`",
+      "expected": "`:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}`"
+    },
+    {
+      "source": "```\n:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}\n```",
+      "expected": "```\n:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}\n```"
+    },
+    {
+      "source": "\\:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}",
+      "expected": "\\:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}"
+    },
+    {
+      "source": "**:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}**",
+      "expected": "**[a.md](<資料/a.md#L12>)**"
+    },
+    {
+      "source": "[:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}](https://example.com)",
+      "expected": "[:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}](https://example.com)"
+    },
+    {
+      "source": "![:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}](a.png)",
+      "expected": "![:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}](a.png)"
+    },
+    {
+      "source": "<span>:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}</span>",
+      "expected": "<span>[a.md](<資料/a.md#L12>)</span>"
+    },
+    {
+      "source": "> :codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}",
+      "expected": "> [a.md](<資料/a.md#L12>)"
+    },
+    {
+      "source": "- :codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}",
+      "expected": "- [a.md](<資料/a.md#L12>)"
+    },
+    {
+      "source": "# :codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}",
+      "expected": "# [a.md](<資料/a.md#L12>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}\n:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}",
+      "expected": "[a.md](<資料/a.md#L12>)\n[a.md](<資料/a.md#L12>)"
+    },
+    {
+      "source": "a\n:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}\nb",
+      "expected": "a\n[a.md](<資料/a.md#L12>)\nb"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}\n\n:codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"}",
+      "expected": "[a.md](<資料/a.md#L12>)\n\n[a.md](<資料/a.md#L12>)"
+    },
+    {
+      "source": "| a | b |\n| - | - |\n| :codex-file-citation{path=\"資料/a.md\" line_range_start=\"12\"} | c |",
+      "expected": "| a | b |\n| - | - |\n| [a.md](<資料/a.md#L12>) | c |"
+    },
+    {
+      "source": ":codex-followup[**Prepare** `print`]{prompt=\"print\"}",
+      "expected": "**Prepare** `print`"
+    },
+    {
+      "source": "before :codex-followup[**Prepare** `print`]{prompt=\"print\"} after",
+      "expected": "before **Prepare** `print` after"
+    },
+    {
+      "source": "日本語🙂 :codex-followup[**Prepare** `print`]{prompt=\"print\"}",
+      "expected": "日本語🙂 **Prepare** `print`"
+    },
+    {
+      "source": "`:codex-followup[**Prepare** `print`]{prompt=\"print\"}`",
+      "expected": "`:codex-followup[**Prepare** `print`]{prompt=\"print\"}`"
+    },
+    {
+      "source": "```\n:codex-followup[**Prepare** `print`]{prompt=\"print\"}\n```",
+      "expected": "```\n:codex-followup[**Prepare** `print`]{prompt=\"print\"}\n```"
+    },
+    {
+      "source": "\\:codex-followup[**Prepare** `print`]{prompt=\"print\"}",
+      "expected": "\\:codex-followup[**Prepare** `print`]{prompt=\"print\"}"
+    },
+    {
+      "source": "**:codex-followup[**Prepare** `print`]{prompt=\"print\"}**",
+      "expected": "****Prepare** `print`**"
+    },
+    {
+      "source": "[:codex-followup[**Prepare** `print`]{prompt=\"print\"}](https://example.com)",
+      "expected": "[**Prepare** `print`](https://example.com)"
+    },
+    {
+      "source": "![:codex-followup[**Prepare** `print`]{prompt=\"print\"}](a.png)",
+      "expected": "![:codex-followup[**Prepare** `print`]{prompt=\"print\"}](a.png)"
+    },
+    {
+      "source": "<span>:codex-followup[**Prepare** `print`]{prompt=\"print\"}</span>",
+      "expected": "<span>**Prepare** `print`</span>"
+    },
+    {
+      "source": "> :codex-followup[**Prepare** `print`]{prompt=\"print\"}",
+      "expected": "> **Prepare** `print`"
+    },
+    {
+      "source": "- :codex-followup[**Prepare** `print`]{prompt=\"print\"}",
+      "expected": "- **Prepare** `print`"
+    },
+    {
+      "source": "# :codex-followup[**Prepare** `print`]{prompt=\"print\"}",
+      "expected": "# **Prepare** `print`"
+    },
+    {
+      "source": ":codex-followup[**Prepare** `print`]{prompt=\"print\"}\n:codex-followup[**Prepare** `print`]{prompt=\"print\"}",
+      "expected": "**Prepare** `print`\n**Prepare** `print`"
+    },
+    {
+      "source": "a\n:codex-followup[**Prepare** `print`]{prompt=\"print\"}\nb",
+      "expected": "a\n**Prepare** `print`\nb"
+    },
+    {
+      "source": ":codex-followup[**Prepare** `print`]{prompt=\"print\"}\n\n:codex-followup[**Prepare** `print`]{prompt=\"print\"}",
+      "expected": "**Prepare** `print`\n\n**Prepare** `print`"
+    },
+    {
+      "source": "| a | b |\n| - | - |\n| :codex-followup[**Prepare** `print`]{prompt=\"print\"} | c |",
+      "expected": "| a | b |\n| - | - |\n| **Prepare** `print` | c |"
+    },
+    {
+      "source": "::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}",
+      "expected": "資料 (Document template)"
+    },
+    {
+      "source": "before ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"} after",
+      "expected": "before ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"} after"
+    },
+    {
+      "source": "日本語🙂 ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}",
+      "expected": "日本語🙂 ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}"
+    },
+    {
+      "source": "`::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}`",
+      "expected": "`::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}`"
+    },
+    {
+      "source": "```\n::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}\n```",
+      "expected": "```\n::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}\n```"
+    },
+    {
+      "source": "\\::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}",
+      "expected": "\\::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}"
+    },
+    {
+      "source": "**::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}**",
+      "expected": "**::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}**"
+    },
+    {
+      "source": "[::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}](https://example.com)",
+      "expected": "[::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}](https://example.com)"
+    },
+    {
+      "source": "![::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}](a.png)",
+      "expected": "![::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}](a.png)"
+    },
+    {
+      "source": "<span>::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}</span>",
+      "expected": "<span>::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}</span>"
+    },
+    {
+      "source": "> ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}",
+      "expected": "> 資料 (Document template)"
+    },
+    {
+      "source": "- ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}",
+      "expected": "- 資料 (Document template)"
+    },
+    {
+      "source": "# ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}",
+      "expected": "# ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}"
+    },
+    {
+      "source": "::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}\n::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}",
+      "expected": "資料 (Document template)\n資料 (Document template)"
+    },
+    {
+      "source": "a\n::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}\nb",
+      "expected": "a\n資料 (Document template)\nb"
+    },
+    {
+      "source": "::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}\n\n::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"}",
+      "expected": "資料 (Document template)\n\n資料 (Document template)"
+    },
+    {
+      "source": "| a | b |\n| - | - |\n| ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"} | c |",
+      "expected": "| a | b |\n| - | - |\n| ::artifact-template{skill_name=\"artifact-template-test\" skill_directory=\"/tmp/test\" display_name=\"資料\" artifact_kind=\"document\"} | c |"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"\"}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start=''}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=}",
+      "expected": ":codex-file-citation{path=a line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"0\"}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='0'}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=0}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"1\"}",
+      "expected": "[a](<a#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='1'}",
+      "expected": "[a](<a#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=1}",
+      "expected": "[a](<a#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"-1\"}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='-1'}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=-1}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"1.2\"}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='1.2'}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=1.2}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"1e2\"}",
+      "expected": "[a](<a#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='1e2'}",
+      "expected": "[a](<a#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=1e2}",
+      "expected": "[a](<a#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"0x10\"}",
+      "expected": "[a](<a#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='0x10'}",
+      "expected": "[a](<a#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=0x10}",
+      "expected": "[a](<a#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"Infinity\"}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='Infinity'}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=Infinity}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"9007199254740992\"}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='9007199254740992'}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=9007199254740992}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\"+1\"}",
+      "expected": "[a](<a#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start='+1'}",
+      "expected": "[a](<a#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start=+1}",
+      "expected": "[a](<a#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=\" 2 \"}",
+      "expected": "[a](<a#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a' line_range_start=' 2 '}",
+      "expected": "[a](<a#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a line_range_start= 2 }",
+      "expected": "[a](<a#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"\"}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start=''}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=}",
+      "expected": ":codex-file-citation{path=/ line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"0\"}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='0'}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=0}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"1\"}",
+      "expected": "[File](</#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='1'}",
+      "expected": "[File](</#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=1}",
+      "expected": "[File](</#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"-1\"}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='-1'}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=-1}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"1.2\"}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='1.2'}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=1.2}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"1e2\"}",
+      "expected": "[File](</#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='1e2'}",
+      "expected": "[File](</#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=1e2}",
+      "expected": "[File](</#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"0x10\"}",
+      "expected": "[File](</#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='0x10'}",
+      "expected": "[File](</#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=0x10}",
+      "expected": "[File](</#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"Infinity\"}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='Infinity'}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=Infinity}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"9007199254740992\"}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='9007199254740992'}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=9007199254740992}",
+      "expected": "[File](</>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\"+1\"}",
+      "expected": "[File](</#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start='+1'}",
+      "expected": "[File](</#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start=+1}",
+      "expected": "[File](</#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"/\" line_range_start=\" 2 \"}",
+      "expected": "[File](</#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='/' line_range_start=' 2 '}",
+      "expected": "[File](</#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=/ line_range_start= 2 }",
+      "expected": "[File](</#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"\"}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start=''}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=}",
+      "expected": ":codex-file-citation{path=a/ line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"0\"}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='0'}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=0}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"1\"}",
+      "expected": "[a](<a/#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='1'}",
+      "expected": "[a](<a/#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=1}",
+      "expected": "[a](<a/#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"-1\"}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='-1'}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=-1}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"1.2\"}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='1.2'}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=1.2}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"1e2\"}",
+      "expected": "[a](<a/#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='1e2'}",
+      "expected": "[a](<a/#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=1e2}",
+      "expected": "[a](<a/#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"0x10\"}",
+      "expected": "[a](<a/#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='0x10'}",
+      "expected": "[a](<a/#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=0x10}",
+      "expected": "[a](<a/#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"Infinity\"}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='Infinity'}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=Infinity}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"9007199254740992\"}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='9007199254740992'}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=9007199254740992}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\"+1\"}",
+      "expected": "[a](<a/#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start='+1'}",
+      "expected": "[a](<a/#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start=+1}",
+      "expected": "[a](<a/#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a/\" line_range_start=\" 2 \"}",
+      "expected": "[a](<a/#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a/' line_range_start=' 2 '}",
+      "expected": "[a](<a/#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a/ line_range_start= 2 }",
+      "expected": "[a](<a/#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start=''}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=}",
+      "expected": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"0\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='0'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=0}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"1\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='1'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=1}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"-1\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='-1'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=-1}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"1.2\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='1.2'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=1.2}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"1e2\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='1e2'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=1e2}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"0x10\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='0x10'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=0x10}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"Infinity\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='Infinity'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=Infinity}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"9007199254740992\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='9007199254740992'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=9007199254740992}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\"+1\"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start='+1'}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start=+1}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"C:\\foo\\bar.txt\" line_range_start=\" 2 \"}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='C:\\foo\\bar.txt' line_range_start=' 2 '}",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=C:\\foo\\bar.txt line_range_start= 2 }",
+      "expected": "[bar.txt](<C:%5Cfoo%5Cbar.txt#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"\"}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start=''}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=}",
+      "expected": ":codex-file-citation{path=a\\b line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"0\"}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='0'}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=0}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"1\"}",
+      "expected": "[b](<a%5Cb#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='1'}",
+      "expected": "[b](<a%5Cb#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=1}",
+      "expected": "[b](<a%5Cb#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"-1\"}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='-1'}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=-1}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"1.2\"}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='1.2'}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=1.2}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"1e2\"}",
+      "expected": "[b](<a%5Cb#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='1e2'}",
+      "expected": "[b](<a%5Cb#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=1e2}",
+      "expected": "[b](<a%5Cb#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"0x10\"}",
+      "expected": "[b](<a%5Cb#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='0x10'}",
+      "expected": "[b](<a%5Cb#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=0x10}",
+      "expected": "[b](<a%5Cb#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"Infinity\"}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='Infinity'}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=Infinity}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"9007199254740992\"}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='9007199254740992'}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=9007199254740992}",
+      "expected": "[b](<a%5Cb>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\"+1\"}",
+      "expected": "[b](<a%5Cb#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start='+1'}",
+      "expected": "[b](<a%5Cb#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start=+1}",
+      "expected": "[b](<a%5Cb#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\b\" line_range_start=\" 2 \"}",
+      "expected": "[b](<a%5Cb#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\b' line_range_start=' 2 '}",
+      "expected": "[b](<a%5Cb#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\b line_range_start= 2 }",
+      "expected": "[b](<a%5Cb#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"\"}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start=''}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=}",
+      "expected": ":codex-file-citation{path=a&#38;b line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"0\"}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='0'}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=0}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"1\"}",
+      "expected": "[a\\&b](<a&b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='1'}",
+      "expected": "[a\\&b](<a&b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=1}",
+      "expected": "[a\\&b](<a&b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"-1\"}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='-1'}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=-1}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"1.2\"}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='1.2'}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=1.2}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"1e2\"}",
+      "expected": "[a\\&b](<a&b#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='1e2'}",
+      "expected": "[a\\&b](<a&b#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=1e2}",
+      "expected": "[a\\&b](<a&b#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"0x10\"}",
+      "expected": "[a\\&b](<a&b#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='0x10'}",
+      "expected": "[a\\&b](<a&b#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=0x10}",
+      "expected": "[a\\&b](<a&b#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"Infinity\"}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='Infinity'}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=Infinity}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"9007199254740992\"}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='9007199254740992'}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=9007199254740992}",
+      "expected": "[a\\&b](<a&b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\"+1\"}",
+      "expected": "[a\\&b](<a&b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start='+1'}",
+      "expected": "[a\\&b](<a&b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start=+1}",
+      "expected": "[a\\&b](<a&b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#38;b\" line_range_start=\" 2 \"}",
+      "expected": "[a\\&b](<a&b#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a&#38;b' line_range_start=' 2 '}",
+      "expected": "[a\\&b](<a&b#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a&#38;b line_range_start= 2 }",
+      "expected": "[a\\&b](<a&b#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start=''}",
+      "expected": "[\"b](<a%5C\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"0\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"0\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='0'}",
+      "expected": "[\"b](<a%5C\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=0}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=0}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"1\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"1\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='1'}",
+      "expected": "[\"b](<a%5C\"b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=1}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"-1\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"-1\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='-1'}",
+      "expected": "[\"b](<a%5C\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=-1}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=-1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"1.2\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"1.2\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='1.2'}",
+      "expected": "[\"b](<a%5C\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=1.2}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=1.2}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"1e2\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"1e2\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='1e2'}",
+      "expected": "[\"b](<a%5C\"b#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=1e2}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=1e2}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"0x10\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"0x10\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='0x10'}",
+      "expected": "[\"b](<a%5C\"b#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=0x10}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=0x10}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"Infinity\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"Infinity\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='Infinity'}",
+      "expected": "[\"b](<a%5C\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=Infinity}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=Infinity}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"9007199254740992\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"9007199254740992\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='9007199254740992'}",
+      "expected": "[\"b](<a%5C\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=9007199254740992}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=9007199254740992}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"+1\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\"+1\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start='+1'}",
+      "expected": "[\"b](<a%5C\"b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start=+1}",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start=+1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\" 2 \"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\" line_range_start=\" 2 \"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\\\"b' line_range_start=' 2 '}",
+      "expected": "[\"b](<a%5C\"b#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\\\"b line_range_start= 2 }",
+      "expected": ":codex-file-citation{path=a\\\"b line_range_start= 2 }"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start=''}",
+      "expected": "[a\"b](<a\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"0\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"0\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='0'}",
+      "expected": "[a\"b](<a\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=0}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=0}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"1\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"1\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='1'}",
+      "expected": "[a\"b](<a\"b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=1}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"-1\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"-1\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='-1'}",
+      "expected": "[a\"b](<a\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=-1}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=-1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"1.2\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"1.2\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='1.2'}",
+      "expected": "[a\"b](<a\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=1.2}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=1.2}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"1e2\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"1e2\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='1e2'}",
+      "expected": "[a\"b](<a\"b#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=1e2}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=1e2}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"0x10\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"0x10\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='0x10'}",
+      "expected": "[a\"b](<a\"b#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=0x10}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=0x10}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"Infinity\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"Infinity\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='Infinity'}",
+      "expected": "[a\"b](<a\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=Infinity}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=Infinity}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"9007199254740992\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"9007199254740992\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='9007199254740992'}",
+      "expected": "[a\"b](<a\"b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=9007199254740992}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=9007199254740992}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\"+1\"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\"+1\"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start='+1'}",
+      "expected": "[a\"b](<a\"b#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start=+1}",
+      "expected": ":codex-file-citation{path=a\"b line_range_start=+1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"b\" line_range_start=\" 2 \"}",
+      "expected": ":codex-file-citation{path=\"a\"b\" line_range_start=\" 2 \"}"
+    },
+    {
+      "source": ":codex-file-citation{path='a\"b' line_range_start=' 2 '}",
+      "expected": "[a\"b](<a\"b#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\"b line_range_start= 2 }",
+      "expected": ":codex-file-citation{path=a\"b line_range_start= 2 }"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"\"}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start=''}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=}",
+      "expected": ":codex-file-citation{path=a\nb line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"0\"}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='0'}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=0}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"1\"}",
+      "expected": "[a\nb](<a%0Ab#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='1'}",
+      "expected": "[a\nb](<a%0Ab#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=1}",
+      "expected": "[a](<a#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"-1\"}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='-1'}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=-1}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"1.2\"}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='1.2'}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=1.2}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"1e2\"}",
+      "expected": "[a\nb](<a%0Ab#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='1e2'}",
+      "expected": "[a\nb](<a%0Ab#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=1e2}",
+      "expected": "[a](<a#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"0x10\"}",
+      "expected": "[a\nb](<a%0Ab#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='0x10'}",
+      "expected": "[a\nb](<a%0Ab#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=0x10}",
+      "expected": "[a](<a#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"Infinity\"}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='Infinity'}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=Infinity}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"9007199254740992\"}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='9007199254740992'}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=9007199254740992}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\"+1\"}",
+      "expected": "[a\nb](<a%0Ab#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start='+1'}",
+      "expected": "[a\nb](<a%0Ab#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start=+1}",
+      "expected": "[a](<a#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\" line_range_start=\" 2 \"}",
+      "expected": "[a\nb](<a%0Ab#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a\nb' line_range_start=' 2 '}",
+      "expected": "[a\nb](<a%0Ab#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb line_range_start= 2 }",
+      "expected": "[a](<a#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"\"}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start=''}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=}",
+      "expected": ":codex-file-citation{path=資料🙂.md line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"0\"}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='0'}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=0}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"1\"}",
+      "expected": "[資料🙂.md](<資料🙂.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='1'}",
+      "expected": "[資料🙂.md](<資料🙂.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=1}",
+      "expected": "[資料🙂.md](<資料🙂.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"-1\"}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='-1'}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=-1}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"1.2\"}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='1.2'}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=1.2}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"1e2\"}",
+      "expected": "[資料🙂.md](<資料🙂.md#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='1e2'}",
+      "expected": "[資料🙂.md](<資料🙂.md#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=1e2}",
+      "expected": "[資料🙂.md](<資料🙂.md#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"0x10\"}",
+      "expected": "[資料🙂.md](<資料🙂.md#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='0x10'}",
+      "expected": "[資料🙂.md](<資料🙂.md#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=0x10}",
+      "expected": "[資料🙂.md](<資料🙂.md#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"Infinity\"}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='Infinity'}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=Infinity}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"9007199254740992\"}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='9007199254740992'}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=9007199254740992}",
+      "expected": "[資料🙂.md](<資料🙂.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\"+1\"}",
+      "expected": "[資料🙂.md](<資料🙂.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start='+1'}",
+      "expected": "[資料🙂.md](<資料🙂.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start=+1}",
+      "expected": "[資料🙂.md](<資料🙂.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"資料🙂.md\" line_range_start=\" 2 \"}",
+      "expected": "[資料🙂.md](<資料🙂.md#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='資料🙂.md' line_range_start=' 2 '}",
+      "expected": "[資料🙂.md](<資料🙂.md#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=資料🙂.md line_range_start= 2 }",
+      "expected": "[資料🙂.md](<資料🙂.md#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start=''}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"0\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='0'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=0}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=0}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"1\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='1'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=1}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"-1\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='-1'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=-1}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=-1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"1.2\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='1.2'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=1.2}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=1.2}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"1e2\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='1e2'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L100>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=1e2}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=1e2}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"0x10\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='0x10'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L16>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=0x10}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=0x10}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"Infinity\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='Infinity'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=Infinity}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=Infinity}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"9007199254740992\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='9007199254740992'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=9007199254740992}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=9007199254740992}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\"+1\"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start='+1'}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L1>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=+1}",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start=+1}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a[]*_`<&>?#%.md\" line_range_start=\" 2 \"}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path='a[]*_`<&>?#%.md' line_range_start=' 2 '}",
+      "expected": "[a\\[\\]\\*\\_\\`\\<\\&>?#%.md](<a[]*_`%3C&%3E%3F%23%25.md#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start= 2 }",
+      "expected": ":codex-file-citation{path=a[]*_`<&>?#%.md line_range_start= 2 }"
+    },
+    {
+      "source": ":codex-followup[]{prompt=p}",
+      "expected": ":codex-followup[]{prompt=p}"
+    },
+    {
+      "source": ":codex-followup[]{prompt=}",
+      "expected": ":codex-followup[]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[]{prompt= }",
+      "expected": ":codex-followup[]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[]{prompt=\"print version\"}",
+      "expected": ":codex-followup[]{prompt=\"print version\"}"
+    },
+    {
+      "source": ":codex-followup[ ]{prompt=p}",
+      "expected": ":codex-followup[ ]{prompt=p}"
+    },
+    {
+      "source": ":codex-followup[ ]{prompt=}",
+      "expected": ":codex-followup[ ]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[ ]{prompt= }",
+      "expected": ":codex-followup[ ]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[ ]{prompt=\"print version\"}",
+      "expected": ":codex-followup[ ]{prompt=\"print version\"}"
+    },
+    {
+      "source": ":codex-followup[a]{prompt=p}",
+      "expected": "a"
+    },
+    {
+      "source": ":codex-followup[a]{prompt=}",
+      "expected": ":codex-followup[a]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[a]{prompt= }",
+      "expected": ":codex-followup[a]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[a]{prompt=\"print version\"}",
+      "expected": "a"
+    },
+    {
+      "source": ":codex-followup[**a**]{prompt=p}",
+      "expected": "**a**"
+    },
+    {
+      "source": ":codex-followup[**a**]{prompt=}",
+      "expected": ":codex-followup[**a**]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[**a**]{prompt= }",
+      "expected": ":codex-followup[**a**]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[**a**]{prompt=\"print version\"}",
+      "expected": "**a**"
+    },
+    {
+      "source": ":codex-followup[\\[a\\]]{prompt=p}",
+      "expected": "\\[a\\]"
+    },
+    {
+      "source": ":codex-followup[\\[a\\]]{prompt=}",
+      "expected": ":codex-followup[\\[a\\]]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[\\[a\\]]{prompt= }",
+      "expected": ":codex-followup[\\[a\\]]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[\\[a\\]]{prompt=\"print version\"}",
+      "expected": "\\[a\\]"
+    },
+    {
+      "source": ":codex-followup[[a](b)]{prompt=p}",
+      "expected": "[a](b)"
+    },
+    {
+      "source": ":codex-followup[[a](b)]{prompt=}",
+      "expected": ":codex-followup[[a](b)]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[[a](b)]{prompt= }",
+      "expected": ":codex-followup[[a](b)]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[[a](b)]{prompt=\"print version\"}",
+      "expected": "[a](b)"
+    },
+    {
+      "source": ":codex-followup[`a`]{prompt=p}",
+      "expected": "`a`"
+    },
+    {
+      "source": ":codex-followup[`a`]{prompt=}",
+      "expected": ":codex-followup[`a`]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[`a`]{prompt= }",
+      "expected": ":codex-followup[`a`]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[`a`]{prompt=\"print version\"}",
+      "expected": "`a`"
+    },
+    {
+      "source": ":codex-followup[a\nb]{prompt=p}",
+      "expected": "a\nb"
+    },
+    {
+      "source": ":codex-followup[a\nb]{prompt=}",
+      "expected": ":codex-followup[a\nb]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[a\nb]{prompt= }",
+      "expected": ":codex-followup[a\nb]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[a\nb]{prompt=\"print version\"}",
+      "expected": "a\nb"
+    },
+    {
+      "source": ":codex-followup[a [b] c]{prompt=p}",
+      "expected": "a [b] c"
+    },
+    {
+      "source": ":codex-followup[a [b] c]{prompt=}",
+      "expected": ":codex-followup[a [b] c]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[a [b] c]{prompt= }",
+      "expected": ":codex-followup[a [b] c]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[a [b] c]{prompt=\"print version\"}",
+      "expected": "a [b] c"
+    },
+    {
+      "source": ":codex-followup[a :codex-followup[b]{prompt=p}]{prompt=p}",
+      "expected": "a :codex-followup[b]{prompt=p}"
+    },
+    {
+      "source": ":codex-followup[a :codex-followup[b]{prompt=p}]{prompt=}",
+      "expected": ":codex-followup[a :codex-followup[b]{prompt=p}]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[a :codex-followup[b]{prompt=p}]{prompt= }",
+      "expected": ":codex-followup[a :codex-followup[b]{prompt=p}]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[a :codex-followup[b]{prompt=p}]{prompt=\"print version\"}",
+      "expected": "a :codex-followup[b]{prompt=p}"
+    },
+    {
+      "source": ":codex-followup[&#65;]{prompt=p}",
+      "expected": "&#65;"
+    },
+    {
+      "source": ":codex-followup[&#65;]{prompt=}",
+      "expected": ":codex-followup[&#65;]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[&#65;]{prompt= }",
+      "expected": ":codex-followup[&#65;]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[&#65;]{prompt=\"print version\"}",
+      "expected": "&#65;"
+    },
+    {
+      "source": ":codex-followup[![x](y)]{prompt=p}",
+      "expected": ":codex-followup[![x](y)]{prompt=p}"
+    },
+    {
+      "source": ":codex-followup[![x](y)]{prompt=}",
+      "expected": ":codex-followup[![x](y)]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[![x](y)]{prompt= }",
+      "expected": ":codex-followup[![x](y)]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[![x](y)]{prompt=\"print version\"}",
+      "expected": ":codex-followup[![x](y)]{prompt=\"print version\"}"
+    },
+    {
+      "source": ":codex-followup[<br>]{prompt=p}",
+      "expected": "<br>"
+    },
+    {
+      "source": ":codex-followup[<br>]{prompt=}",
+      "expected": ":codex-followup[<br>]{prompt=}"
+    },
+    {
+      "source": ":codex-followup[<br>]{prompt= }",
+      "expected": ":codex-followup[<br>]{prompt= }"
+    },
+    {
+      "source": ":codex-followup[<br>]{prompt=\"print version\"}",
+      "expected": "<br>"
+    },
+    {
+      "source": ":codex-file-citation{path=a path=b}",
+      "expected": "[b](<b>)"
+    },
+    {
+      "source": ":codex-file-citation{path = a}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path= a}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path =a}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\"line_range_start=2}",
+      "expected": ":codex-file-citation{path=\"a\"line_range_start=2}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\" line_range_start=2}",
+      "expected": "[a](<a#L2>)"
+    },
+    {
+      "source": ":codex-file-citation{#id .class path=a}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\\\"b\"}",
+      "expected": ":codex-file-citation{path=\"a\\\"b\"}"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a\nb\"}",
+      "expected": "[a\nb](<a%0Ab>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\nb=c}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a\n\nb=c}",
+      "expected": ":codex-file-citation{path=a\n\nb=c}"
+    },
+    {
+      "source": ":codex-file-citation{path=a\tb=c}",
+      "expected": "[a](<a>)"
+    },
+    {
+      "source": ":codex-file-citation{PATH=a}",
+      "expected": ":codex-file-citation{PATH=a}"
+    },
+    {
+      "source": ":codex-file-citation{path=a/}",
+      "expected": "[a](<a/>)"
+    },
+    {
+      "source": ":codex-file-citation{path=a_b}",
+      "expected": "[a\\_b](<a_b>)"
+    },
+    {
+      "source": ":codex-file-citation{path=\"a&#0;b\"}",
+      "expected": "[a�b](<a�b>)"
+    }
+  ]
+}

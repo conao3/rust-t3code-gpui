@@ -95,3 +95,7 @@ SOFTWARE.
 ## GPUI component menus
 
 `vendor/gpui-component/` is `gpui-component` 0.9.1, distributed under Apache-2.0 (`vendor/gpui-component/LICENSE-APACHE`). Custom popup menu items expose an explicit accessible label alongside their custom content.
+
+The assistant message metadata and copy behavior in `crates/t3code-gpui/src/{timeline,row_view,markdown_directives,timestamp}.rs` derive from T3 Code `apps/web/src/components/chat/{TimelineAssistantRows,MessageCopyButton}.tsx`, `apps/web/src/timestampFormat.ts`, and `packages/shared/src/{codexMarkdownDirectives,codexFileCitations,codexArtifactTemplates}.ts` at source revision `24e77473ecf41bc1f7142529c7911c1c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.
+
+ICU4X date/time formatting and its Unicode/CLDR data are distributed under the Unicode License V3, reproduced in `crates/t3code-gpui/assets/licenses/Unicode-3.0.txt` and installed with the application notices.
