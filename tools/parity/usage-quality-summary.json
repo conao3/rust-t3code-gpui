@@ -1,0 +1,60 @@
+{
+  "name": "usage-quality-summary",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Usage"
+      }
+    },
+    {
+      "action": "press",
+      "value": "c"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "name": "Totals"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Unpriced usage details"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Unpriced usage details"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "name": "API estimate excludes 33.3% unpriced records."
+      },
+      "reference": {
+        "role": "StaticText",
+        "name": "33.3%",
+        "ancestor": {
+          "role": "dialog",
+          "name": ""
+        }
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    }
+  ]
+}

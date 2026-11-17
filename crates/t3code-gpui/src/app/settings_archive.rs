@@ -2,21 +2,25 @@ use super::*;
 
 pub(super) struct Archive {
     root: WeakEntity<Root>,
-    environment: String,
+    environments: Vec<String>,
     snapshot: Value,
     error: Option<String>,
     loading: bool,
-    pending: HashSet<String>,
+    pending: HashSet<(String, String)>,
     sequence: u64,
     refresh_pending: bool,
     clock_task: Option<Task<()>>,
     subscription: Option<Subscription>,
 }
 impl Archive {
-    pub(super) fn new(root: WeakEntity<Root>, environment: String, cx: &mut Context<Self>) -> Self {
+    pub(super) fn new(
+        root: WeakEntity<Root>,
+        environments: Vec<String>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let mut view = Self {
             root: root.clone(),
-            environment,
+            environments,
             snapshot: Value::Null,
             error: None,
             loading: false,
@@ -28,11 +32,12 @@ impl Archive {
         };
         if let Some(owner) = root.upgrade() {
             view.subscription = Some(cx.observe(&owner, |view, owner, cx| {
-                let sequence = owner
-                    .read(cx)
-                    .connection(&view.environment)
+                let sequence = view
+                    .environments
+                    .iter()
+                    .filter_map(|environment| owner.read(cx).connection(environment))
                     .map(|connection| connection.shell().lock().expect("shell").sequence)
-                    .unwrap_or(0);
+                    .sum();
                 if sequence != view.sequence {
                     view.sequence = sequence;
                     view.refresh(cx);
@@ -51,18 +56,49 @@ impl Archive {
             return;
         }
         self.loading = true;
-        settings_controls::request(
-            &self.root,
-            &self.environment,
-            "orchestration.getArchivedShellSnapshot",
-            json!({}),
-            cx,
-            |view, result, cx| {
+        let Some(owner) = self.root.upgrade() else {
+            return;
+        };
+        let owner = owner.read(cx);
+        let connections = self
+            .environments
+            .iter()
+            .filter_map(|environment| owner.connection(environment))
+            .collect::<Vec<_>>();
+        let runtime = owner.runtime.clone();
+        cx.spawn(async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                let mut snapshot = json!({"threads":[],"projects":[]});
+                let mut errors = Vec::new();
+                for connection in connections {
+                    match connection
+                        .request("orchestration.getArchivedShellSnapshot", json!({}))
+                        .await
+                    {
+                        Ok(data) => {
+                            for key in ["threads", "projects"] {
+                                for mut item in data[key].as_array().into_iter().flatten().cloned()
+                                {
+                                    item["_environment"] = json!(connection.label());
+                                    snapshot[key]
+                                        .as_array_mut()
+                                        .expect("snapshot collection")
+                                        .push(item);
+                                }
+                            }
+                        }
+                        Err(error) => errors.push(format!("{}: {error:#}", connection.label())),
+                    }
+                }
+                Ok((snapshot, errors))
+            })
+            .await;
+            let _ = this.update(cx, |view, cx| {
                 view.loading = false;
                 match result {
-                    Ok(snapshot) => {
+                    Ok((snapshot, errors)) => {
                         view.snapshot = snapshot;
-                        view.error = None;
+                        view.error = (!errors.is_empty()).then(|| errors.join("\n"));
                         view.schedule_clock(cx);
                     }
                     Err(error) => view.error = Some(error.to_string()),
@@ -70,8 +106,10 @@ impl Archive {
                 if std::mem::take(&mut view.refresh_pending) {
                     view.refresh(cx);
                 }
-            },
-        );
+                cx.notify();
+            });
+        })
+        .detach();
     }
     fn schedule_clock(&mut self, cx: &mut Context<Self>) {
         let now = SystemTime::now();
@@ -104,18 +142,19 @@ impl Archive {
             })
         });
     }
-    fn perform(&mut self, id: String, delete: bool, cx: &mut Context<Self>) {
-        if !self.pending.insert(id.clone()) {
+    fn perform(&mut self, environment: String, id: String, delete: bool, cx: &mut Context<Self>) {
+        if !self.pending.insert((environment.clone(), id.clone())) {
             return;
         }
+        let target = (environment.clone(), id.clone());
         settings_controls::request(
             &self.root,
-            &self.environment,
+            &environment,
             "orchestration.dispatchCommand",
             json!({"type":if delete {"thread.delete"} else {"thread.unarchive"},"commandId":uuid::Uuid::new_v4().to_string(),"threadId":id}),
             cx,
             move |view, result, cx| {
-                view.pending.remove(&id);
+                view.pending.remove(&target);
                 match result {
                     Ok(_) => view.refresh(cx),
                     Err(error) => view.error = Some(error.to_string()),
@@ -123,26 +162,36 @@ impl Archive {
             },
         );
     }
-    fn delete(&mut self, id: String, title: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn delete(
+        &mut self,
+        environment: String,
+        id: String,
+        title: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let confirm = self
             .root
             .upgrade()
             .is_some_and(|root| root.read(cx).settings.values["confirmThreadDelete"] != false);
         if !confirm {
-            self.perform(id, true, cx);
+            self.perform(environment, id, true, cx);
             return;
         }
         let owner = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |dialog, _, _| {
             let owner = owner.clone();
             let id = id.clone();
+            let environment = environment.clone();
             dialog
                 .title(format!("Delete thread \"{title}\"?"))
                 .centered()
                 .child("This permanently clears conversation history for this thread.")
                 .confirm()
                 .on_ok(move |_, _, cx| {
-                    let _ = owner.update(cx, |view, cx| view.perform(id.clone(), true, cx));
+                    let _ = owner.update(cx, |view, cx| {
+                        view.perform(environment.clone(), id.clone(), true, cx)
+                    });
                     true
                 })
         });
@@ -208,7 +257,10 @@ impl Render for Archive {
         for (index, project) in projects.iter().enumerate() {
             let mut rows = threads
                 .iter()
-                .filter(|thread| thread["projectId"] == project["id"])
+                .filter(|thread| {
+                    thread["projectId"] == project["id"]
+                        && thread["_environment"] == project["_environment"]
+                })
                 .collect::<Vec<_>>();
             rows.sort_by(|a, b| {
                 b["archivedAt"]
@@ -237,13 +289,21 @@ impl Render for Archive {
                     continue;
                 };
                 let id = id.to_string();
+                let environment = thread["_environment"]
+                    .as_str()
+                    .expect("archive environment")
+                    .to_string();
+                let restore_environment = environment.clone();
+                let remove_environment = environment.clone();
                 let title = thread["title"].as_str().unwrap_or_default().to_string();
                 let restore = id.clone();
                 let remove = id.clone();
                 let remove_title = title.clone();
                 items = items.child(
                     h_flex()
-                        .id(SharedString::from(format!("archive-thread-{id}")))
+                        .id(SharedString::from(format!(
+                            "archive-thread-{environment}-{id}"
+                        )))
                         .gap_3()
                         .px_4()
                         .py_3()
@@ -278,9 +338,14 @@ impl Render for Archive {
                                 .outline()
                                 .compact()
                                 .accessibility_label(format!("Unarchive {title}"))
-                                .disabled(self.pending.contains(&id))
+                                .disabled(self.pending.contains(&(environment.clone(), id.clone())))
                                 .on_click(cx.listener(move |view, _, _, cx| {
-                                    view.perform(restore.clone(), false, cx)
+                                    view.perform(
+                                        restore_environment.clone(),
+                                        restore.clone(),
+                                        false,
+                                        cx,
+                                    )
                                 })),
                         )
                         .child(
@@ -290,9 +355,15 @@ impl Render for Archive {
                                 .outline()
                                 .compact()
                                 .accessibility_label(format!("Delete {title}"))
-                                .disabled(self.pending.contains(&id))
+                                .disabled(self.pending.contains(&(environment.clone(), id.clone())))
                                 .on_click(cx.listener(move |view, _, window, cx| {
-                                    view.delete(remove.clone(), remove_title.clone(), window, cx)
+                                    view.delete(
+                                        remove_environment.clone(),
+                                        remove.clone(),
+                                        remove_title.clone(),
+                                        window,
+                                        cx,
+                                    )
                                 })),
                         ),
                 );

@@ -10,7 +10,6 @@ impl Root {
     ) {
         match client_settings::update(&self.settings_path, &[(key, value)]) {
             Ok(settings) => {
-                let (interface, code) = (settings.font_size_interface, settings.font_size_code);
                 self.settings = settings;
                 if key == "sidebarWorkingShelfEnabled" {
                     self.rebuild_entries();
@@ -24,10 +23,7 @@ impl Root {
                 if key == "gpuiAppearance" {
                     crate::appearance::apply(self.settings.light_theme, cx);
                 }
-                Theme::update(cx, |theme| {
-                    theme.font_size = px(interface);
-                    theme.mono_font_size = px(code);
-                });
+                crate::appearance::apply_typography(&self.settings, cx);
             }
             Err(error) => {
                 self.conversation.message = Some(format!("Saving the settings failed: {error:#}"))
@@ -64,12 +60,53 @@ impl Root {
             );
             return;
         }
+        let targets = if self.settings_environment.is_none() {
+            self.connections
+                .iter()
+                .filter(|connection| {
+                    project.is_none_or(|id| {
+                        connection
+                            .shell()
+                            .lock()
+                            .expect("shell")
+                            .projects
+                            .iter()
+                            .any(|project| project["id"] == id)
+                    })
+                })
+                .map(|connection| connection.label().to_string())
+                .collect::<Vec<_>>()
+        } else {
+            vec![environment.to_string()]
+        };
+        let operations = targets
+            .into_iter()
+            .filter_map(|target| {
+                self.connection(&target).map(|connection| {
+                    self.environment_setting_patch(definition, &target, project, value.clone())
+                        .map(|patch| (connection, json!({"patch":patch})))
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>();
+        match operations {
+            Ok(operations) => self.settings_requests(operations, "server.updateSettings", cx),
+            Err(error) => {
+                self.message = Some(error.to_string());
+                cx.notify();
+            }
+        }
+    }
+
+    fn environment_setting_patch(
+        &self,
+        definition: &settings_catalog::Setting,
+        environment: &str,
+        project: Option<&str>,
+        value: Option<Value>,
+    ) -> anyhow::Result<Value> {
         let patch = if let Some(project) = project {
             if !settings_catalog::project_scoped(definition.key) {
-                self.conversation.message =
-                    Some("Select All projects to change this environment setting.".into());
-                cx.notify();
-                return;
+                anyhow::bail!("Select All projects to change this environment setting.");
             }
             let config = self.config_of(environment).unwrap_or(Value::Null);
             let mut overrides = config["settings"]["projectSettingsOverrides"][project]
@@ -85,12 +122,7 @@ impl Root {
         } else {
             json!({definition.key:value.unwrap_or_else(||definition.default.clone())})
         };
-        self.settings_request(
-            environment,
-            "server.updateSettings",
-            json!({"patch":patch}),
-            cx,
-        );
+        Ok(patch)
     }
 
     pub(super) fn settings_request(
@@ -100,16 +132,27 @@ impl Root {
         payload: Value,
         cx: &mut Context<Self>,
     ) {
-        let Some(connection) = self.connection(environment) else {
-            self.conversation.message =
-                Some("Connect an environment to change its settings.".into());
-            cx.notify();
-            return;
-        };
+        let connections = self.settings_request_targets(environment, method);
+        self.settings_requests(
+            connections
+                .into_iter()
+                .map(|connection| (connection, payload.clone()))
+                .collect(),
+            method,
+            cx,
+        );
+    }
+
+    fn settings_requests(
+        &mut self,
+        operations: Vec<(Arc<Connection>, Value)>,
+        method: &'static str,
+        cx: &mut Context<Self>,
+    ) {
         let runtime = self.runtime.clone();
         cx.spawn(async move |this, cx| {
             let result = on_runtime(&runtime, async move {
-                connection.request(method, payload).await
+                settings_controls::request_operations(operations, method).await
             })
             .await;
             let _ = this.update(cx, |root, cx| {
@@ -122,16 +165,34 @@ impl Root {
         .detach();
     }
 
+    pub(super) fn settings_request_targets(
+        &self,
+        environment: &str,
+        method: &str,
+    ) -> Vec<Arc<Connection>> {
+        if self.settings_environment.is_none()
+            && matches!(
+                method,
+                "server.upsertKeybinding" | "server.removeKeybinding"
+            )
+        {
+            self.connections.clone()
+        } else {
+            self.connection(environment).into_iter().collect()
+        }
+    }
+
     fn restore_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let changed = settings_catalog::settings()
             .into_iter()
             .filter(|setting| {
                 !setting.server
-                    && self
+                    && (self
                         .settings
                         .values
                         .get(setting.key)
                         .is_some_and(|value| *value != setting.default)
+                        || matches!(setting.control, settings_catalog::Control::Font(key, _, _) if self.settings.values[key].as_str().is_some_and(|value| !value.is_empty())))
             })
             .collect::<Vec<_>>();
         if changed.is_empty() {
@@ -153,6 +214,9 @@ impl Root {
                 .on_ok(move |_, _, cx| {
                     let _ = owner.update(cx, |root, cx| {
                         for setting in &changed {
+                            if let settings_catalog::Control::Font(key, _, _) = setting.control {
+                                root.change_setting(key, json!(""), cx);
+                            }
                             root.change_setting(setting.key, setting.default.clone(), cx);
                         }
                     });
@@ -186,14 +250,8 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        use gpui_kit::component::select::{Select, SelectEvent};
-        if self
-            .conversation
-            .composer
-            .read(cx)
-            .focus_handle(cx)
-            .is_focused(window)
-        {
+        use gpui_kit::component::button::ButtonVariants;
+        if self.composer.read(cx).focus_handle(cx).is_focused(window) {
             self.settings_focus.focus(window, cx);
         }
         let search_root = cx.entity().downgrade();
@@ -245,41 +303,6 @@ impl Root {
         let environment = self.settings_environment();
         let server = self.config_of(&environment).unwrap_or(Value::Null);
         let page = self.settings_page;
-        let root = cx.entity().downgrade();
-        let selected_environment = environment.clone();
-        let choices = self
-            .connections
-            .iter()
-            .map(|connection| {
-                (
-                    connection.label().to_string(),
-                    connection.label().to_string(),
-                )
-            })
-            .collect::<Vec<_>>();
-        let scope = window.use_keyed_state(
-            SharedString::from(format!("settings-scope:{environment}:{}", choices.len())),
-            cx,
-            |window, cx| {
-                let state = settings_controls::select(choices, &selected_environment, window, cx);
-                cx.subscribe_in(
-                    &state,
-                    window,
-                    move |_, _, event: &SelectEvent<_>, _, cx| {
-                        if let SelectEvent::Confirm(Some(environment)) = event {
-                            let _ = root.update(cx, |root, cx| {
-                                root.settings_environment = Some(environment.clone());
-                                root.settings_project = None;
-                                cx.notify();
-                            });
-                        }
-                    },
-                )
-                .detach();
-                state
-            },
-        );
-        let scope = scope.read(cx).clone();
         let mut content = v_flex()
             .id("settings-content")
             .w_full()
@@ -295,41 +318,55 @@ impl Root {
             .find(|(id, _, _)| *id == page)
             .map(|(_, label, _)| *label)
             .unwrap_or("Settings");
-        if matches!(
+        if !matches!(
             page,
-            "providers"
-                | "threads"
-                | "scheduled-tasks"
-                | "keybindings"
-                | "maintenance"
-                | "archived"
-                | "browser"
-                | "devices"
-                | "voice"
-                | "worktrees"
-                | "labs"
+            "general"
+                | "appearance"
+                | "chat"
+                | "diffs"
+                | "snap-shot"
+                | "connections"
+                | "access"
+                | "about"
         ) {
-            content = content.child(
-                h_flex()
-                    .gap_2()
-                    .text_sm()
-                    .text_color(theme.muted_foreground)
-                    .child("Applying settings across")
-                    .child(
-                        Select::new(&scope)
-                            .accessibility_label("Settings environment")
-                            .w(px(200.))
-                            .h(px(32.)),
-                    ),
-            );
-        }
-        if matches!(
-            page,
-            "threads" | "maintenance" | "archived" | "projects" | "worktrees"
-        ) {
-            let root = cx.entity().downgrade();
-            let mut projects = vec![(String::new(), "All projects".to_string())];
-            if let Some(connection) = self.connection(&environment) {
+            let single_environment = page == "providers";
+            let selected_environment = if single_environment {
+                Some(environment.clone())
+            } else {
+                self.settings_environment.clone()
+            };
+            let environment_label = selected_environment
+                .as_ref()
+                .map(|label| {
+                    self.config_of(label)
+                        .and_then(|config| {
+                            config["environment"]["label"].as_str().map(str::to_string)
+                        })
+                        .unwrap_or_else(|| label.clone())
+                })
+                .unwrap_or_else(|| "All environments".into());
+            let project_label = self
+                .settings_project
+                .as_ref()
+                .and_then(|id| {
+                    self.connections.iter().find_map(|connection| {
+                        connection
+                            .shell()
+                            .lock()
+                            .expect("shell")
+                            .projects
+                            .iter()
+                            .find(|project| project["id"] == *id)
+                            .and_then(|project| project["title"].as_str().map(str::to_string))
+                    })
+                })
+                .unwrap_or_else(|| "All projects".into());
+            let mut projects = vec![(None, "All projects".to_string())];
+            for connection in self.connections.iter().filter(|connection| {
+                selected_environment
+                    .as_ref()
+                    .is_none_or(|label| connection.label() == label)
+            }) {
                 projects.extend(
                     connection
                         .shell()
@@ -339,42 +376,90 @@ impl Root {
                         .iter()
                         .filter_map(|project| {
                             Some((
-                                project["id"].as_str()?.to_string(),
+                                Some(project["id"].as_str()?.to_string()),
                                 project["title"].as_str()?.to_string(),
                             ))
                         }),
                 );
             }
-            let selected = self.settings_project.clone().unwrap_or_default();
-            let selector = window.use_keyed_state(
-                SharedString::from(format!(
-                    "settings-project:{environment}:{selected}:{}",
-                    projects.len()
-                )),
-                cx,
-                |window, cx| {
-                    let state = settings_controls::select(projects, &selected, window, cx);
-                    cx.subscribe_in(
-                        &state,
-                        window,
-                        move |_, _, event: &SelectEvent<_>, _, cx| {
-                            if let SelectEvent::Confirm(Some(project)) = event {
-                                let _ = root.update(cx, |root, cx| {
-                                    root.settings_project =
-                                        (!project.is_empty()).then(|| project.clone());
-                                    cx.notify();
-                                });
-                            }
-                        },
-                    )
-                    .detach();
-                    state
-                },
-            );
+            let mut environments = Vec::new();
+            if !single_environment {
+                environments.push((None, "All environments".to_string()));
+            }
+            environments.extend(self.connections.iter().map(|connection| {
+                let label = connection.label().to_string();
+                let name = self
+                    .config_of(&label)
+                    .and_then(|config| config["environment"]["label"].as_str().map(str::to_string))
+                    .unwrap_or_else(|| label.clone());
+                (Some(label), name)
+            }));
+            let project_root = cx.entity().downgrade();
+            let environment_root = cx.entity().downgrade();
+            let selected_project = self.settings_project.clone();
             content = content.child(
-                Select::new(selector.read(cx))
-                    .accessibility_label("Settings project")
-                    .w(px(260.)),
+                h_flex()
+                    .gap_2()
+                    .px_4()
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .child(settings_controls::text("Applying settings for"))
+                    .child(
+                        Button::new("settings-project-scope")
+                            .child(settings_controls::text(project_label.clone()))
+                            .accessibility_label(format!("Project scope: {project_label}"))
+                            .outline()
+                            .h(px(28.))
+                            .dropdown_menu(move |menu, _, _| {
+                                projects
+                                    .iter()
+                                    .fold(menu.radio_group(), |menu, (id, title)| {
+                                        let id = id.clone();
+                                        let root = project_root.clone();
+                                        menu.item(
+                                            PopupMenuItem::new(title.clone())
+                                                .checked(id == selected_project)
+                                                .on_click(move |_, _, cx| {
+                                                    let _ = root.update(cx, |root, cx| {
+                                                        root.settings_project = id.clone();
+                                                        cx.notify();
+                                                    });
+                                                }),
+                                        )
+                                    })
+                            }),
+                    )
+                    .child(settings_controls::text(if selected_environment.is_some() {
+                        "on"
+                    } else {
+                        "across"
+                    }))
+                    .child(
+                        Button::new("settings-environment-scope")
+                            .child(settings_controls::text(environment_label.clone()))
+                            .accessibility_label(format!("Environment scope: {environment_label}"))
+                            .outline()
+                            .h(px(28.))
+                            .dropdown_menu(move |menu, _, _| {
+                                environments
+                                    .iter()
+                                    .fold(menu.radio_group(), |menu, (id, title)| {
+                                        let id = id.clone();
+                                        let root = environment_root.clone();
+                                        menu.item(
+                                            PopupMenuItem::new(title.clone())
+                                                .checked(id == selected_environment)
+                                                .on_click(move |_, _, cx| {
+                                                    let _ = root.update(cx, |root, cx| {
+                                                        root.settings_environment = id.clone();
+                                                        root.settings_project = None;
+                                                        cx.notify();
+                                                    });
+                                                }),
+                                        )
+                                    })
+                            }),
+                    ),
             );
         }
         if let Some(error) = &self.conversation.message {
@@ -397,10 +482,18 @@ impl Root {
         };
         let mut section_rows = group();
         let mut advanced_started = false;
-        for definition in settings_catalog::settings()
+        for mut definition in settings_catalog::settings()
             .into_iter()
             .filter(|setting| setting.page == page)
         {
+            let separate_fonts = self.settings.values["gpuiSeparateFonts"] == true;
+            if !separate_fonts && matches!(definition.key, "fontSizePrompt" | "fontSizeTerminal") {
+                continue;
+            }
+            if separate_fonts && definition.key == "fontSizeCode" {
+                definition.label = "Code font";
+                definition.description = "Code blocks, diffs, and file previews.";
+            }
             if section != definition.section {
                 if !section.is_empty() {
                     content = content.child(
@@ -505,10 +598,26 @@ impl Root {
             }
             let root = cx.entity().downgrade();
             let environment = environment.clone();
+            let font_family = match definition.control {
+                settings_catalog::Control::Font(key, _, _) => self.settings.values[key]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                _ => String::new(),
+            };
             let control = window.use_keyed_state(
                 SharedString::from(format!(
-                    "setting:{}:{}:{}:{:?}:{}",
-                    definition.key, definition.label, environment, self.settings_project, value
+                    "setting:{}:{}:{}:{:?}:{}:{}",
+                    definition.key,
+                    definition.label,
+                    environment,
+                    self.settings_project,
+                    value,
+                    match definition.control {
+                        settings_catalog::Control::Font(key, _, _) =>
+                            self.settings.values[key].clone(),
+                        _ => Value::Null,
+                    }
                 )),
                 cx,
                 |window, cx| {
@@ -517,7 +626,7 @@ impl Root {
                         environment,
                         self.settings_project.clone(),
                         definition,
-                        value,
+                        (value, font_family),
                         window,
                         cx,
                     )
@@ -535,6 +644,58 @@ impl Root {
                             .font_weight(FontWeight::SEMIBOLD),
                     )
                     .child(section_rows),
+            );
+        }
+        if page == "snap-shot" {
+            let unavailable =
+                if cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_none() {
+                    "SnapShots require a Wayland session. X11 capture is not supported."
+                } else {
+                    "SnapShot capture is not implemented in this client."
+                };
+            content = content.child(
+                v_flex()
+                    .id("snapshot-section")
+                    .gap_3()
+                    .child(
+                        settings_controls::text("SnapShots")
+                            .px_4()
+                            .font_weight(FontWeight::SEMIBOLD),
+                    )
+                    .child(
+                        group().child(
+                            h_flex()
+                                .id("snapshot-setting-row")
+                                .p_4()
+                                .gap_4()
+                                .child(
+                                    v_flex()
+                                        .flex_1()
+                                        .gap_1()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(
+                                            settings_controls::text("SnapShots")
+                                                .text_sm()
+                                                .text_color(theme.foreground),
+                                        )
+                                        .child(settings_controls::text(
+                                            "Capture a window and attach it to your current draft.",
+                                        ))
+                                        .child(settings_controls::text(unavailable)),
+                                )
+                                .child(
+                                    div().opacity(0.5).child(
+                                        gpui_kit::component::switch::Switch::new(
+                                            "snapshot-enabled",
+                                        )
+                                        .accessibility_label("Enable snapshots")
+                                        .checked(false)
+                                        .disabled(true),
+                                    ),
+                                ),
+                        ),
+                    ),
             );
         }
         if page == "threads" && self.settings_project.is_none() {
@@ -588,10 +749,21 @@ impl Root {
         if page == "archived" {
             let root = cx.entity().downgrade();
             let environment = environment.clone();
+            let environments = if self.settings_environment.is_none() {
+                self.connections
+                    .iter()
+                    .map(|connection| connection.label().to_string())
+                    .collect()
+            } else {
+                vec![environment.clone()]
+            };
             let panel = window.use_keyed_state(
-                SharedString::from(format!("settings-archive:{environment}")),
+                SharedString::from(format!(
+                    "settings-archive:{environment}:{:?}",
+                    self.settings_environment
+                )),
                 cx,
-                |_, cx| settings_archive::Archive::new(root, environment, cx),
+                |_, cx| settings_archive::Archive::new(root, environments, cx),
             );
             content = content.child(panel);
         }

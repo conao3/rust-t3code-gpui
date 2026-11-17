@@ -1,0 +1,121 @@
+{
+  "name": "settings-typography",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1000,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Close"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Settings"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Appearance"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Appearance"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "combobox",
+        "name": "Interface font family"
+      }
+    },
+    {
+      "action": "type",
+      "value": "DejaVu Sans"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Interface font family"
+      },
+      "native": {
+        "role": "label",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Interface font family"
+        },
+        "name": "DejaVu Sans"
+      },
+      "text_contains": "DejaVu Sans"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "combobox",
+        "name": "Interface font size"
+      }
+    },
+    {
+      "action": "press",
+      "value": "end"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Interface font size"
+      },
+      "native": {
+        "role": "label",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Interface font size"
+        },
+        "name": "20 px"
+      },
+      "text_contains": "20 px"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Reset interface font to default"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Interface font size"
+      },
+      "native": {
+        "role": "label",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Interface font size"
+        },
+        "name": "16 px"
+      },
+      "text_contains": "16 px"
+    }
+  ]
+}

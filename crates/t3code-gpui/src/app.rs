@@ -1549,7 +1549,7 @@ impl Render for Root {
             }))
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
-            .font_family(UI_FONT)
+            .font_family(cx.theme().font_family.clone())
             .on_mouse_move(cx.listener(|root, event: &MouseMoveEvent, window, cx| {
                 if event.pressed_button == Some(MouseButton::Left)
                     && let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() {
@@ -1666,10 +1666,8 @@ pub fn run(
             crate::timestamp::initialize(settings.timestamp_format, cx)
                 .expect("initialize timestamp formatting");
             crate::appearance::apply(settings.light_theme, cx);
+            crate::appearance::apply_typography(&settings, cx);
             Theme::update(cx, |theme| {
-                theme.font_family = UI_FONT.into();
-                theme.font_size = px(settings.font_size_interface);
-                theme.mono_font_size = px(settings.font_size_code);
                 theme.cursor_blink =
                     CursorBlink::blinking(CURSOR_BLINK).with_idle_timeout(CURSOR_BLINK_IDLE);
             });

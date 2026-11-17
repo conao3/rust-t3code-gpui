@@ -11,6 +11,7 @@ pub(super) struct Keybindings {
     condition: Entity<InputState>,
     editing: Option<Value>,
     adding: bool,
+    recording: bool,
     subscriptions: Vec<Subscription>,
 }
 
@@ -37,6 +38,7 @@ impl Keybindings {
             condition,
             editing: None,
             adding: false,
+            recording: false,
             subscriptions,
         }
     }
@@ -105,163 +107,229 @@ fn target(row: &Value) -> Value {
     target
 }
 
+fn command_label(command: &str) -> String {
+    match command {
+        "workspace.focusNext" => "Focus Next Workspace Area".into(),
+        "workspace.focusPrevious" => "Focus Previous Workspace Area".into(),
+        "composer.sendAlternate" => "Composer: Opposite Queue or Steer Action".into(),
+        "composer.sendBackground" => "Composer: Start in Background".into(),
+        "composer.sendAndNewThread" => "Composer: Send and Start New Thread".into(),
+        "composer.dictation" => "Composer: Start or Finish Dictation".into(),
+        "thread.steerQueuedMessage" => "Queue: Send First Queued Message".into(),
+        "thread.editQueuedMessage" => "Queue: Edit Last Queued Message".into(),
+        "thread.copyReference" => "Pull Request: Copy Link or Thread".into(),
+        "view.reopenClosed" => "Reopen Closed Tab".into(),
+        "preview.focusUrl" => "Preview: Focus URL".into(),
+        "usage.period.day" => "Usage: Period: Past 24h".into(),
+        "usage.period.week" => "Usage: Period: 7 days".into(),
+        "usage.period.month" => "Usage: Period: 30 days".into(),
+        "usage.period.quarter" => "Usage: Period: 90 days".into(),
+        _ => {
+            let title = |part: &str| {
+                let mut result = String::new();
+                let mut previous = ' ';
+                for character in part.chars() {
+                    if character.is_uppercase()
+                        && (previous.is_lowercase() || previous.is_ascii_digit())
+                    {
+                        result.push(' ');
+                    }
+                    if matches!(character, '-' | '_' | ' ') {
+                        result.push(' ');
+                    } else if result.is_empty() || result.ends_with(' ') {
+                        result.extend(character.to_uppercase());
+                    } else {
+                        result.push(character);
+                    }
+                    previous = character;
+                }
+                result.split_whitespace().collect::<Vec<_>>().join(" ")
+            };
+            if let Some(script) = command
+                .strip_prefix("script.")
+                .and_then(|value| value.strip_suffix(".run"))
+            {
+                format!("Run Script: {}", title(script))
+            } else {
+                command.split('.').map(title).collect::<Vec<_>>().join(": ")
+            }
+        }
+    }
+}
+
+fn group_index(command: &str) -> usize {
+    match command.split('.').next().unwrap_or_default() {
+        "sidebar" | "rightPanel" | "commandPalette" | "filePicker" | "projectSearch" | "editor" => {
+            0
+        }
+        "thread" | "chat" | "pullRequest" => 1,
+        "composer" | "modelPicker" => 2,
+        "terminal" => 3,
+        "preview" | "diff" => 4,
+        "theme" | "appearance" | "themeEditor" => 5,
+        "script" => 6,
+        _ => 7,
+    }
+}
+
+fn command_order(command: &str) -> (String, usize) {
+    let usage = [
+        "usage.open",
+        "usage.cost",
+        "usage.tokens",
+        "usage.limits",
+        "usage.period.day",
+        "usage.period.week",
+        "usage.period.month",
+        "usage.period.quarter",
+    ];
+    match usage.iter().position(|value| *value == command) {
+        Some(index) => ("usage.cost".into(), index),
+        None => (command.into(), 0),
+    }
+}
+
+fn shortcut_label(key: &str) -> String {
+    let (modifiers, key) = key.rsplit_once('+').map_or(("", key), |(modifiers, key)| {
+        if key.is_empty() {
+            (modifiers.strip_suffix('+').unwrap_or(modifiers), "+")
+        } else {
+            (modifiers, key)
+        }
+    });
+    let mut parts = modifiers
+        .split('+')
+        .filter(|part| !part.is_empty())
+        .map(|part| match part {
+            "mod" | "ctrl" => "Ctrl".to_string(),
+            "shift" => "Shift".to_string(),
+            "alt" => "Alt".to_string(),
+            "meta" => "Meta".to_string(),
+            _ => part.to_string(),
+        })
+        .collect::<Vec<_>>();
+    parts.push(match key {
+        "arrowup" => "Up".into(),
+        "arrowdown" => "Down".into(),
+        "arrowleft" => "Left".into(),
+        "arrowright" => "Right".into(),
+        "enter" => "Enter".into(),
+        "space" => "Space".into(),
+        "esc" => "Esc".into(),
+        _ if key.len() == 1 || key.starts_with('f') => key.to_uppercase(),
+        _ => command_label(key),
+    });
+    parts.join("+")
+}
+
+fn key_pill(key: &str, background: Hsla) -> impl IntoElement {
+    h_flex()
+        .gap_1()
+        .children(key.split('+').enumerate().map(|(index, part)| {
+            let label = match part {
+                "mod" => "Ctrl".into(),
+                "shift" => "⇧".into(),
+                "alt" => "Alt".into(),
+                "ctrl" => "⌃".into(),
+                _ if part.len() == 1 => part.to_uppercase(),
+                _ => part.into(),
+            };
+            settings_controls::text(label)
+                .id(("shortcut-part", index))
+                .bg(background)
+                .text_xs()
+                .px_1()
+                .rounded_sm()
+        }))
+}
+
 impl Render for Keybindings {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use settings_controls::text;
         let _ = &self.subscriptions;
         let config = self
             .root
             .upgrade()
             .and_then(|root| root.read(cx).config_of(&self.environment))
             .unwrap_or(Value::Null);
-        let query = self.search.read(cx).value().to_lowercase();
+        let query = self.search.read(cx).value().trim().to_lowercase();
         let mut rows = config["keybindings"]
             .as_array()
             .into_iter()
             .flatten()
             .map(binding_row)
+            .filter(|row| {
+                let label = command_label(row["command"].as_str().unwrap_or_default());
+                query.is_empty() || format!("{label} {row}").to_lowercase().contains(&query)
+            })
             .collect::<Vec<_>>();
-        rows.sort_by(|a, b| a["command"].as_str().cmp(&b["command"].as_str()));
-        v_flex()
-            .when_some(self.error.clone(), |view, error| {
-                view.child(
-                    div()
-                        .id("settings-error")
-                        .role(accesskit::Role::Alert)
-                        .text_color(cx.theme().danger)
-                        .child(error),
-                )
-            })
-            .gap_2()
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        Input::new(&self.search)
-                            .role(accesskit::Role::SearchInput)
-                            .aria_label("Search keybindings")
-                            .flex_1(),
-                    )
-                    .child(
-                        Button::new("add-keybinding")
-                            .label("Add keybinding")
-                            .outline()
-                            .on_click(
-                                cx.listener(|view, _, window, cx| view.edit(None, window, cx)),
-                            ),
-                    ),
+        rows.sort_by_key(|row| {
+            (
+                command_order(row["command"].as_str().unwrap_or_default()),
+                row["key"].as_str().unwrap_or_default().to_string(),
             )
-            .when(self.adding, |view| {
-                view.child(
-                    v_flex()
-                        .id("keybinding-editor")
-                        .role(accesskit::Role::Group)
-                        .aria_label("Edit keybinding")
-                        .gap_2()
-                        .p_3()
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .child(Input::new(&self.command).aria_label("Command"))
-                        .child(Input::new(&self.shortcut).aria_label("Shortcut"))
-                        .child(Input::new(&self.condition).aria_label("When"))
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .child(
-                                    Button::new("save-binding")
-                                        .label("Save")
-                                        .disabled(self.saving)
-                                        .primary()
-                                        .on_click(cx.listener(|view, _, _, cx| view.save(cx))),
-                                )
-                                .child(
-                                    Button::new("cancel-binding")
-                                        .label("Cancel")
-                                        .ghost()
-                                        .on_click(cx.listener(|view, _, _, cx| {
-                                            view.adding = false;
-                                            cx.notify();
-                                        })),
-                                ),
-                        ),
-                )
-            })
-            .children(
-                rows.into_iter()
-                    .enumerate()
-                    .filter(|(_, row)| {
-                        query.is_empty() || row.to_string().to_lowercase().contains(&query)
-                    })
-                    .map(|(index, row)| {
-                        let edit = row.clone();
-                        let reset = default_binding(&row).filter(|default| {
-                            default["key"] != row["key"]
-                                || default["when"].as_str().unwrap_or_default()
-                                    != row["when"].as_str().unwrap_or_default()
-                        });
-                        h_flex()
-                            .id(("keybinding", index))
-                            .role(accesskit::Role::Group)
-                            .aria_label(row["command"].as_str().unwrap_or_default().to_string())
-                            .gap_2()
-                            .py_2()
-                            .border_b_1()
-                            .border_color(cx.theme().border)
-                            .child(
-                                v_flex()
-                                    .flex_1()
-                                    .child(row["command"].as_str().unwrap_or_default().to_string())
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(
-                                                row["when"]
-                                                    .as_str()
-                                                    .unwrap_or_default()
-                                                    .to_string(),
-                                            ),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .child(row["key"].as_str().unwrap_or_default().to_string()),
-                            )
-                            .child(
-                                Button::new(("edit", index))
-                                    .label("Edit")
-                                    .ghost()
-                                    .compact()
-                                    .on_click(cx.listener(move |view, _, window, cx| {
-                                        view.edit(Some(edit.clone()), window, cx)
-                                    })),
-                            )
-                            .when_some(reset, |element, reset| {
-                                element.child(
-                                    Button::new(("reset", index))
-                                        .label("Reset")
-                                        .ghost()
-                                        .compact()
-                                        .on_click(cx.listener(move |view, _, _, cx| {
-                                            view.request(
-                                                "server.upsertKeybinding",
-                                                reset.clone(),
-                                                cx,
-                                            )
-                                        })),
-                                )
-                            })
-                            .child(
-                                Button::new(("remove", index))
-                                    .label("Remove")
-                                    .ghost()
-                                    .compact()
-                                    .on_click(cx.listener(move |view, _, _, cx| {
-                                        view.request("server.removeKeybinding", target(&row), cx)
-                                    })),
-                            )
-                    }),
-            )
+        });
+        rows.dedup();
+        let config_path = config["keybindingsConfigPath"].as_str().map(str::to_string);
+        v_flex().gap_8()
+            .when_some(self.error.clone(), |view, error| view.child(div().id("settings-error").role(accesskit::Role::Alert).text_color(cx.theme().danger).child(error)))
+            .child(v_flex().gap_3().child(text("Keybindings").px_4().font_weight(FontWeight::SEMIBOLD)).child(h_flex().gap_2().px_4().py_3().rounded(px(12.)).border_1().border_color(cx.theme().border).bg(cx.theme().muted.opacity(0.25))
+                .child(Input::new(&self.search).role(accesskit::Role::SearchInput).aria_label("Search keybindings").flex_1())
+                .child(Button::new("add-keybinding").label("Add keybinding").outline().disabled(self.adding).on_click(cx.listener(|view, _, window, cx| view.edit(None, window, cx))))
+                .child(Button::new("open-keybindings").icon(gpui_kit::assets::IconName::File).accessibility_label("Open keybindings.json").outline().disabled(config_path.is_none()).on_click(cx.listener(move |view, _, _, cx| {
+                    if let Some(path) = &config_path {
+                        let editor = view.root.upgrade().map(|root| root.read(cx).settings.values.get("gpuiPreferredEditor").cloned().unwrap_or(json!("code")));
+                        if let Some(editor) = editor { view.request("shell.openInEditor", json!({"cwd":path,"editor":editor}), cx); }
+                    }
+                })))))
+            .when(self.adding, |view| view.child(v_flex().id("keybinding-editor").role(accesskit::Role::Group).aria_label("Edit keybinding").gap_2().p_3().border_1().border_color(cx.theme().border)
+                .child(Input::new(&self.command).aria_label("Command"))
+                .child(div().child(Input::new(&self.shortcut).aria_label(format!("Keybinding for {}", command_label(self.command.read(cx).value().as_ref()))))
+                    .capture_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                        if event.keystroke.key == "escape" {
+                            view.adding = false;
+                            view.recording = false;
+                        } else {
+                            let key = &event.keystroke;
+                            let mut parts = Vec::new();
+                            if key.modifiers.control { parts.push("mod"); }
+                            if key.modifiers.platform { parts.push("meta"); }
+                            if key.modifiers.alt { parts.push("alt"); }
+                            if key.modifiers.shift { parts.push("shift"); }
+                            parts.push(match key.key.as_str() { "up" => "arrowup", "down" => "arrowdown", "left" => "arrowleft", "right" => "arrowright", "space" => "space", value => value });
+                            view.shortcut.update(cx, |input, cx| input.set_value(parts.join("+"), window, cx));
+                            view.recording = false;
+                        }
+                        cx.stop_propagation();
+                        window.prevent_default();
+                        cx.notify();
+                    })))
+                .child(Input::new(&self.condition).aria_label("When expression"))
+                .child(h_flex().gap_2()
+                    .child(Button::new("save-binding").label("Save").disabled(self.saving).primary().on_click(cx.listener(|view, _, _, cx| view.save(cx))))
+                    .child(Button::new("cancel-binding").label("Cancel").ghost().on_click(cx.listener(|view, _, _, cx| { view.adding = false; cx.notify(); }))))))
+            .when(rows.is_empty(), |view| view.child(text("No keybindings match your search.").p_4()))
+            .children(["Navigation", "Threads", "Composer", "Terminal", "Preview & diff", "Appearance", "Project scripts", "Other"].into_iter().enumerate().filter_map(|(group, title)| {
+                let group_rows = rows.iter().enumerate().filter(|(_, row)| group_index(row["command"].as_str().unwrap_or_default()) == group).collect::<Vec<_>>();
+                if group_rows.is_empty() { return None; }
+                Some(v_flex().gap_3().child(text(title).px_4().font_weight(FontWeight::SEMIBOLD))
+                    .child(v_flex().rounded(px(12.)).overflow_hidden().border_1().border_color(cx.theme().border).bg(cx.theme().muted.opacity(0.25)).children(group_rows.into_iter().map(|(index, row)| {
+                        let label = command_label(row["command"].as_str().unwrap_or_default());
+                        let key = row["key"].as_str().unwrap_or_default();
+                        let when = row["when"].as_str().unwrap_or_default();
+                        let edit_key = row.clone();
+                        let edit_when = row.clone();
+                        let reset = default_binding(row).filter(|default| default["key"] != row["key"] || default["when"].as_str().unwrap_or_default() != when);
+                        let custom = reset.is_some() || default_binding(row).is_none();
+                        let remove = row.clone();
+                        h_flex().id(("keybinding", index)).gap_4().px_4().py_3().border_b_1().border_color(cx.theme().border)
+                            .child(v_flex().flex_1().min_w_0().child(text(label.clone()).text_sm()).child(h_flex().gap_1().child(text("When").text_xs().text_color(cx.theme().muted_foreground))
+                                .child(Button::new(("when", index)).child(text(if when.is_empty() { "Always".to_string() } else { when.to_string() }).text_xs().font_family(cx.theme().mono_font_family.clone())).accessibility_label(format!("Edit when clause for {label}")).ghost().compact().h(px(24.)).on_click(cx.listener(move |view, _, window, cx| { view.edit(Some(edit_when.clone()), window, cx); view.condition.update(cx, |input, cx| input.focus(window, cx)); })))))
+                            .when(custom, |view| view.child(text("Custom").text_xs()).child(Button::new(("remove", index)).label("Remove").ghost().compact().on_click(cx.listener(move |view, _, _, cx| view.request("server.removeKeybinding", target(&remove), cx)))))
+                            .when_some(reset, |view, reset| view.child(Button::new(("reset", index)).label("Reset to default").ghost().compact().on_click(cx.listener(move |view, _, _, cx| view.request("server.upsertKeybinding", reset.clone(), cx)))))
+                            .child(Button::new(("edit-key", index)).accessibility_label(format!("Edit shortcut for {label}: {}", shortcut_label(key))).ghost().child(key_pill(key, cx.theme().muted)).on_click(cx.listener(move |view, _, window, cx| { view.edit(Some(edit_key.clone()), window, cx); view.recording = true; })))
+                    }))))
+            }))
     }
 }
 
@@ -358,6 +426,9 @@ const DEFAULTS: &[(&str, &str, &str)] = &[
     ("thread.next", "mod+shift+]", ""),
     ("thread.copyReference", "mod+shift+c", "!terminalFocus"),
     ("thread.settle", "mod+shift+s", "!terminalFocus"),
+    ("thread.nextDone", "alt+o", "!terminalFocus"),
+    ("chat.previousUserMessage", "alt+p", "!terminalFocus"),
+    ("chat.nextUserMessage", "alt+n", "!terminalFocus"),
     ("thread.pin", "mod+shift+p", "!terminalFocus"),
     ("thread.undo", "mod+z", "!terminalFocus && !editableFocus"),
     ("usage.cost", "c", "usagePageOpen"),
@@ -490,8 +561,37 @@ fn default_binding(row: &Value) -> Option<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{binding_row, default_binding, when_expression};
+    use super::{
+        binding_row, command_label, default_binding, group_index, shortcut_label, when_expression,
+    };
     use serde_json::json;
+    #[test]
+    fn settings_labels_follow_the_reference_commands_and_chords() {
+        for (command, label, group) in [
+            ("workspace.focusNext", "Focus Next Workspace Area", 7),
+            (
+                "composer.sendBackground",
+                "Composer: Start in Background",
+                2,
+            ),
+            ("modelPicker.jump.3", "Model Picker: Jump: 3", 2),
+            ("usage.period.day", "Usage: Period: Past 24h", 7),
+            ("script.run_tests.run", "Run Script: Run Tests", 6),
+            ("pullRequest.copyNumber", "Pull Request: Copy Number", 1),
+        ] {
+            assert_eq!(command_label(command), label);
+            assert_eq!(group_index(command), group);
+        }
+        for (key, label) in [
+            ("mod+shift+o", "Ctrl+Shift+O"),
+            ("mod++", "Ctrl++"),
+            ("mod+shift+arrowup", "Ctrl+Shift+Up"),
+            ("f6", "F6"),
+        ] {
+            assert_eq!(shortcut_label(key), label);
+        }
+    }
+
     #[test]
     fn resolved_shortcuts_and_conditions_keep_the_original_editable_form() {
         for (shortcut, expected) in [

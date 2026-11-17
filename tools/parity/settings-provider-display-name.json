@@ -1,0 +1,92 @@
+{
+  "name": "settings-provider-display-name",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1000,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Settings"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Providers"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Providers"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Select Codex"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Codex"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "type",
+      "value": "Parity Codex"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Select Parity Codex"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Codex"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Select Codex"
+      }
+    }
+  ]
+}

@@ -441,8 +441,30 @@ pub(super) fn chart_tangents(points: &[(f32, f32)]) -> Vec<f32> {
     tangents
 }
 
+pub(super) fn percent(share: f64) -> String {
+    let value = share * 100.;
+    if value > 0. && value < 0.1 {
+        "<0.1%".into()
+    } else {
+        format!("{value:.1}%")
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unpriced_share_retains_small_positive_values_and_decimal_precision() {
+        for (share, expected) in [
+            (0., "0.0%"),
+            (0.00001, "<0.1%"),
+            (0.001, "0.1%"),
+            (0.125, "12.5%"),
+            (1., "100.0%"),
+        ] {
+            assert_eq!(super::percent(share), expected);
+        }
+    }
+
     use super::*;
 
     #[test]
