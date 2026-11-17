@@ -310,6 +310,7 @@ struct NewThreadDraft {
 
 #[derive(PartialEq)]
 struct SidebarStamp {
+    undo: Vec<(String, String, &'static str)>,
     catalog_revision: u64,
     jump_labels: Vec<Option<String>>,
     history_available: (bool, bool),
@@ -1027,6 +1028,11 @@ impl Render for Root {
             (f32::from(window.viewport_size().width) - 640.).max(208.),
         );
         let sidebar_stamp = SidebarStamp {
+            undo: self
+                .thread_undos
+                .iter()
+                .map(|entry| (entry.environment.clone(), entry.thread.clone(), entry.kind))
+                .collect(),
             catalog_revision: self.model_catalog_revision,
             jump_labels: if self.jump_hints && !self.picker_open && !self.palette_open {
                 keymap::jump_labels(&self.key_rules, &|name| self.key_context(name, window, cx))

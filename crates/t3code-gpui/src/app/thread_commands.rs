@@ -337,7 +337,6 @@ impl Root {
         self.thread_undos.push(entry);
         self.thread_undo_claimed = true;
         self.thread_undo_epoch += 1;
-        self.sidebar_pane.update(cx, |_, cx| cx.notify());
         let epoch = self.thread_undo_epoch;
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(5)).await;
@@ -345,7 +344,6 @@ impl Root {
                 if root.thread_undo_epoch == epoch {
                     root.thread_undos.clear();
                     root.thread_undo_claimed = false;
-                    root.sidebar_pane.update(cx, |_, cx| cx.notify());
                     cx.notify();
                 }
             });
@@ -365,7 +363,6 @@ impl Root {
         {
             group.push(self.thread_undos.pop().unwrap());
         }
-        self.sidebar_pane.update(cx, |_, cx| cx.notify());
         for entry in group {
             let Some(connection) = self.connection(&entry.environment) else {
                 continue;
