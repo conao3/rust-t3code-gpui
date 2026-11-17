@@ -84,6 +84,31 @@ fn select(
 }
 
 impl Root {
+    pub(super) fn set_model_favorite(
+        &mut self,
+        provider: String,
+        model: String,
+        favorite: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((environment, ..)) = self.composer_target() else {
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let runtime = self.runtime.clone();
+        self.spawn_pane(cx, async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                connection.request("server.updateSettings", json!({"patch":{"setModelFavorites":[{"provider":provider,"model":model,"favorite":favorite}]}})).await
+            }).await;
+            let _ = this.update(cx, |root, cx| {
+                root.conversation.message = result.err().map(|error| format!("Favorites not saved: {error:#}"));
+                cx.notify();
+            });
+        }).detach();
+    }
+
     pub(super) fn sync_composer_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let key = self
             .draft_project()

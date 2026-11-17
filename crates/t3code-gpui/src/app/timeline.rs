@@ -1,6 +1,8 @@
 use super::*;
 
 pub(super) struct TimelinePane {
+    pub(super) queue: Entity<composer_queue::QueuePane>,
+    pub(super) has_queue: bool,
     pub(super) views: Vec<Entity<RowView>>,
     pub(super) list: ListState,
     pub(super) minimap: Entity<super::minimap::Minimap>,
@@ -9,6 +11,7 @@ pub(super) struct TimelinePane {
 impl Render for TimelinePane {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let views = self.views.clone();
+        let queue = self.has_queue.then(|| self.queue.clone());
         div()
             .relative()
             .flex_1()
@@ -19,6 +22,13 @@ impl Render for TimelinePane {
                     views
                         .get(ix)
                         .map(|view| view.clone().into_any_element())
+                        .or_else(|| {
+                            queue.clone().filter(|_| ix == views.len()).map(|queue| {
+                                queue
+                                    .cached(StyleRefinement::default().w_full())
+                                    .into_any_element()
+                            })
+                        })
                         .unwrap_or_else(|| div().into_any_element())
                 })
                 .w_full()
@@ -56,6 +66,7 @@ impl Root {
             )
         };
         self.conversation.revision += 1;
+        let had_queue = !self.conversation.queued.is_empty();
         self.conversation.queued = queued;
         self.conversation.thread_loading = loading;
         let mut existing: HashMap<String, Entity<RowView>> = self
@@ -64,7 +75,7 @@ impl Root {
             .map(|r| r.key.clone())
             .zip(self.conversation.row_views.iter().cloned())
             .collect();
-        let old_keys: Vec<String> = self
+        let mut old_keys: Vec<String> = self
             .conversation
             .rows
             .iter()
@@ -104,31 +115,31 @@ impl Root {
                 }
             })
             .collect();
-        let appended = rows.len() >= old_keys.len()
-            && old_keys.iter().zip(&rows).all(|(old, new)| *old == new.key);
-        if appended {
-            let old = old_keys.len();
-            if rows.len() > old {
+        let mut keys: Vec<String> = rows.iter().map(|row| row.key.clone()).collect();
+        if had_queue {
+            old_keys.push("composer-queue".into());
+        }
+        if !self.conversation.queued.is_empty() {
+            keys.push("composer-queue".into());
+        }
+        let prefix = old_keys
+            .iter()
+            .zip(&keys)
+            .take_while(|(old, new)| old == new)
+            .count();
+        let suffix = old_keys[prefix..]
+            .iter()
+            .rev()
+            .zip(keys[prefix..].iter().rev())
+            .take_while(|(old, new)| old == new)
+            .count();
+        if prefix != old_keys.len() || prefix != keys.len() {
+            if rows.len() > self.conversation.rows.len() {
                 self.conversation.user_cursor = None;
-                self.conversation
-                    .list_state
-                    .splice(old..old, rows.len() - old);
             }
-        } else {
-            let prefix = old_keys
-                .iter()
-                .zip(&rows)
-                .take_while(|(old, new)| **old == new.key)
-                .count();
-            let suffix = old_keys[prefix..]
-                .iter()
-                .rev()
-                .zip(rows[prefix..].iter().rev())
-                .take_while(|(old, new)| **old == new.key)
-                .count();
             self.conversation.list_state.splice(
                 prefix..old_keys.len() - suffix,
-                rows.len() - prefix - suffix,
+                keys.len() - prefix - suffix,
             );
         }
         self.conversation.rows = rows;
@@ -173,6 +184,7 @@ impl Root {
         }
         self.conversation.timeline_pane.update(cx, |pane, cx| {
             pane.views = self.conversation.row_views.clone();
+            pane.has_queue = !self.conversation.queued.is_empty();
             pane.minimap.update(cx, |map, cx| {
                 if map.items != minimap_items {
                     map.items = minimap_items;
@@ -490,6 +502,7 @@ impl Root {
     }
 
     pub(super) fn render_thread(&self, cx: &mut Context<Self>) -> AnyElement {
+        self.sync_queue_pane(cx);
         let message = self.render_message(cx);
         let theme = cx.theme();
         let Some(_) = &self.conversation.open else {
@@ -588,12 +601,7 @@ impl Root {
                 )
             })
             .children(message)
-            .child(
-                div()
-                    .pt_6()
-                    .children(self.render_queue(cx))
-                    .child(self.render_composer(cx)),
-            )
+            .child(div().pt_6().child(self.render_composer(cx)))
             .into_any_element()
     }
 }

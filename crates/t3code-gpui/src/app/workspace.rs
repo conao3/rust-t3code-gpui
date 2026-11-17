@@ -63,16 +63,19 @@ impl Root {
         cx: &Context<Self>,
     ) -> AnyElement {
         let layout = workspace::layout(self.canvas_width, self.details_open);
-        let card_height = self.lineage_height()
-            + self.thread_extra_height()
-            + 52.
+        let card_height = if self.details_has_lineage() {
+            self.lineage_height()
+        } else {
+            0.
+        } + self.thread_extra_height()
+            + 84.
             + if self.workspace_editor().is_some() {
                 32.
             } else {
                 0.
             }
             + if self.conversation.workspace_status.is_repo() {
-                180.
+                114.
             } else {
                 0.
             }
@@ -138,6 +141,15 @@ impl Root {
             .into_any_element()
     }
 
+    fn details_has_lineage(&self) -> bool {
+        !self.lineage_data.rows.is_empty()
+            || self.lineage_data.running > 0
+            || self
+                .current()
+                .and_then(|(environment, thread)| self.thread_value(&environment, &thread))
+                .is_some_and(|thread| !thread["delegatedFrom"].is_null())
+    }
+
     fn render_thread_details(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let Some((environment, cwd)) = self.composer_cwd() else {
@@ -156,8 +168,24 @@ impl Root {
             .is_some_and(|draft| draft.workspace_strategy["type"] == "worktree")
         {
             "New worktree"
+        } else if self.conversation.draft.is_none() {
+            "Local checkout"
         } else {
             "Current checkout"
+        };
+        let workspace_label = if self.conversation.draft.is_none()
+            && self
+                .current()
+                .and_then(|(environment, thread)| self.thread_value(&environment, &thread))
+                .and_then(|thread| thread["worktreePath"].as_str().map(str::to_owned))
+                .is_some()
+        {
+            std::path::Path::new(&cwd)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(&cwd)
+        } else {
+            workspace_label
         };
         let host_accessibility_label = format!("Run context: {label}, {workspace_label}");
         let groups = self.project_groups();
@@ -179,7 +207,7 @@ impl Root {
                     .w_full()
                     .gap_2p5()
                     .child(Icon::new(gpui_kit::assets::IconName::Monitor).size(px(16.)))
-                    .child(div().flex_1().text_size(px(13.)).child(label))
+                    .child(div().flex_1().text_size(px(13.)).child(text!(label)))
                     .child(Icon::new(IconName::Folder).size(px(16.)))
                     .child(Icon::new(IconName::ChevronDown).size(px(16.))),
             )
@@ -326,22 +354,30 @@ impl Root {
             .text_size(px(13.))
             .child(
                 v_flex()
+                    .id("details-workspace-section")
+                    .role(accesskit::Role::Region)
+                    .aria_label("Workspace")
                     .px_2()
                     .pt_2()
                     .pb_2p5()
                     .child(host)
-                    .children(editor_button),
+                    .children(editor_button)
+                    .child(self.render_project_scripts(cx)),
             )
             .when(self.conversation.workspace_status.is_repo(), |card| {
                 let changes = &self.conversation.workspace_status.local["workingTree"];
                 card.child(
                     v_flex()
+                        .id("details-git-section")
+                        .role(accesskit::Role::Region)
+                        .aria_label("Version Control")
                         .px_2()
                         .pt_2()
                         .pb_2p5()
                         .border_t_1()
                         .border_color(theme.border.opacity(0.65))
                         .child(self.render_branch_control("details-branch", cx))
+                        .child(self.render_git_controls(cx))
                         .child(
                             Button::new("workspace-changes")
                                 .child(
@@ -360,19 +396,30 @@ impl Root {
                                                 .text_color(theme.muted_foreground)
                                                 .child(text!("Uncommitted")),
                                         )
-                                        .child(div().text_xs().text_color(theme.success).child(
-                                            format!(
-                                                "+{}",
-                                                changes["insertions"].as_u64().unwrap_or(0)
-                                            ),
-                                        ))
                                         .child(
-                                            div()
+                                            h_flex()
+                                                .text_xs()
+                                                .text_color(theme.success)
+                                                .child(text!("+"))
+                                                .child(text!(
+                                                    id = "changes-insertions",
+                                                    changes["insertions"]
+                                                        .as_u64()
+                                                        .unwrap_or(0)
+                                                        .to_string()
+                                                )),
+                                        )
+                                        .child(
+                                            h_flex()
                                                 .text_xs()
                                                 .text_color(theme.muted_foreground)
-                                                .child(format!(
-                                                    "-{}",
-                                                    changes["deletions"].as_u64().unwrap_or(0)
+                                                .child(text!("-"))
+                                                .child(text!(
+                                                    id = "changes-deletions",
+                                                    changes["deletions"]
+                                                        .as_u64()
+                                                        .unwrap_or(0)
+                                                        .to_string()
                                                 )),
                                         ),
                                 )
@@ -381,12 +428,15 @@ impl Root {
                                 .h(px(32.))
                                 .px_2p5()
                                 .rounded(px(8.))
-                                .accessibility_label("Open changes")
+                                .accessibility_label(format!(
+                                    "Changes Uncommitted +{} -{}",
+                                    changes["insertions"].as_u64().unwrap_or(0),
+                                    changes["deletions"].as_u64().unwrap_or(0)
+                                ))
                                 .on_click(
                                     self.pane_listener(cx, |root, _, _, cx| root.toggle_diff(cx)),
                                 ),
-                        )
-                        .child(self.render_git_controls(cx)),
+                        ),
                 )
             })
             .when_some(
@@ -405,7 +455,9 @@ impl Root {
                 },
             )
             .child(self.render_thread_pull_requests(cx))
-            .child(self.render_lineage(cx))
+            .when(self.details_has_lineage(), |card| {
+                card.child(self.render_lineage(cx))
+            })
             .child(self.render_thread_usage(cx))
             .into_any_element()
     }
@@ -443,32 +495,70 @@ impl Root {
             .or_else(|| self.conversation.workspace_status.branch())
             .unwrap_or("Select branch")
             .to_string();
-        let button = Button::new(id)
-            .child(
-                h_flex()
-                    .when(id == "details-branch", |row| row.w_full())
-                    .gap(px(if id == "details-branch" { 10. } else { 6. }))
-                    .child(
-                        Icon::new(gpui_kit::assets::IconName::GitBranch)
-                            .size(px(if id == "details-branch" { 16. } else { 12. })),
-                    )
-                    .child(div().flex_1().truncate().child(branch)),
-            )
-            .ghost()
-            .when(id == "details-branch", |button| button.w_full())
-            .h(px(if id == "details-branch" { 32. } else { 24. }))
-            .px(px(if id == "details-branch" { 10. } else { 7. }))
-            .when(id != "details-branch", |button| {
-                button
-                    .text_size(px(12.))
-                    .text_color(cx.theme().muted_foreground)
-            })
-            .rounded(px(8.))
-            .accessibility_label("Select branch")
-            .role(accesskit::Role::ComboBox)
-            .on_click(self.pane_listener(cx, move |root, _, window, cx| {
-                root.open_branch_picker(id, window, cx)
-            }));
+        let branch = if let Some(draft) = self
+            .conversation
+            .draft
+            .as_ref()
+            .filter(|draft| draft.workspace_strategy["type"] == "worktree")
+        {
+            if draft.workspace_strategy["startFromOrigin"] == true {
+                format!("From {branch} (remote)")
+            } else {
+                format!("From {branch}")
+            }
+        } else {
+            branch
+        };
+        let (head, tail) = split_branch_label(&branch);
+        let accessible_label = if tail.is_empty() {
+            branch.clone()
+        } else {
+            format!("{head} {tail}")
+        };
+        let button =
+            Button::new(id)
+                .child(
+                    h_flex()
+                        .when(id == "details-branch", |row| row.w_full())
+                        .gap(px(if id == "details-branch" { 10. } else { 6. }))
+                        .child(
+                            Icon::new(gpui_kit::assets::IconName::GitBranch)
+                                .size(px(if id == "details-branch" { 16. } else { 12. })),
+                        )
+                        .child(
+                            h_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .child(div().truncate().child(text!(
+                                    id = SharedString::from(format!("{id}-label")),
+                                    head
+                                )))
+                                .when(!tail.is_empty(), |row| {
+                                    row.child(div().flex_shrink_0().child(text!(
+                                        id = SharedString::from(format!("{id}-tail")),
+                                        tail
+                                    )))
+                                }),
+                        )
+                        .when(id == "details-branch", |row| {
+                            row.child(Icon::new(IconName::ChevronDown).size(px(12.)))
+                        }),
+                )
+                .ghost()
+                .when(id == "details-branch", |button| button.w_full())
+                .h(px(if id == "details-branch" { 32. } else { 24. }))
+                .px(px(if id == "details-branch" { 10. } else { 7. }))
+                .when(id != "details-branch", |button| {
+                    button
+                        .text_size(px(12.))
+                        .text_color(cx.theme().muted_foreground)
+                })
+                .rounded(px(8.))
+                .accessibility_label(accessible_label)
+                .role(accesskit::Role::ComboBox)
+                .on_click(self.pane_listener(cx, move |root, _, window, cx| {
+                    root.open_branch_picker(id, window, cx)
+                }));
         let mut popup = gpui_kit::base::Popup::new(id, button)
             .anchor(if id == "details-branch" {
                 Anchor::TopRight
@@ -748,7 +838,7 @@ impl Root {
             "mode" => {
                 if let Some(draft) = self.conversation.draft.as_mut() {
                     draft.workspace_strategy = if action.value.as_str() == Some("worktree") {
-                        json!({"type":"worktree","baseRef":self.conversation.workspace_status.branch().unwrap_or("HEAD"),"startFromOrigin":false})
+                        json!({"type":"worktree","baseRef":self.conversation.workspace_status.branch().unwrap_or("HEAD"),"startFromOrigin":true})
                     } else {
                         json!({"type":"root"})
                     };
@@ -901,4 +991,32 @@ impl Root {
             });
         }).detach();
     }
+}
+
+fn split_branch_label(value: &str) -> (String, String) {
+    let chars: Vec<char> = value.chars().collect();
+    let mut keep = 10;
+    if let Some(slash) = chars.iter().rposition(|c| *c == '/') {
+        let segment = chars.len() - slash - 1;
+        if slash > 0 && segment > 0 && segment <= 16 {
+            keep = segment;
+        }
+    }
+    if chars.len() <= keep + 4 {
+        return (value.into(), String::new());
+    }
+    let mut cut = chars.len() - keep;
+    let starts_word = |index: usize| matches!(chars[index - 1], '-' | '_' | '.' | '/');
+    if !starts_word(cut)
+        && let Some(index) = (cut + 1..=chars.len() - 4)
+            .find(|index| starts_word(*index))
+            .or_else(|| {
+                (5.max(chars.len().saturating_sub(16))..cut)
+                    .rev()
+                    .find(|index| starts_word(*index))
+            })
+    {
+        cut = index;
+    }
+    (chars[..cut].iter().collect(), chars[cut..].iter().collect())
 }

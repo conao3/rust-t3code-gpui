@@ -333,11 +333,17 @@ impl Root {
         true
     }
 
-    pub(super) fn render_prompt_stash(&self, cx: &Context<Self>) -> Option<AnyElement> {
-        if !self.conversation.prompts.open && self.conversation.prompts.store.entries.is_empty() {
+    pub(super) fn render_prompt_stash(
+        &self,
+        drawer: bool,
+        cx: &Context<Self>,
+    ) -> Option<AnyElement> {
+        if (drawer && !self.conversation.prompts.open)
+            || (!drawer && self.conversation.prompts.store.entries.is_empty())
+        {
             return None;
         }
-        let open = self.conversation.prompts.open;
+        let open = drawer;
         let count = self.conversation.prompts.store.entries.len();
         Some(
             v_flex()
@@ -353,7 +359,7 @@ impl Root {
                         .rounded_md()
                         .border_1()
                         .border_color(cx.theme().border)
-                        .bg(crate::appearance::composer(cx))
+                        .bg(crate::appearance::composer(cx).opacity(1.))
                         .shadow_md()
                 })
                 .gap_1()
@@ -367,9 +373,9 @@ impl Root {
                                 .child(
                                     Icon::new(gpui_kit::assets::IconName::Bookmark).size(px(12.)),
                                 )
-                                .child("Stash")
+                                .child(text!("Stash"))
                                 .child(div().flex_1())
-                                .child(count.to_string()),
+                                .child(text!(count.to_string())),
                         )
                         .small()
                         .accessibility_label(if open {
@@ -423,10 +429,10 @@ impl Root {
                                                             Icon::new(IconName::FileText)
                                                                 .size(px(12.)),
                                                         )
-                                                        .child(snippet.clone())
+                                                        .child(text!(id = ("stash-snippet", index), snippet.clone()))
                                                         .child(div().flex_1())
                                                         .children(self.conversation.prompts.thumbnails.get(&entry.id).into_iter().flatten().take(3).map(|image| img(image.clone()).size(px(16.)).object_fit(ObjectFit::Cover).rounded_sm()))
-                                                        .child(div().text_color(cx.theme().muted_foreground).child(prompt_store::relative_time(entry.created_at, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("current time").as_secs()))),
+                                                        .child(div().text_color(cx.theme().muted_foreground).child(text!(id = ("stash-time", index), prompt_store::relative_time(entry.created_at, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("current time").as_secs())))),
                                                 )
                                                 .small()
                                                 .accessibility_label(format!(

@@ -26,7 +26,7 @@
       },
       "native": {
         "role": "list item",
-        "name": "GPT-6-Luna"
+        "name": "GPT-6-Luna , Codex Add to favorites Ctrl+1"
       }
     },
     {
@@ -36,9 +36,10 @@
     {
       "action": "checkpoint",
       "selector": {
-        "role": "textbox",
-        "name": "Message New thread"
-      }
+        "role": "dialog",
+        "name": ""
+      },
+      "count": 0
     }
   ]
 }

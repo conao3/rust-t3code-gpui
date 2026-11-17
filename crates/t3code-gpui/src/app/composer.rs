@@ -251,28 +251,32 @@ impl Root {
         let Some((environment, selected, ..)) = self.composer_target() else {
             return true;
         };
-        let Some((_, instances)) = self.model_catalogs.get(&environment) else {
+        let Some((config, instances)) = self.model_catalogs.get(&environment) else {
             return true;
         };
-        if instances.is_empty() {
-            return true;
-        }
         let current = self.conversation.picker_instance.as_deref().or_else(|| {
             selected
                 .as_ref()
                 .and_then(|model| model.get("instanceId")?.as_str())
         });
-        let at = instances
+        let tabs: Vec<&str> = std::iter::once("favorites")
+            .chain(
+                instances
+                    .iter()
+                    .map(|instance| instance.instance_id.as_str()),
+            )
+            .collect();
+        let at = tabs
             .iter()
-            .position(|instance| Some(instance.instance_id.as_str()) == current)
+            .position(|tab| Some(*tab) == current)
             .unwrap_or(0);
         if let Some(forward) = direction {
             let at = if forward {
-                (at + 1) % instances.len()
+                (at + 1) % tabs.len()
             } else {
-                (at + instances.len() - 1) % instances.len()
+                (at + tabs.len() - 1) % tabs.len()
             };
-            self.conversation.picker_instance = Some(instances[at].instance_id.clone());
+            self.conversation.picker_instance = Some(tabs[at].to_string());
             self.conversation
                 .model_picker
                 .update(cx, |state, cx| state.set_query("", window, cx));
@@ -284,14 +288,27 @@ impl Root {
                 .read(cx)
                 .query(cx)
                 .to_lowercase();
-            let instance = &instances[at];
-            if let Some(model) = instance
-                .models
+            let favorites = config["settings"]["favorites"].as_array();
+            let choice = instances
                 .iter()
-                .filter(|model| model.full_name.to_lowercase().contains(&query))
+                .flat_map(|instance| instance.models.iter().map(move |model| (instance, model)))
+                .filter(|(instance, model)| {
+                    if tabs[at] == "favorites" {
+                        favorites.is_some_and(|items| {
+                            items.iter().any(|item| {
+                                item["provider"] == instance.instance_id
+                                    && item["model"] == model.slug
+                            })
+                        })
+                    } else {
+                        instance.instance_id == tabs[at]
+                    }
+                })
+                .filter(|(_, model)| model.full_name.to_lowercase().contains(&query))
                 .nth(index)
-            {
-                self.pick_model(instance.instance_id.clone(), model.slug.clone(), cx);
+                .map(|(instance, model)| (instance.instance_id.clone(), model.slug.clone()));
+            if let Some((instance, model)) = choice {
+                self.pick_model(instance, model, cx);
                 self.conversation
                     .composer
                     .update(cx, |state, cx| state.focus(window, cx));
@@ -506,6 +523,7 @@ impl Root {
             .trim()
             .to_string();
         if text.is_empty() && self.conversation.attachments.is_empty() {
+            self.resume_composer(window, cx);
             return;
         }
         let Some(connection) = self.connection(&environment) else {
@@ -1150,6 +1168,10 @@ impl Root {
     }
 
     pub(super) fn render_queue(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        static TRACE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *TRACE.get_or_init(|| std::env::var_os("T3CODE_GPUI_TRACE_CONVERSATIONS").is_some()) {
+            eprintln!("T3CODE_GPUI_QUEUE_RENDER {}", self.conversation.id);
+        }
         let count = self.conversation.queued.len();
         if count == 0 {
             return None;
@@ -1178,6 +1200,24 @@ impl Root {
                         .items_end()
                         .gap_3()
                         .pb_4()
+                        .child(
+                            div()
+                                .id("queue-live-summary")
+                                .role(accesskit::Role::Status)
+                                .absolute()
+                                .child(
+                                    div()
+                                        .id("queue-live-count")
+                                        .role(accesskit::Role::Label)
+                                        .aria_value(count.to_string()),
+                                )
+                                .child(
+                                    div()
+                                        .id("queue-live-label")
+                                        .role(accesskit::Role::Label)
+                                        .aria_value("queued"),
+                                ),
+                        )
                         .children(
                             self.conversation
                                 .queued
@@ -1195,6 +1235,7 @@ impl Root {
                                         .is_some_and(|edit| edit.run_id == queued.run_id);
                                     v_flex()
                                         .id(("queued-message", i))
+                                        .group("queued-message")
                                         .role(accesskit::Role::ListItem)
                                         .aria_label(format!(
                                             "Queued message {} of {count}, not sent",
@@ -1222,7 +1263,10 @@ impl Root {
                                                 } else {
                                                     theme.muted_foreground
                                                 })
-                                                .child(queued.text.clone()),
+                                                .child(text!(
+                                                    id = ("queued-text", i),
+                                                    queued.text.clone()
+                                                )),
                                         )
                                         .child(
                                             h_flex()
@@ -1230,6 +1274,32 @@ impl Root {
                                                 .pr_1()
                                                 .text_xs()
                                                 .text_color(theme.muted_foreground)
+                                                .when_some(
+                                                    queued.created_at.as_deref().map(|time| {
+                                                        crate::timestamp::display(time, cx)
+                                                    }),
+                                                    |row, (timestamp, tooltip)| {
+                                                        row.child(
+                                                            div()
+                                                                .id(("queued-timestamp", i))
+                                                                .px_1()
+                                                                .mr_1()
+                                                                .opacity(0.)
+                                                                .group_hover(
+                                                                    "queued-message",
+                                                                    |time| time.opacity(1.),
+                                                                )
+                                                                .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(tooltip.clone()).build(window, cx))
+                                                                .child(text!(
+                                                                    id = (
+                                                                        "queued-timestamp-label",
+                                                                        i
+                                                                    ),
+                                                                    timestamp
+                                                                )),
+                                                        )
+                                                    },
+                                                )
                                                 .when(!editing, |row| {
                                                     row.child(
                                                         Button::new(("queue-steer", i))
@@ -1250,7 +1320,10 @@ impl Root {
                                                     )
                                                 })
                                                 .when(editing, |row| {
-                                                    row.child("Editing in the composer")
+                                                    row.child(text!(
+                                                        id = ("queue-editing-label", i),
+                                                        "Editing in the composer"
+                                                    ))
                                                 })
                                                 .child(
                                                     Button::new(("queue-edit", i))
@@ -1260,7 +1333,10 @@ impl Root {
                                                             )
                                                         })
                                                         .when(editing, |button| {
-                                                            button.label("Cancel")
+                                                            button.child(text!(
+                                                                id = ("queue-cancel-label", i),
+                                                                "Cancel"
+                                                            ))
                                                         })
                                                         .ghost()
                                                         .compact()
@@ -1461,6 +1537,30 @@ impl Root {
                 .rounded(px(16.))
                 .danger()
                 .on_click(self.pane_listener(cx, |root, _, _, cx| root.stop(cx)))
+        } else if self
+            .conversation
+            .composer
+            .read(cx)
+            .value()
+            .trim()
+            .is_empty()
+            && self.conversation.attachments.is_empty()
+            && self.can_resume_composer()
+        {
+            Button::new("resume-thread")
+                .icon(gpui_kit::assets::IconName::Play)
+                .accessibility_label("Resume thread")
+                .tooltip("Resume thread")
+                .size(px(32.))
+                .rounded(px(16.))
+                .primary()
+                .disabled(
+                    self.composer_key()
+                        .is_some_and(|key| self.conversation.composer_sends.contains(&key)),
+                )
+                .on_click(
+                    self.pane_listener(cx, |root, _, window, cx| root.resume_composer(window, cx)),
+                )
         } else {
             Button::new("send")
                 .icon(Icon::empty().path(match self.composer_delivery(false) {
@@ -1573,7 +1673,7 @@ impl Root {
                             .map(|model| model.full_name.clone())
                             .unwrap_or_else(|| "Pick a model".into()),
                     )
-                    .label(label)
+                    .child(text!(id = "model-trigger-label", label))
                     .text_color(theme.foreground.opacity(0.8))
                     .icon(
                         Icon::empty()
@@ -1614,19 +1714,107 @@ impl Root {
                 .iter()
                 .find(|i| Some(&i.instance_id) == self.conversation.picker_instance.as_ref())
                 .or(selected_instance);
-            let group = CommandGroup::new().items(shown.into_iter().flat_map(|instance| {
-                instance.models.iter().map(|model| {
-                    CommandItem::new()
-                        .label(model.full_name.clone())
-                        .checked(
-                            instance.instance_id == current_instance && model.slug == current_slug,
-                        )
-                        .action(Box::new(PickModelAction {
-                            instance_id: instance.instance_id.clone(),
-                            slug: model.slug.clone(),
-                        }))
-                })
-            }));
+            let favorites = config.and_then(|config| config["settings"]["favorites"].as_array());
+            let favorite_tab = self.conversation.picker_instance.as_deref() == Some("favorites");
+            let mut group = CommandGroup::new();
+            let mut index = 0usize;
+            for instance in instances {
+                for model in &instance.models {
+                    let favorite = favorites.is_some_and(|favorites| {
+                        favorites.iter().any(|favorite| {
+                            favorite["provider"] == instance.instance_id
+                                && favorite["model"] == model.slug
+                        })
+                    });
+                    if if favorite_tab {
+                        !favorite
+                    } else {
+                        !shown.is_some_and(|shown| shown.instance_id == instance.instance_id)
+                    } {
+                        continue;
+                    }
+                    let name = model.full_name.clone();
+                    let provider = instance.name.clone();
+                    let favorite_label = if favorite {
+                        "Remove from favorites"
+                    } else {
+                        "Add to favorites"
+                    };
+                    let jump = if index < 9 {
+                        format!("Ctrl+{}", index + 1)
+                    } else {
+                        String::new()
+                    };
+                    let label = format!("{name} , {provider} {favorite_label} {jump}");
+                    let instance_id = instance.instance_id.clone();
+                    let slug = model.slug.clone();
+                    let root = self.pane_root(cx);
+                    let icon = match instance.driver.as_str() {
+                        "codex" => "icons/t3-openai.svg",
+                        "claudeAgent" => "icons/t3-claude.svg",
+                        _ => "icons/bot.svg",
+                    };
+                    group = group.item(
+                        CommandItem::new()
+                            .label(label)
+                            .checked(
+                                instance.instance_id == current_instance
+                                    && model.slug == current_slug,
+                            )
+                            .action(Box::new(PickModelAction {
+                                instance_id: instance_id.clone(),
+                                slug: slug.clone(),
+                            }))
+                            .child(move |_, _| {
+                                let root = root.clone();
+                                let instance_id = instance_id.clone();
+                                let slug = slug.clone();
+                                h_flex()
+                                    .w_full()
+                                    .gap_2()
+                                    .child(Icon::empty().path(icon).size(px(16.)))
+                                    .child(text!(id = ("picker-model-label", index), name.clone()))
+                                    .child(
+                                        div()
+                                            .id(("picker-provider-description", index))
+                                            .role(accesskit::Role::Label)
+                                            .aria_value(provider.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .id(("picker-provider-separator", index))
+                                            .role(accesskit::Role::Label)
+                                            .aria_value(","),
+                                    )
+                                    .child(div().flex_1())
+                                    .child(
+                                        Button::new(("model-favorite", index))
+                                            .icon(gpui_kit::assets::IconName::Star)
+                                            .accessibility_label(favorite_label)
+                                            .ghost()
+                                            .size(px(24.))
+                                            .selected(favorite)
+                                            .on_click(move |_, _, cx| {
+                                                cx.stop_propagation();
+                                                let _ = root.update(cx, |root, cx| {
+                                                    root.set_model_favorite(
+                                                        instance_id.clone(),
+                                                        slug.clone(),
+                                                        !favorite,
+                                                        cx,
+                                                    )
+                                                });
+                                            }),
+                                    )
+                                    .child(div().text_xs().child(text!(
+                                        id = ("picker-model-shortcut", index),
+                                        jump.clone()
+                                    )))
+                            }),
+                    );
+                    index += 1;
+                }
+            }
             let interaction_mode = target
                 .as_ref()
                 .map(|(_, _, _, mode)| mode.as_str())
@@ -1687,7 +1875,12 @@ impl Root {
                             .px_1()
                             .text_sm()
                             .text_color(theme.muted_foreground)
-                            .child(descriptor["label"].as_str().unwrap_or("Effort").to_string()),
+                            .child(text!(
+                                descriptor["label"].as_str().unwrap_or("Effort").to_string()
+                            ))
+                            .child(div().text_xs().child(text!(
+                                selected_model.expect("reasoning model").name.clone()
+                            ))),
                     )
                     .children(
                         descriptor
@@ -1698,6 +1891,9 @@ impl Root {
                             .map(|option| {
                                 let value = option.get("id").cloned().unwrap_or(Value::Null);
                                 let checked = Some(&value) == selected.as_ref();
+                                let is_default = descriptor["defaultValue"] == value;
+                                let label =
+                                    option["label"].as_str().unwrap_or_default().to_string();
                                 let tracked = Some(&value) == focused;
                                 let choices = options.clone();
                                 let key_id = id.clone();
@@ -1706,9 +1902,11 @@ impl Root {
                                 h_flex()
                                     .id(SharedString::from(format!("reasoning-{value}")))
                                     .role(accesskit::Role::RadioButton)
-                                    .aria_label(
-                                        option["label"].as_str().unwrap_or_default().to_string(),
-                                    )
+                                    .aria_label(if is_default {
+                                        format!("{label} Default")
+                                    } else {
+                                        label.clone()
+                                    })
                                     .aria_toggled(if checked {
                                         accesskit::Toggled::True
                                     } else {
@@ -1774,14 +1972,16 @@ impl Root {
                                     .text_sm()
                                     .cursor_pointer()
                                     .hover(|row| row.bg(theme.list_hover))
-                                    .child(
-                                        option
-                                            .get("label")
-                                            .and_then(Value::as_str)
-                                            .unwrap_or_default()
-                                            .to_string(),
-                                    )
+                                    .child(text!(label))
                                     .child(div().flex_1())
+                                    .when(is_default, |row| {
+                                        row.child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(text!("Default")),
+                                        )
+                                    })
                                     .when(checked, |row| {
                                         row.child(Icon::new(IconName::Check).size(px(14.)))
                                     })
@@ -1793,6 +1993,7 @@ impl Root {
             });
             v_flex()
                 .id("model-picker")
+                .role(accesskit::Role::Dialog)
                 .absolute()
                 .bottom(px(40.))
                 .right(px(48.))
@@ -1812,12 +2013,35 @@ impl Root {
                         .items_start()
                         .child(
                             v_flex()
+                                .id("model-picker-providers")
+                                .role(accesskit::Role::Toolbar)
+                                .aria_label("Providers")
                                 .w(px(44.))
                                 .h_full()
                                 .border_r_1()
                                 .border_color(theme.border)
                                 .py_2()
                                 .gap_1()
+                                .child(
+                                    Button::new("model-picker-favorites")
+                                        .icon(gpui_kit::assets::IconName::Star)
+                                        .accessibility_label("Favorites")
+                                        .ghost()
+                                        .size(px(36.))
+                                        .selected(favorite_tab)
+                                        .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                                            root.conversation.picker_instance =
+                                                Some("favorites".into());
+                                            root.conversation.model_picker.update(
+                                                cx,
+                                                |state, cx| {
+                                                    state.set_query("", window, cx);
+                                                    state.focus(window, cx);
+                                                },
+                                            );
+                                            cx.notify();
+                                        })),
+                                )
                                 .children(instances.iter().map(|instance| {
                                     let id = instance.instance_id.clone();
                                     Button::new(SharedString::from(format!("picker-provider-{id}")))
@@ -1829,6 +2053,7 @@ impl Root {
                                         .ghost()
                                         .size(px(36.))
                                         .tooltip(instance.name.clone())
+                                        .accessibility_label(instance.name.clone())
                                         .selected(shown.is_some_and(|i| i.instance_id == id))
                                         .on_click(self.pane_listener(
                                             cx,
@@ -1867,7 +2092,7 @@ impl Root {
                                 .p_2()
                                 .text_sm()
                                 .text_color(theme.muted_foreground)
-                                .child(div().h(px(34.)).px_1().child("Effort"))
+                                .child(div().h(px(34.)).px_1().child(text!("Effort")))
                                 .child(
                                     div()
                                         .id("no-effort-levels")
@@ -1875,7 +2100,7 @@ impl Root {
                                         .aria_label("No effort levels")
                                         .h(px(32.))
                                         .px_2()
-                                        .child("No effort levels"),
+                                        .child(text!("No effort levels")),
                                 )
                         })),
                 )
@@ -2054,7 +2279,7 @@ impl Root {
                 h_flex()
                     .gap(px(6.))
                     .child(Icon::new(icon).size(px(12.)))
-                    .child(div().text_size(px(12.)).child(runtime_label)),
+                    .child(div().text_size(px(12.)).child(text!(runtime_label))),
             )
             .accessibility_label(format!("Permissions: {runtime_label}"))
             .tooltip(format!("Permissions: {runtime_label}. {description}"))
@@ -2090,6 +2315,8 @@ impl Root {
             .filter(|c| !c.suggestions.is_empty())
             .map(|c| {
                 v_flex()
+                    .id("composer-completions")
+                    .role(accesskit::Role::ListBox)
                     .mx_3()
                     .mt_2()
                     .p_1()
@@ -2097,22 +2324,47 @@ impl Root {
                     .border_1()
                     .border_color(theme.border)
                     .children(c.suggestions.iter().take(8).enumerate().map(|(i, s)| {
+                        let label = if c.trigger.kind == completion::TriggerKind::Path {
+                            s.label.trim_start_matches('@').to_string()
+                        } else {
+                            s.label.clone()
+                        };
                         h_flex()
+                            .id(("composer-completion", i))
+                            .role(accesskit::Role::ListBoxOption)
+                            .aria_label(label.clone())
+                            .cursor_pointer()
+                            .on_click(self.pane_listener(cx, move |root, _, window, cx| {
+                                if let Some(completion) = root.conversation.completion.as_mut() {
+                                    completion.selected = i;
+                                }
+                                root.conversation.composer.update(cx, |state, cx| {
+                                    state.focus(window, cx);
+                                });
+                                root.completion_key(
+                                    &Keystroke::parse("enter").expect("completion key"),
+                                    window,
+                                    cx,
+                                );
+                                cx.stop_propagation();
+                            }))
                             .px_2()
                             .py_0p5()
                             .gap_3()
                             .rounded_sm()
                             .when(i == c.selected, |row| row.bg(theme.list_active))
-                            .child(div().text_sm().child(s.label.clone()))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_xs()
-                                    .text_color(theme.muted_foreground)
-                                    .child(s.detail.clone()),
-                            )
+                            .child(div().text_sm().child(text!(label)))
+                            .when(c.trigger.kind != completion::TriggerKind::Path, |row| {
+                                row.child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(text!(s.detail.clone())),
+                                )
+                            })
                     }))
             });
         let chips = (!self.conversation.attachments.is_empty()).then(|| {
@@ -2138,9 +2390,12 @@ impl Root {
             )
         });
         let content = v_flex()
+            .id("composer-input")
+            .role(accesskit::Role::Region)
+            .aria_label("Message input")
             .children(self.render_queue_attachments(cx))
             .children(self.render_force_stop(cx))
-            .children(self.render_prompt_stash(cx))
+            .children(self.render_prompt_stash(false, cx))
             .relative()
             .w_full()
             .max_w(px(736.))
@@ -2154,10 +2409,22 @@ impl Root {
                     root.attach_paths(paths, cx)
                 }),
             )
+            .when(
+                self.conversation.composer.read(cx).value().is_empty(),
+                |content| {
+                    content.child(
+                        div()
+                            .id("composer-placeholder-text")
+                            .role(accesskit::Role::Label)
+                            .aria_value("Ask anything. @ files, $ skills, / commands")
+                            .absolute(),
+                    )
+                },
+            )
             .children(suggestions)
             .children(chips)
             .child(
-                h_flex().px_1p5().pt_3().pb_5().gap_2().items_end().child(
+                h_flex().px_1p5().pt_2().pb_6().gap_2().items_end().child(
                     div()
                         .flex_1()
                         .text_size(px(self.settings.font_size_prompt))
@@ -2188,13 +2455,17 @@ impl Root {
             })
             .into_any_element();
         h_flex()
-            .id("composer-input")
-            .role(accesskit::Role::Region)
-            .aria_label("Message input")
             .w_full()
             .px_4()
             .justify_center()
-            .child(content)
+            .child(
+                v_flex()
+                    .relative()
+                    .w_full()
+                    .max_w(px(736.))
+                    .child(content)
+                    .children(self.render_prompt_stash(true, cx)),
+            )
             .into_any_element()
     }
 
@@ -2228,7 +2499,11 @@ impl Root {
                     .text_size(px(if scratch { 14. } else { 30. }))
                     .line_height(px(if scratch { 24. } else { 36. }))
                     .font_weight(FontWeight::MEDIUM)
-                    .child(title.clone()),
+                    .child(if scratch {
+                        div().child(title.clone()).into_any_element()
+                    } else {
+                        DraftHeadingText(title.clone().into()).into_any_element()
+                    }),
             )
             .accessibility_label(title)
             .role(accesskit::Role::ComboBox)
@@ -2262,18 +2537,23 @@ impl Root {
             .text_size(px(30.))
             .line_height(px(36.))
             .child(if scratch {
-                "What should we work on?"
+                div().child(DraftHeadingText("What should we work on?".into()))
             } else if selected.is_some() {
-                "What should we build in"
+                h_flex()
+                    .gap(px(7.))
+                    .child(DraftHeadingText("What should we build".into()))
+                    .child(DraftHeadingText("in".into()))
             } else {
-                ""
+                div()
             })
             .when(!scratch, |heading| {
                 heading.child(
                     h_flex()
                         .items_center()
                         .child(project.take().expect("project selector"))
-                        .child(if selected.is_some() { "?" } else { " to start" }),
+                        .child(DraftHeadingText(
+                            if selected.is_some() { "?" } else { " to start" }.into(),
+                        )),
                 )
             });
         let heading = v_flex().items_center().child(heading).when(
@@ -2313,6 +2593,11 @@ impl Root {
             .child(
                 v_flex()
                     .relative()
+                    .when(self.pane_layout.ids().len() == 1, |body| body.top(px(-18.)))
+                    .when(
+                        !self.conversation.prompts.store.entries.is_empty(),
+                        |body| body.pt_8(),
+                    )
                     .w_full()
                     .child(
                         div()
@@ -2325,7 +2610,7 @@ impl Root {
                                 0.
                             }))
                             .px_4()
-                            .children((!self.conversation.prompts.open).then_some(heading)),
+                            .child(heading),
                     )
                     .children(self.render_message(cx))
                     .child(self.render_composer(cx))
@@ -2398,5 +2683,60 @@ mod send_tests {
                 "{case}"
             );
         }
+    }
+}
+
+#[derive(IntoElement)]
+struct DraftHeadingText(SharedString);
+
+impl RenderOnce for DraftHeadingText {
+    fn render(self, window: &mut Window, _: &mut App) -> impl IntoElement {
+        let style = window.text_style();
+        let font_size = style.font_size.to_pixels(window.rem_size());
+        let line_height = style.line_height_in_pixels(window.rem_size());
+        let mut line = window.text_system().shape_line(
+            self.0.clone(),
+            font_size,
+            &[style.to_run(self.0.len())],
+            None,
+        );
+        let spacing = font_size * -0.025;
+        let mut runs = line.runs.clone();
+        for run in &mut runs {
+            for glyph in &mut run.glyphs {
+                glyph.position.x += spacing * self.0[..glyph.index].chars().count() as f32;
+            }
+        }
+        let width = line.width + spacing * self.0.chars().count() as f32;
+        *line = Arc::new(LineLayout {
+            font_size: line.font_size,
+            width,
+            ascent: line.ascent,
+            descent: line.descent,
+            runs,
+            len: line.len(),
+        });
+        div()
+            .id(self.0.clone())
+            .role(accesskit::Role::Label)
+            .aria_value(self.0)
+            .child(
+                canvas(
+                    move |_, _, _| line,
+                    move |bounds, line, window, cx| {
+                        line.paint(
+                            bounds.origin,
+                            line_height,
+                            TextAlign::Left,
+                            None,
+                            window,
+                            cx,
+                        )
+                        .expect("draft heading paint");
+                    },
+                )
+                .w(width)
+                .h(line_height),
+            )
     }
 }
