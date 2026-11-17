@@ -934,7 +934,8 @@ impl Root {
                                 root.settings_open = !root.settings_open;
                                 cx.notify();
                             })),
-                    ),
+                    )
+                    .children(self.render_thread_undo(cx)),
             )
     }
 }

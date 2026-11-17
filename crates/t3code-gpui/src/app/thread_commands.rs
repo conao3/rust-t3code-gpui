@@ -337,6 +337,7 @@ impl Root {
         self.thread_undos.push(entry);
         self.thread_undo_claimed = true;
         self.thread_undo_epoch += 1;
+        self.sidebar_pane.update(cx, |_, cx| cx.notify());
         let epoch = self.thread_undo_epoch;
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(5)).await;
@@ -344,6 +345,7 @@ impl Root {
                 if root.thread_undo_epoch == epoch {
                     root.thread_undos.clear();
                     root.thread_undo_claimed = false;
+                    root.sidebar_pane.update(cx, |_, cx| cx.notify());
                     cx.notify();
                 }
             });
@@ -363,6 +365,7 @@ impl Root {
         {
             group.push(self.thread_undos.pop().unwrap());
         }
+        self.sidebar_pane.update(cx, |_, cx| cx.notify());
         for entry in group {
             let Some(connection) = self.connection(&entry.environment) else {
                 continue;
@@ -440,24 +443,24 @@ impl Root {
         Some(
             h_flex()
                 .id("thread-undo-notice")
-                .absolute()
-                .bottom(px(16.))
-                .left(px(16.))
-                .w(px(300.))
-                .bg(cx.theme().popover)
-                .border_1()
-                .border_color(cx.theme().border)
-                .rounded_md()
-                .shadow_lg()
-                .px_3()
-                .py_2()
-                .gap_2()
+                .flex_1()
+                .min_w_0()
+                .h(px(24.))
+                .justify_end()
+                .overflow_hidden()
+                .text_color(crate::appearance::sidebar_muted(cx))
+                .gap_1()
                 .role(accesskit::Role::Alert)
                 .aria_label(label.clone())
-                .child(div().flex_1().text_xs().child(label))
+                .child(div().text_size(px(10.)).child(if count == 1 {
+                    format!("{},", last.kind)
+                } else {
+                    format!("{} {count},", last.kind)
+                }))
                 .child(
                     Button::new("undo-thread")
                         .label(undo_label)
+                        .text_size(px(10.))
                         .compact()
                         .ghost()
                         .on_click(cx.listener(|root, _, _, cx| root.undo_thread_action(cx))),
