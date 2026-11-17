@@ -253,6 +253,7 @@ impl Root {
             }
         });
         self.load_composer();
+        self.save_conversations();
         cx.notify();
     }
 

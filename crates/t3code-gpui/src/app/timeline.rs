@@ -43,6 +43,7 @@ impl Root {
                 state.projection.is_empty(),
             )
         };
+        self.revision += 1;
         self.queued = queued;
         self.thread_loading = loading;
         let mut existing: HashMap<String, Entity<RowView>> = self
@@ -143,6 +144,14 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some(id) = self
+            .panes
+            .iter()
+            .find_map(|(id, pane)| pane.row_views.iter().any(|row| row == view).then_some(*id))
+        {
+            self.with_conversation(id, |root| root.on_row_event(view, event, window, cx));
+            return;
+        }
         match event {
             RowEvent::MessageHover {
                 message_id,
@@ -219,7 +228,7 @@ impl Root {
                 );
                 let runtime = self.runtime.clone();
                 let view = view.clone();
-                cx.spawn(async move |this, cx| {
+                self.spawn_pane(cx, async move |this, cx| {
                     let command = json!({
                         "type": "thread.fork",
                         "createdBy": "user",
@@ -268,7 +277,7 @@ impl Root {
                     return;
                 };
                 let runtime = self.runtime.clone();
-                cx.spawn(async move |this, cx| {
+                self.spawn_pane(cx, async move |this, cx| {
                     let result = on_runtime(&runtime, async move {
                         connection
                             .implement_plan(&thread_id, &plan_id, &markdown)
@@ -302,7 +311,7 @@ impl Root {
             return;
         };
         let runtime = self.runtime.clone();
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             let result = on_runtime(&runtime, async move {
                 connection.respond(&thread_id, &request_id, &decision).await
             })
@@ -365,7 +374,7 @@ impl Root {
             .update(cx, |state, cx| state.set_value("", window, cx));
         self.stash_composer(cx);
         let runtime = self.runtime.clone();
-        cx.spawn_in(window, async move |this, cx| {
+        self.spawn_pane_in(window, cx, async move |this, cx| {
             let result = on_runtime(&runtime, async move {
                 connection.answer(&thread_id, &request_id, answers).await
             })
@@ -449,23 +458,31 @@ impl Root {
                                 .label("Previous")
                                 .compact()
                                 .outline()
-                                .on_click(cx.listener(|root, _, _, cx| root.step_find(false, cx))),
+                                .on_click(
+                                    self.pane_listener(cx, |root, _, _, cx| {
+                                        root.step_find(false, cx)
+                                    }),
+                                ),
                         )
                         .child(
                             Button::new("find-next")
                                 .label("Next")
                                 .compact()
                                 .outline()
-                                .on_click(cx.listener(|root, _, _, cx| root.step_find(true, cx))),
+                                .on_click(
+                                    self.pane_listener(cx, |root, _, _, cx| {
+                                        root.step_find(true, cx)
+                                    }),
+                                ),
                         )
                         .child(
                             Button::new("find-close")
                                 .label("Close")
                                 .compact()
                                 .outline()
-                                .on_click(
-                                    cx.listener(|root, _, window, cx| root.close_find(window, cx)),
-                                ),
+                                .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                                    root.close_find(window, cx)
+                                })),
                         ),
                 )
             })

@@ -2,11 +2,15 @@ use super::*;
 
 pub(super) struct ComposerControlsPane {
     pub(super) root: WeakEntity<Root>,
+    pub(super) pane_id: u64,
 }
 impl Render for ComposerControlsPane {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
-            .update(cx, |root, cx| root.render_composer_controls(cx))
+            .update(cx, |root, cx| {
+                root.with_conversation(self.pane_id, |root| root.render_composer_controls(cx))
+                    .unwrap_or_else(|| div().into_any_element())
+            })
             .expect("composer root is alive")
     }
 }
@@ -94,7 +98,7 @@ impl Root {
             let seq = self.completion_seq;
             let runtime = self.runtime.clone();
             let query = trigger.query.clone();
-            cx.spawn(async move |this, cx| {
+            self.spawn_pane(cx, async move |this, cx| {
                 cx.background_executor()
                     .timer(Duration::from_millis(120))
                     .await;
@@ -298,6 +302,7 @@ impl Root {
             cx.background_executor().timer(Duration::from_secs(1)).await;
             let _ = this.update(cx, |root, cx| {
                 root.drafts_save_scheduled = false;
+                root.save_conversations();
                 if let Err(error) = root.drafts.save(&root.drafts_path) {
                     root.message = Some(format!("Saving drafts failed: {error:#}"));
                     cx.notify();
@@ -338,7 +343,7 @@ impl Root {
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
         self.stash_composer(cx);
-        cx.spawn_in(window, async move |this, cx| {
+        self.spawn_pane_in(window, cx, async move |this, cx| {
             let sent = on_runtime(&runtime, {
                 let text = text.clone();
                 let pending = pending.clone();
@@ -372,7 +377,7 @@ impl Root {
             return;
         };
         let runtime = self.runtime.clone();
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             let stopped = on_runtime(
                 &runtime,
                 async move { connection.stop_thread(&thread_id).await },
@@ -548,7 +553,7 @@ impl Root {
         self.stash_composer(cx);
         let runtime = self.runtime.clone();
         let pending = std::mem::take(&mut self.attachments);
-        cx.spawn_in(window, async move |this, cx| {
+        self.spawn_pane_in(window, cx, async move |this, cx| {
             let launched = on_runtime(&runtime, {
                 let text = text.clone();
                 let pending = pending.clone();
@@ -637,7 +642,7 @@ impl Root {
         };
         let runtime = self.runtime.clone();
         let future = command(connection, thread_id);
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             if let Err(error) = on_runtime(&runtime, future).await {
                 let _ = this.update(cx, |root, cx| {
                     root.message = Some(format!("{what} failed: {error:#}"));
@@ -753,7 +758,7 @@ impl Root {
             multiple: true,
             prompt: Some("Attach files".into()),
         });
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             let result = selected.await;
             let _ = this.update(cx, |root, cx| {
                 match result {
@@ -907,7 +912,7 @@ impl Root {
                         .label("Steer now")
                         .compact()
                         .outline()
-                        .on_click(cx.listener(move |root, _, _, cx| {
+                        .on_click(self.pane_listener(cx, move |root, _, _, cx| {
                             root.steer_queued(steer_run.clone(), cx)
                         })),
                 )
@@ -916,7 +921,7 @@ impl Root {
                         .label("Cancel")
                         .compact()
                         .outline()
-                        .on_click(cx.listener(move |root, _, _, cx| {
+                        .on_click(self.pane_listener(cx, move |root, _, _, cx| {
                             root.cancel_queued(cancel_run.clone(), cx)
                         })),
                 )
@@ -990,7 +995,7 @@ impl Root {
                 .tooltip("Send")
                 .accessibility_label("Send")
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.launch(window, cx)));
+                .on_click(self.pane_listener(cx, |root, _, window, cx| root.launch(window, cx)));
         }
         let working = self.open_entry().is_some_and(|entry| {
             matches!(
@@ -1002,7 +1007,7 @@ impl Root {
             Button::new("answer")
                 .label("Answer")
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
+                .on_click(self.pane_listener(cx, |root, _, window, cx| root.send(window, cx)))
         } else if working {
             Button::new("stop")
                 .icon(Icon::empty().path("icons/t3-stop.svg"))
@@ -1011,7 +1016,7 @@ impl Root {
                 .size(px(32.))
                 .rounded(px(16.))
                 .danger()
-                .on_click(cx.listener(|root, _, _, cx| root.stop(cx)))
+                .on_click(self.pane_listener(cx, |root, _, _, cx| root.stop(cx)))
         } else {
             Button::new("send")
                 .icon(IconName::ArrowUp)
@@ -1031,7 +1036,7 @@ impl Root {
                 .size(px(32.))
                 .rounded(px(16.))
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
+                .on_click(self.pane_listener(cx, |root, _, window, cx| root.send(window, cx)))
         }
     }
 
@@ -1083,7 +1088,7 @@ impl Root {
                     .size(px(32.))
                     .tooltip("Attach files")
                     .accessibility_label("Attach files")
-                    .on_click(cx.listener(|root, _, _, cx| root.choose_attachments(cx))),
+                    .on_click(self.pane_listener(cx, |root, _, _, cx| root.choose_attachments(cx))),
             )
             .child(div().flex_1())
             .child(
@@ -1120,9 +1125,9 @@ impl Root {
                             .unwrap_or_else(|| "Choose model and permissions".into()),
                     )
                     .selected(self.picker_open)
-                    .on_click(
-                        cx.listener(|root, _, window, cx| root.toggle_model_picker(window, cx)),
-                    ),
+                    .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                        root.toggle_model_picker(window, cx)
+                    })),
             );
         let picker = self.picker_open.then(|| {
             let shown = instances
@@ -1216,7 +1221,7 @@ impl Root {
                                     .when(checked, |row| {
                                         row.child(Icon::new(IconName::Check).size(px(14.)))
                                     })
-                                    .on_click(cx.listener(move |root, _, _, cx| {
+                                    .on_click(self.pane_listener(cx, move |root, _, _, cx| {
                                         root.set_model_option(&id, value.clone(), cx)
                                     }))
                             }),
@@ -1261,14 +1266,17 @@ impl Root {
                                         .size(px(36.))
                                         .tooltip(instance.name.clone())
                                         .selected(shown.is_some_and(|i| i.instance_id == id))
-                                        .on_click(cx.listener(move |root, _, window, cx| {
-                                            root.picker_instance = Some(id.clone());
-                                            root.model_picker.update(cx, |state, cx| {
-                                                state.set_query("", window, cx);
-                                                state.focus(window, cx);
-                                            });
-                                            cx.notify();
-                                        }))
+                                        .on_click(self.pane_listener(
+                                            cx,
+                                            move |root, _, window, cx| {
+                                                root.picker_instance = Some(id.clone());
+                                                root.model_picker.update(cx, |state, cx| {
+                                                    state.set_query("", window, cx);
+                                                    state.focus(window, cx);
+                                                });
+                                                cx.notify();
+                                            },
+                                        ))
                                 })),
                         )
                         .child(
@@ -1321,13 +1329,16 @@ impl Root {
                                                 .ghost()
                                                 .compact()
                                                 .selected(checked)
-                                                .on_click(cx.listener(move |root, _, _, cx| {
-                                                    root.set_model_option(
-                                                        &id,
-                                                        Value::Bool(!checked),
-                                                        cx,
-                                                    )
-                                                })),
+                                                .on_click(self.pane_listener(
+                                                    cx,
+                                                    move |root, _, _, cx| {
+                                                        root.set_model_option(
+                                                            &id,
+                                                            Value::Bool(!checked),
+                                                            cx,
+                                                        )
+                                                    },
+                                                )),
                                             ),
                                         );
                                     }
@@ -1369,7 +1380,8 @@ impl Root {
                                                             },
                                                         )
                                                         .selected(Some(&value) == selected.as_ref())
-                                                        .on_click(cx.listener(
+                                                        .on_click(self.pane_listener(
+                                                            cx,
                                                             move |root, _, _, cx| {
                                                                 root.set_model_option(
                                                                     &id,
@@ -1400,9 +1412,9 @@ impl Root {
                                         .ghost()
                                         .text_size(px(12.))
                                         .selected(interaction_mode == "plan")
-                                        .on_click(
-                                            cx.listener(|root, _, _, cx| root.toggle_plan(cx)),
-                                        ),
+                                        .on_click(self.pane_listener(cx, |root, _, _, cx| {
+                                            root.toggle_plan(cx)
+                                        })),
                                 )
                             },
                         )
@@ -1434,7 +1446,9 @@ impl Root {
             .text_size(px(12.))
             .text_color(theme.muted_foreground)
             .selected(self.permissions_menu.is_some())
-            .on_click(cx.listener(|root, _, window, cx| root.open_permissions(false, window, cx)));
+            .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                root.open_permissions(false, window, cx)
+            }));
         gpui_kit::base::Popup::new("permissions-popover", trigger)
             .anchor(Anchor::BottomRight)
             .offset(px(4.))
@@ -1488,7 +1502,7 @@ impl Root {
                         .compact()
                         .outline()
                         .tooltip("Remove")
-                        .on_click(cx.listener(move |root, _, _, cx| {
+                        .on_click(self.pane_listener(cx, move |root, _, _, cx| {
                             if i < root.attachments.len() {
                                 root.attachments.remove(i);
                             }
@@ -1506,7 +1520,11 @@ impl Root {
             .border_1()
             .border_color(theme.border)
             .bg(crate::appearance::composer(cx))
-            .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
+            .on_drop(
+                self.pane_listener(cx, |root, paths: &ExternalPaths, _, cx| {
+                    root.attach_paths(paths, cx)
+                }),
+            )
             .children(suggestions)
             .children(chips)
             .child(

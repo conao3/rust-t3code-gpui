@@ -148,6 +148,15 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([event["modifiers"] for event in events], [2, 2, 2, 2, 2, 0])
         self.assertEqual(app.held_modifiers, 0)
 
+    def test_native_function_keys_use_x11_keysyms(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.xdo = Mock()
+        app.press("shift+F6")
+        app.xdo.assert_called_once_with("key", "--clearmodifiers", "shift+F6")
+
     def test_native_number_keeps_held_control_and_cleanup_releases_it(self):
         from native import Native
 

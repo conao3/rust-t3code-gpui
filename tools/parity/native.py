@@ -233,6 +233,7 @@ class Native:
             "delete": "Delete",
             "space": "space",
         }
+        keys.update({f"f{number}": f"F{number}" for number in range(1, 25)})
         parts = chord.lower().split("+")
         parts[-1] = keys.get(parts[-1], parts[-1])
         if getattr(self, "held_modifiers", set()):

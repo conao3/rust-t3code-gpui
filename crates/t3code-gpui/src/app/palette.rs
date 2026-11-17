@@ -17,7 +17,16 @@ impl Root {
 
     pub(super) fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 11] = [
+        let commands: [(&str, Box<dyn Action>); 17] = [
+            ("Side chat", Box::new(OpenSideChat)),
+            ("Split conversation right", Box::new(SplitConversation)),
+            (
+                "Split conversation down",
+                Box::new(SplitConversationVertical),
+            ),
+            ("Close conversation pane", Box::new(CloseConversation)),
+            ("Focus Next Workspace Area", Box::new(FocusNextWorkspace)),
+            ("Reopen Closed Tab", Box::new(ReopenClosed)),
             ("New thread", Box::new(NewThread)),
             ("Next Done or waiting thread", Box::new(NextDone)),
             ("Settle the thread", Box::new(Settle)),

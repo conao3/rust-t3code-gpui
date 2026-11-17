@@ -48,6 +48,7 @@ mod find;
 mod hosts;
 mod lineage;
 mod palette;
+mod pane_layout;
 mod settings;
 mod sidebar_branding;
 mod sidebar_controls;
@@ -115,12 +116,22 @@ actions!(
         SplitTerminalVertical,
         NewTerminal,
         CloseTerminal,
+        OpenSideChat,
+        SplitConversation,
+        SplitConversationVertical,
+        CloseConversation,
+        FocusNextWorkspace,
+        FocusPreviousWorkspace,
+        ReopenClosed,
     ]
 );
 
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
+        "workspace.focusNext" => Box::new(FocusNextWorkspace),
+        "workspace.focusPrevious" => Box::new(FocusPreviousWorkspace),
+        "view.reopenClosed" => Box::new(ReopenClosed),
         "terminal.toggle" => Box::new(ToggleTerminal),
         "terminal.split" => Box::new(SplitTerminal),
         "terminal.splitVertical" => Box::new(SplitTerminalVertical),
@@ -275,6 +286,7 @@ struct Completion {
     selected: usize,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct NewThreadDraft {
     id: String,
     environment: Option<String>,
@@ -345,6 +357,13 @@ struct DetailsStamp {
 
 pub struct Root {
     conversation: ConversationState,
+    panes: HashMap<u64, ConversationState>,
+    pane_layout: pane_layout::Layout,
+    pane_closed: Vec<pane_layout::SavedPane>,
+    pane_restored: bool,
+    pane_save_pending: bool,
+    pane_next_id: u64,
+    pane_resize: Option<(Vec<bool>, bool, Bounds<Pixels>)>,
     lineage_data: crate::lineage::Details,
     lineage_target: Option<(String, String)>,
     lineage_revision: u64,
@@ -493,13 +512,6 @@ impl Root {
                 }
             }
         });
-        let composer = cx.new(|cx| {
-            let mut state = TextareaState::new(window, cx)
-                .placeholder("Ask anything. @ files, $ skills, / commands");
-            state.set_auto_grow(1, 12, cx);
-            state
-        });
-        let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
         let file_find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in file"));
         let host_inputs = [
             cx.new(|cx| InputState::new(window, cx).placeholder("Name (eos, helios)")),
@@ -521,17 +533,15 @@ impl Root {
             cx.observe_window_activation(window, |root, window, cx| {
                 root.window_active = window.is_window_active();
                 if !root.window_active {
+                    if root.pane_resize.take().is_some() {
+                        root.save_conversations();
+                    }
                     root.window_drag_pending = false;
                     root.jump_hint_epoch += 1;
                     root.jump_modifiers = Modifiers::default();
                     root.jump_hints = false;
                     cx.notify();
                 }
-            }),
-            cx.subscribe(&find_input, |root, _, event: &InputEvent, cx| match event {
-                InputEvent::Change => root.find_again(true, cx),
-                InputEvent::PressEnter { shift, .. } => root.step_find(!*shift, cx),
-                _ => {}
             }),
             cx.subscribe(
                 &file_find_input,
@@ -541,15 +551,7 @@ impl Root {
                     _ => {}
                 },
             ),
-            cx.subscribe(&composer, |root, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) && root.pending_composer.is_none() {
-                    root.stash_composer(cx);
-                    root.update_completion(cx);
-                }
-            }),
         ];
-        let list_state = ListState::new(0, ListAlignment::Top, px(800.));
-        list_state.set_follow_mode(FollowMode::Tail);
         let sidebar_root = cx.entity().downgrade();
         let mut terminal_store =
             crate::terminal::Store::load(drafts_path.with_file_name("terminals.json"));
@@ -564,42 +566,14 @@ impl Root {
         .filter_map(|(section, expanded)| (!expanded).then_some(section))
         .collect();
         Self {
-            conversation: ConversationState {
-                open: None,
-                draft: None,
-                rows: Vec::new(),
-                row_views: Vec::new(),
-                timeline_pane: cx.new(|_| TimelinePane {
-                    views: Vec::new(),
-                    list: list_state.clone(),
-                }),
-                row_subscriptions: HashMap::new(),
-                list_state,
-                user_cursor: None,
-                hovered_message: None,
-                composer,
-                composer_controls: cx.new(|_| ComposerControlsPane {
-                    root: sidebar_root.clone(),
-                }),
-                composer_controls_stamp: None,
-                message: terminal_error,
-                picker_open: false,
-                picker_instance: None,
-                permissions_menu: None,
-                permissions_subscription: None,
-                model_picker: cx.new(|cx| CommandState::new(window, cx)),
-                attachments: Vec::new(),
-                queued: Vec::new(),
-                thread_loading: false,
-                completion: None,
-                completion_seq: 0,
-                find_input,
-                find_open: false,
-                find_hits: Vec::new(),
-                find_at: 0,
-                pending_composer: None,
-                thread_dirty: false,
-            },
+            conversation: ConversationState::new(0, terminal_error, window, cx),
+            panes: HashMap::new(),
+            pane_layout: pane_layout::Layout::Pane(0),
+            pane_closed: Vec::new(),
+            pane_restored: false,
+            pane_save_pending: false,
+            pane_next_id: 1,
+            pane_resize: None,
             lineage_data: crate::lineage::Details::default(),
             lineage_target: None,
             lineage_revision: 0,
@@ -703,6 +677,15 @@ impl Root {
     ) -> bool {
         if window.has_active_dialog(cx) {
             return false;
+        }
+        if let Some(id) = self.panes.iter().find_map(|(id, pane)| {
+            pane.composer
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+                .then_some(*id)
+        }) {
+            self.activate_conversation(id, window, cx, false);
         }
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
@@ -901,9 +884,20 @@ impl Root {
                 if open {
                     self.thread_dirty = true;
                 }
+                for pane in self.panes.values_mut() {
+                    if pane.open.as_ref().is_some_and(|open| {
+                        open.environment == environment && open.watch.thread_id() == thread_id
+                    }) {
+                        pane.thread_dirty = true;
+                    }
+                }
             }
         }
-        if !self.redraw_scheduled && (self.shell_dirty || self.thread_dirty) {
+        if !self.redraw_scheduled
+            && (self.shell_dirty
+                || self.thread_dirty
+                || self.panes.values().any(|pane| pane.thread_dirty))
+        {
             self.redraw_scheduled = true;
             cx.spawn_in(window, async move |this, cx| {
                 cx.background_executor().timer(REDRAW_INTERVAL).await;
@@ -925,6 +919,13 @@ impl Root {
         }
         if std::mem::take(&mut self.thread_dirty) {
             self.rebuild_rows(window, cx);
+        }
+        for id in self.pane_layout.ids() {
+            self.with_conversation(id, |root| {
+                if std::mem::take(&mut root.thread_dirty) {
+                    root.rebuild_rows(window, cx);
+                }
+            });
         }
         self.finish_parks(cx);
         self.sync_lineage();
@@ -1059,30 +1060,6 @@ impl Render for Root {
             self.details_stamp = Some(details_stamp);
             window.mark_view_dirty(self.details_pane.entity_id());
         }
-        if let Some(text) = self.pending_composer.take() {
-            self.composer
-                .update(cx, |state, cx| state.set_value(text, window, cx));
-        }
-        let controls_stamp = ComposerControlsStamp {
-            target: self.composer_target(),
-            current: self.current(),
-            draft: self.draft.is_some(),
-            status: self.open_entry().map(|entry| entry.status),
-            question: self.pending_question().is_some(),
-            empty: self.composer.read(cx).value().trim().is_empty(),
-            attachments: !self.attachments.is_empty(),
-            picker: self.picker_open,
-            permissions: self.permissions_menu.is_some(),
-            picker_instance: self.picker_instance.clone(),
-            catalog_revision: self.model_catalog_revision,
-            light: self.settings.light_theme,
-            font_size: self.settings.font_size_interface,
-            plan_enabled: self.settings.plan_mode_enabled,
-        };
-        if self.composer_controls_stamp.as_ref() != Some(&controls_stamp) {
-            self.composer_controls_stamp = Some(controls_stamp);
-            window.mark_view_dirty(self.composer_controls.entity_id());
-        }
         if !self.focus.contains_focused(window, cx)
             && self.open.is_none()
             && self.draft.is_none()
@@ -1102,10 +1079,7 @@ impl Render for Root {
                 .map(|group| group.title.clone())
                 .unwrap_or_else(|| "Pick a project".into())
         });
-        let pane = match &self.draft {
-            Some(draft) => self.render_draft(draft, draft_groups.as_ref().unwrap(), cx),
-            None => self.render_thread(cx),
-        };
+        let pane = self.render_conversations(window, cx);
         let terminal_drawer = self
             .terminal_key()
             .and_then(|key| self.terminal_drawers.get(&key))
@@ -1126,6 +1100,13 @@ impl Render for Root {
             .size_full()
             .track_focus(&self.focus)
             .key_context("Root")
+            .on_action(cx.listener(|root, _: &OpenSideChat, window, cx| root.open_side_chat(window, cx)))
+            .on_action(cx.listener(|root, _: &SplitConversation, window, cx| root.split_conversation(false, window, cx)))
+            .on_action(cx.listener(|root, _: &SplitConversationVertical, window, cx| root.split_conversation(true, window, cx)))
+            .on_action(cx.listener(|root, _: &CloseConversation, window, cx| root.close_conversation(window, cx)))
+            .on_action(cx.listener(|root, _: &FocusNextWorkspace, window, cx| root.focus_workspace(true, window, cx)))
+            .on_action(cx.listener(|root, _: &FocusPreviousWorkspace, window, cx| root.focus_workspace(false, window, cx)))
+            .on_action(cx.listener(|root, _: &ReopenClosed, window, cx| root.reopen_conversation(window, cx)))
             .on_action(cx.listener(|root, _: &NextDone, _, cx| root.next_done(true, cx)))
             .on_action(cx.listener(|root, _: &PreviousDone, _, cx| root.next_done(false, cx)))
             .on_action(
@@ -1290,6 +1271,10 @@ impl Render for Root {
                     && let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() {
                     drawer.update(cx, |drawer, cx| drawer.drag_resize(f32::from(event.position.y), f32::from(window.viewport_size().height), cx));
                 }
+                if let Some((path, vertical, bounds)) = root.pane_resize.clone() && event.pressed_button == Some(MouseButton::Left) {
+                    let (position, start, length) = if vertical { (event.position.y, bounds.origin.y, bounds.size.height) } else { (event.position.x, bounds.origin.x, bounds.size.width) };
+                    if length > px(0.) { root.pane_layout.resize(&path, f32::from(position - start) / f32::from(length)); cx.notify(); }
+                }
                 if root.sidebar_resizing && event.pressed_button == Some(MouseButton::Left) {
                     let max = (f32::from(window.viewport_size().width) - 640.).max(208.);
                     root.settings.sidebar_width = f32::from(event.position.x).clamp(208., max);
@@ -1301,6 +1286,7 @@ impl Render for Root {
                 cx.listener(|root, _, _, cx| {
                     if let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() { drawer.update(cx, |drawer, cx| drawer.end_resize(cx)); }
                     root.window_drag_pending = false;
+                    if root.pane_resize.take().is_some() { root.save_conversations(); }
                     if root.sidebar_resizing {
                         root.sidebar_resizing = false;
                         if let Err(error) = client_settings::update(
