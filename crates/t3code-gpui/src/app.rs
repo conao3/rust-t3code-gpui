@@ -6509,7 +6509,7 @@ impl Render for Root {
         };
         if self.sidebar_stamp.as_ref() != Some(&sidebar_stamp) {
             self.sidebar_stamp = Some(sidebar_stamp);
-            self.sidebar_pane.update(cx, |_, cx| cx.notify());
+            window.mark_view_dirty(self.sidebar_pane.entity_id());
         }
         self.follow_explorer(cx);
         self.follow_workspace();
@@ -6533,7 +6533,7 @@ impl Render for Root {
         };
         if self.details_stamp.as_ref() != Some(&details_stamp) {
             self.details_stamp = Some(details_stamp);
-            self.details_pane.update(cx, |_, cx| cx.notify());
+            window.mark_view_dirty(self.details_pane.entity_id());
         }
         if let Some(text) = self.pending_composer.take() {
             self.composer
@@ -6557,7 +6557,7 @@ impl Render for Root {
         };
         if self.composer_controls_stamp.as_ref() != Some(&controls_stamp) {
             self.composer_controls_stamp = Some(controls_stamp);
-            self.composer_controls.update(cx, |_, cx| cx.notify());
+            window.mark_view_dirty(self.composer_controls.entity_id());
         }
         if !self.focus.contains_focused(window, cx)
             && self.open.is_none()
