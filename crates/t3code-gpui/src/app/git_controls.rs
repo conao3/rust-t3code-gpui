@@ -83,7 +83,7 @@ impl Root {
             let submit = editor.clone();
             let branch_submit = editor.clone();
             let empty = editor.read(cx).selected().is_empty();
-            dialog.title("Commit changes").accessibility_label("Commit changes").width(px(560.))
+            dialog.title("Commit changes").accessibility_label("Commit changes").width(px(512.)).centered()
                 .child(div().text_sm().text_color(cx.theme().muted_foreground)
                     .child(text!("Review and confirm your commit. Leave the message blank to auto-generate one.")))
                 .child(editor.clone())
@@ -91,7 +91,7 @@ impl Root {
                     .child(Button::new("cancel-commit").label("Cancel").outline().small().on_click(|_, window, cx| window.close_dialog(cx)))
                     .child(Button::new("commit-new-branch").label("Commit on new branch").outline().small().disabled(empty)
                         .on_click(move |_, window, cx| { if branch_submit.update(cx, |view, cx| view.submit(true, cx)) { window.close_dialog(cx); } }))
-                    .child(DialogAction::new().child(Button::new("commit-selected").label("Commit").primary().small().disabled(empty))))
+                    .child(div().w(px(72.)).child(DialogAction::new().child(Button::new("commit-selected").label("Commit").primary().small().disabled(empty)))))
                 .on_ok(move |_, _, cx| submit.update(cx, |view, cx| view.submit(false, cx)))
         });
     }
@@ -654,7 +654,7 @@ impl Render for CommitEditor {
             })
             .map(|file| file["deletions"].as_u64().unwrap_or(0))
             .sum();
-        v_flex().gap_3().child(v_flex().p_3().gap_2().rounded_xl().bg(cx.theme().muted.opacity(0.4))
+        v_flex().gap_3().child(v_flex().p_3().gap_2().rounded_xl().bg(cx.theme().foreground.opacity(0.035))
             .child(h_flex().gap_2().child(div().text_color(cx.theme().muted_foreground).child(text!("Branch")))
                 .child(div().flex_1().child(self.branch.clone()))
                 .when(self.default_branch, |row| row.child(div().text_color(cx.theme().warning).child(text!("Default branch")))))
@@ -667,7 +667,7 @@ impl Render for CommitEditor {
                 .child(div().flex_1().child(text!("Files")))
                 .when(!self.excluded.is_empty() && !self.editing, |row| row.child(format!("({} of {})",selected.len(),self.files.len())))
                 .child(Button::new("commit-edit-files").label(if self.editing { "Done" } else { "Edit" }).ghost().small().on_click(cx.listener(|view, _, window, cx| { view.editing = !view.editing; window.refresh(); cx.notify(); }))))
-            .child(v_flex().id("commit-files").h(px(176.)).overflow_y_scroll().gap_1().children(self.files.iter().map(|file| {
+            .child(v_flex().id("commit-files").h(px(176.)).overflow_y_scroll().gap_1().rounded_lg().bg(cx.theme().foreground.opacity(0.025)).children(self.files.iter().map(|file| {
                 let path = file["path"].as_str().unwrap_or_default().to_string();
                 let check_path = path.clone();
                 let open_path = path.clone();
@@ -677,14 +677,14 @@ impl Render for CommitEditor {
                         if !view.excluded.remove(&check_path) { view.excluded.insert(check_path.clone()); }
                         window.refresh(); cx.notify();
                     }))))
-                    .child(Button::new(SharedString::from(format!("commit-open-{path}"))).label(path.clone()).accessibility_label(format!("Open {path} in editor")).ghost().compact().flex_1()
+                    .child(Button::new(SharedString::from(format!("commit-open-{path}"))).child(div().w_full().child(path.clone())).accessibility_label(format!("Open {path} in editor")).ghost().compact().flex_1()
                         .on_click(cx.listener(move |view, _, window, cx| { let _ = view.root.update(cx, |root, cx| {
                             if let Some((_, cwd)) = root.composer_cwd() { root.workspace_action(&WorkspaceAction { kind: "editor".into(), value: json!({"path":format!("{cwd}/{open_path}"),"editor":root.workspace_editor()}) },window,cx); }
                         }); })))
                     .child(div().text_xs().child(if excluded { "Excluded".into() } else { format!("+{} / -{}",file["insertions"].as_u64().unwrap_or(0),file["deletions"].as_u64().unwrap_or(0)) }))
             })))
             .child(div().text_right().child(format!("+{additions} / -{deletions}"))))
-            .child(text!("Commit message (optional)")).child(Textarea::new(&self.input))
+            .child(text!("Commit message (optional)")).child(Textarea::new(&self.input).h(px(68.)))
     }
 }
 
