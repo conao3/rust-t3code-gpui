@@ -269,6 +269,11 @@ impl Render for Providers {
                 let root = self.root.clone();
                 let environment = self.environment.clone();
                 let id = id.clone();
+                let accessible_name = if path == "displayName" {
+                    instance_name(&id, &json!({"driver":instance["driver"]}))
+                } else {
+                    label.to_string()
+                };
                 let field = window.use_keyed_state(
                     SharedString::from(format!("provider-field:{environment}:{id}:{path}:{value}")),
                     cx,
@@ -279,6 +284,7 @@ impl Render for Providers {
                             id,
                             path,
                             label,
+                            accessible_name,
                             description,
                             value,
                             window,
@@ -376,6 +382,7 @@ fn provider_summary(provider: Option<&Value>) -> String {
 struct ProviderField {
     input: Entity<InputState>,
     label: &'static str,
+    accessible_name: String,
     description: &'static str,
     _subscription: Subscription,
 }
@@ -388,12 +395,21 @@ impl ProviderField {
         id: String,
         path: &'static str,
         label: &'static str,
+        accessible_name: String,
         description: &'static str,
         value: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let input = cx.new(|cx| InputState::new(window, cx).default_value(value));
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(if path == "displayName" {
+                    accessible_name.clone()
+                } else {
+                    String::new()
+                })
+                .default_value(value)
+        });
         let subscription = cx.subscribe(&input, move |_, input, event, cx| {
             if !matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) { return; }
             let text = input.read(cx).value().trim().to_string();
@@ -415,6 +431,7 @@ impl ProviderField {
         Self {
             input,
             label,
+            accessible_name,
             description,
             _subscription: subscription,
         }
@@ -450,6 +467,7 @@ impl Render for ProviderField {
             .child(
                 v_flex()
                     .flex_1()
+                    .min_w_0()
                     .gap_1()
                     .child(settings_controls::text(self.label).text_sm())
                     .when(!self.description.is_empty(), |view| {
@@ -460,7 +478,12 @@ impl Render for ProviderField {
                         )
                     }),
             )
-            .child(Input::new(&self.input).aria_label(self.label).w(px(224.)))
+            .child(
+                Input::new(&self.input)
+                    .aria_label(self.accessible_name.clone())
+                    .w(px(224.))
+                    .flex_none(),
+            )
     }
 }
 
