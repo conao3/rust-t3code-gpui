@@ -7,9 +7,42 @@ pub(super) struct Prompts {
     pub(super) open: bool,
     pub(super) selected: usize,
     pub(super) history: Option<prompt_store::Position>,
+    pub(super) thumbnails: HashMap<String, Vec<Arc<Image>>>,
+    pub(super) delete_focus: HashMap<String, FocusHandle>,
 }
 
 impl Root {
+    pub(super) fn sync_prompt_thumbnails(&mut self, cx: &mut Context<Self>) {
+        let prompts = &mut self.conversation.prompts;
+        prompts
+            .delete_focus
+            .retain(|id, _| prompts.store.entries.iter().any(|entry| &entry.id == id));
+        prompts
+            .thumbnails
+            .retain(|id, _| prompts.store.entries.iter().any(|entry| &entry.id == id));
+        for entry in &prompts.store.entries {
+            prompts
+                .delete_focus
+                .entry(entry.id.clone())
+                .or_insert_with(|| cx.focus_handle());
+            prompts
+                .thumbnails
+                .entry(entry.id.clone())
+                .or_insert_with(|| {
+                    entry
+                        .attachments
+                        .iter()
+                        .filter_map(|file| {
+                            ImageFormat::from_mime_type(&file.mime_type).map(|format| {
+                                Arc::new(Image::from_bytes(format, file.bytes.clone()))
+                            })
+                        })
+                        .take(3)
+                        .collect()
+                });
+        }
+    }
+
     pub(super) fn stash_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.composer_composing(window, cx) {
             return;
@@ -57,6 +90,10 @@ impl Root {
         }
         let entry = Entry {
             id: uuid::Uuid::new_v4().to_string(),
+            created_at: SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("current time")
+                .as_secs(),
             prompt,
             attachments,
             dropped,
@@ -184,6 +221,15 @@ impl Root {
                     }
                 }
                 "enter" => {
+                    if self
+                        .conversation
+                        .prompts
+                        .delete_focus
+                        .values()
+                        .any(|focus| focus.is_focused(window))
+                    {
+                        return false;
+                    }
                     if let Some(entry) = self
                         .conversation
                         .prompts
@@ -231,8 +277,12 @@ impl Root {
         }
         let current = state.value().to_string();
         let backward = key.key == "up";
-        if (backward && current[..state.cursor()].contains('\n'))
-            || (!backward && current[state.cursor()..].contains('\n'))
+        let boundary = if backward { 0 } else { current.len() };
+        let caret = state.range_to_bounds(&(state.cursor()..state.cursor()));
+        let edge = state.range_to_bounds(&(boundary..boundary));
+        if !caret
+            .zip(edge)
+            .is_some_and(|(caret, edge)| (caret.origin.y - edge.origin.y).abs() < px(1.))
         {
             return false;
         }
@@ -293,7 +343,8 @@ impl Root {
             v_flex()
                 .absolute()
                 .bottom_full()
-                .right_0()
+                .right_5()
+                .when(!open, |view| view.rounded_t_lg().border_1().border_color(cx.theme().border).bg(crate::appearance::composer(cx)))
                 .when(open, |view| {
                     view.left_4()
                         .right_4()
@@ -373,7 +424,9 @@ impl Root {
                                                                 .size(px(12.)),
                                                         )
                                                         .child(snippet.clone())
-                                                        .child(div().flex_1()),
+                                                        .child(div().flex_1())
+                                                        .children(self.conversation.prompts.thumbnails.get(&entry.id).into_iter().flatten().take(3).map(|image| img(image.clone()).size(px(16.)).object_fit(ObjectFit::Cover).rounded_sm()))
+                                                        .child(div().text_color(cx.theme().muted_foreground).child(prompt_store::relative_time(entry.created_at, SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("current time").as_secs()))),
                                                 )
                                                 .small()
                                                 .accessibility_label(format!(
@@ -394,6 +447,7 @@ impl Root {
                                                     "delete-{delete}"
                                                 )))
                                                 .icon(gpui_kit::assets::IconName::X)
+                                                .track_focus(self.conversation.prompts.delete_focus.get(&entry.id).expect("stash delete focus"))
                                                 .size(px(24.))
                                                 .accessibility_label("Delete stashed prompt")
                                                 .ghost()

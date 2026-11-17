@@ -12,9 +12,20 @@ pub struct SavedAttachment {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Entry {
     pub id: String,
+    pub created_at: u64,
     pub prompt: String,
     pub attachments: Vec<SavedAttachment>,
     pub dropped: Vec<String>,
+}
+
+pub fn relative_time(created_at: u64, now: u64) -> String {
+    let seconds = now.saturating_sub(created_at);
+    match seconds {
+        0..60 => "just now".into(),
+        60..3600 => format!("{}m ago", seconds / 60),
+        3600..86400 => format!("{}h ago", seconds / 3600),
+        _ => format!("{}d ago", seconds / 86400),
+    }
 }
 #[derive(Default, Serialize, Deserialize)]
 pub struct Store {
@@ -280,6 +291,21 @@ pub fn step(
 mod tests {
     use super::*;
     #[test]
+    fn stash_relative_time_matches_reference_boundaries() {
+        for (elapsed, expected) in [
+            (0, "just now"),
+            (59, "just now"),
+            (60, "1m ago"),
+            (3599, "59m ago"),
+            (3600, "1h ago"),
+            (86399, "23h ago"),
+            (86400, "1d ago"),
+        ] {
+            assert_eq!(relative_time(100, 100 + elapsed), expected);
+        }
+        assert_eq!(relative_time(101, 100), "just now");
+    }
+    #[test]
     fn pane_stashes_survive_independent_updates() {
         let directory = tempfile::tempdir().unwrap();
         let drafts = directory.path().join("drafts.json");
@@ -291,6 +317,7 @@ mod tests {
                     path,
                     Entry {
                         id: "same-entry-id".into(),
+                        created_at: 100,
                         prompt: prompt.into(),
                         attachments: vec![],
                         dropped: vec![],
@@ -321,6 +348,7 @@ mod tests {
                     &path,
                     Entry {
                         id: n.to_string(),
+                        created_at: 100,
                         prompt: "日本語".into(),
                         attachments: vec![],
                         dropped: vec![],
@@ -340,6 +368,7 @@ mod tests {
                     dir.path(),
                     Entry {
                         id: "failed".into(),
+                        created_at: 100,
                         prompt: "keep".into(),
                         attachments: vec![],
                         dropped: vec![]

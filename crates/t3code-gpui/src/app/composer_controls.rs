@@ -218,6 +218,9 @@ impl Root {
                                 .appearance(false)
                                 .w(px(110.))
                                 .small()
+                                .h(px(24.))
+                                .text_size(px(12.))
+                                .text_color(cx.theme().muted_foreground)
                         }),
                 )
             })
@@ -255,6 +258,9 @@ impl Root {
                         .appearance(false)
                         .w(px(165.))
                         .small()
+                        .h(px(24.))
+                        .text_size(px(12.))
+                        .text_color(cx.theme().muted_foreground)
                         .into_any_element()
                 })
                 .unwrap_or_else(|| div().into_any_element());
@@ -291,7 +297,11 @@ impl Root {
                     .icon(IconName::Folder)
                     .small()
                     .ghost()
-                    .compact(),
+                    .compact()
+                    .h(px(24.))
+                    .px(px(7.))
+                    .text_size(px(12.))
+                    .text_color(cx.theme().muted_foreground),
             )
             .content(move |_, _, cx| {
                 root.update(cx, |root, cx| root.render_context_menu(cx))

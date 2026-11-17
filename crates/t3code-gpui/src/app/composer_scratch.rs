@@ -1,6 +1,31 @@
 use super::*;
 
 impl Root {
+    pub(super) fn is_scratch_draft(&self) -> bool {
+        self.draft_project().is_some_and(|(environment, project)| {
+            self.project_value(&environment, &project)
+                .zip(self.config_of(&environment))
+                .is_some_and(|(project, config)| {
+                    project["workspaceRoot"]
+                        .as_str()
+                        .zip(config["scratchWorkspaceRoot"].as_str())
+                        .is_some_and(|(path, scratch)| {
+                            path.trim_end_matches('/') == scratch.trim_end_matches('/')
+                        })
+                })
+        })
+    }
+
+    pub(super) fn can_start_without_project(&self) -> bool {
+        self.connections.iter().any(|connection| {
+            self.config_of(connection.label()).is_some_and(|config| {
+                config["scratchWorkspaceRoot"]
+                    .as_str()
+                    .is_some_and(|root| !root.is_empty())
+            })
+        })
+    }
+
     pub(super) fn new_without_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let available = |connection: &&Arc<Connection>| {
             self.config_of(connection.label()).is_some_and(|config| {

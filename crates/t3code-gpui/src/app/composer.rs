@@ -84,6 +84,7 @@ impl Root {
             Ok(pending) => self.conversation.attachments.push(pending),
             Err(error) => self.conversation.message = Some(format!("{error:#}")),
         }
+        self.stash_composer(cx);
         cx.notify();
         true
     }
@@ -95,6 +96,7 @@ impl Root {
                 Err(error) => self.conversation.message = Some(format!("{error:#}")),
             }
         }
+        self.stash_composer(cx);
         cx.notify();
     }
 
@@ -326,6 +328,14 @@ impl Root {
         };
         let text = self.conversation.composer.read(cx).value().to_string();
         self.conversation.draft_text = text.clone();
+        let attachments_changed = self
+            .conversation
+            .composer_attachments
+            .get(&key)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            != self.conversation.attachments.as_slice();
+        self.conversation.attachments_dirty |= attachments_changed;
         if self.conversation.attachments.is_empty() {
             self.conversation.composer_attachments.remove(&key);
         } else {
@@ -333,7 +343,7 @@ impl Root {
                 .composer_attachments
                 .insert(key.clone(), self.conversation.attachments.clone());
         }
-        if self.drafts.set(&key, &text) {
+        if self.drafts.set(&key, &text) || attachments_changed {
             self.schedule_drafts_save(cx);
         }
     }
@@ -348,6 +358,7 @@ impl Root {
             .cloned()
             .unwrap_or_default();
         self.conversation.prompts.history = None;
+        self.conversation.queue_expanded = false;
         self.conversation.prompts.open = false;
         self.conversation.hovered_message = None;
         let text = self
@@ -364,12 +375,58 @@ impl Root {
         self.drafts_save_scheduled = true;
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(1)).await;
+            let Ok(snapshots) = this.update(cx, |root, _| {
+                std::iter::once(&mut root.conversation)
+                    .chain(root.panes.values_mut())
+                    .filter(|pane| pane.attachments_dirty)
+                    .map(|pane| {
+                        pane.attachments_dirty = false;
+                        (
+                            pane.id,
+                            pane.attachment_writer.request(
+                                composer_images::attachment_drafts_path(&root.drafts_path, pane.id),
+                                pane.composer_attachments.clone(),
+                            ),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            }) else {
+                return;
+            };
+            let failures = cx
+                .background_executor()
+                .spawn(async move {
+                    snapshots
+                        .into_iter()
+                        .filter_map(|(id, request)| {
+                            request.save().err().map(|error| {
+                                (id, format!("Saving draft attachments failed: {error:#}"))
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .await;
             let _ = this.update(cx, |root, cx| {
                 root.drafts_save_scheduled = false;
                 root.save_conversations();
+                let failed = !failures.is_empty();
+                for (id, message) in failures {
+                    root.with_conversation(id, |root| {
+                        root.conversation.message = Some(message);
+                        root.conversation.attachments_dirty = true;
+                    });
+                    cx.notify();
+                }
                 if let Err(error) = root.drafts.save(&root.drafts_path) {
                     root.conversation.message = Some(format!("Saving drafts failed: {error:#}"));
                     cx.notify();
+                }
+                if !failed
+                    && std::iter::once(&root.conversation)
+                        .chain(root.panes.values())
+                        .any(|pane| pane.attachments_dirty)
+                {
+                    root.schedule_drafts_save(cx);
                 }
             });
         })
@@ -509,8 +566,8 @@ impl Root {
                     root.conversation
                         .composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
-                    root.stash_composer(cx);
                     root.conversation.attachments = pending;
+                    root.stash_composer(cx);
                 }
                 cx.notify();
             });
@@ -726,9 +783,9 @@ impl Root {
         self.conversation
             .composer
             .update(cx, |state, cx| state.set_value("", window, cx));
+        let pending = std::mem::take(&mut self.conversation.attachments);
         self.stash_composer(cx);
         let runtime = self.runtime.clone();
-        let pending = std::mem::take(&mut self.conversation.attachments);
         let root = cx.entity().downgrade();
         self.spawn_pane_in(window, cx, async move |this, cx| {
             let launched = on_runtime(&runtime, {
@@ -776,8 +833,8 @@ impl Root {
                     root.conversation
                         .composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
-                    root.stash_composer(cx);
                     root.conversation.attachments = pending;
+                    root.stash_composer(cx);
                     cx.notify();
                 }
             });
@@ -1093,108 +1150,185 @@ impl Root {
     }
 
     pub(super) fn render_queue(&self, cx: &Context<Self>) -> Option<AnyElement> {
-        if self.conversation.queued.is_empty() {
+        let count = self.conversation.queued.len();
+        if count == 0 {
             return None;
         }
         let theme = cx.theme();
-        let rows = self
-            .conversation
-            .queued
-            .iter()
-            .enumerate()
-            .map(|(i, queued)| {
-                let steer_run = queued.run_id.clone();
-                let cancel_run = queued.run_id.clone();
-                let edit_run = queued.run_id.clone();
-                let editing = self
-                    .conversation
-                    .queue_edit
-                    .as_ref()
-                    .is_some_and(|edit| edit.run_id == queued.run_id);
-                h_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child("Queued"),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .child(queued.text.clone()),
-                    )
-                    .child(
-                        Button::new(("queue-steer", i))
-                            .disabled(editing)
-                            .label("Send now")
-                            .compact()
-                            .outline()
-                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
-                                root.steer_queued(steer_run.clone(), cx)
-                            })),
-                    )
-                    .child(
-                        Button::new(("queue-edit", i))
-                            .icon(gpui_kit::assets::IconName::Pencil)
-                            .ghost()
-                            .compact()
-                            .accessibility_label(if editing {
-                                "Cancel editing queued message"
-                            } else {
-                                "Edit queued message"
-                            })
-                            .on_click(self.pane_listener(cx, move |root, _, window, cx| {
-                                if editing {
-                                    root.cancel_queue_edit(window, cx);
-                                } else {
-                                    root.edit_queued(edit_run.clone(), window, cx);
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new(("queue-up", i))
-                            .icon(IconName::ArrowUp)
-                            .ghost()
-                            .compact()
-                            .disabled(i == 0)
-                            .accessibility_label("Move queued message up")
-                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
-                                root.move_queued(i, false, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new(("queue-down", i))
-                            .icon(IconName::ArrowDown)
-                            .ghost()
-                            .compact()
-                            .disabled(i + 1 == self.conversation.queued.len())
-                            .accessibility_label("Move queued message down")
-                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
-                                root.move_queued(i, true, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new(("queue-cancel", i))
-                            .label("Cancel")
-                            .accessibility_label("Remove queued message")
-                            .disabled(editing)
-                            .compact()
-                            .outline()
-                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
-                                root.cancel_queued(cancel_run.clone(), cx)
-                            })),
-                    )
-            });
+        let visible = if count > 3 && !self.conversation.queue_expanded {
+            2
+        } else {
+            count
+        };
         Some(
-            v_flex()
-                .px_3()
-                .pt_2()
-                .gap_1()
-                .children(rows)
+            h_flex()
+                .w_full()
+                .px_4()
+                .justify_center()
+                .child(
+                    v_flex()
+                        .id("queued-messages")
+                        .role(accesskit::Role::Region)
+                        .aria_label(format!(
+                            "{count} queued message{}",
+                            if count == 1 { "" } else { "s" }
+                        ))
+                        .w_full()
+                        .max_w(px(736.))
+                        .items_end()
+                        .gap_3()
+                        .pb_4()
+                        .children(
+                            self.conversation
+                                .queued
+                                .iter()
+                                .take(visible)
+                                .enumerate()
+                                .map(|(i, queued)| {
+                                    let steer_run = queued.run_id.clone();
+                                    let cancel_run = queued.run_id.clone();
+                                    let edit_run = queued.run_id.clone();
+                                    let editing = self
+                                        .conversation
+                                        .queue_edit
+                                        .as_ref()
+                                        .is_some_and(|edit| edit.run_id == queued.run_id);
+                                    v_flex()
+                                        .id(("queued-message", i))
+                                        .role(accesskit::Role::ListItem)
+                                        .aria_label(format!(
+                                            "Queued message {} of {count}, not sent",
+                                            i + 1
+                                        ))
+                                        .w_full()
+                                        .items_end()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .max_w(relative(0.8))
+                                                .px_3()
+                                                .py_2()
+                                                .rounded(px(16.))
+                                                .border_1()
+                                                .border_dashed()
+                                                .border_color(if editing {
+                                                    theme.primary.opacity(0.6)
+                                                } else {
+                                                    theme.muted_foreground.opacity(0.4)
+                                                })
+                                                .text_sm()
+                                                .text_color(if editing {
+                                                    theme.foreground
+                                                } else {
+                                                    theme.muted_foreground
+                                                })
+                                                .child(queued.text.clone()),
+                                        )
+                                        .child(
+                                            h_flex()
+                                                .gap_0p5()
+                                                .pr_1()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .when(!editing, |row| {
+                                                    row.child(
+                                                        Button::new(("queue-steer", i))
+                                                            .label("Send now")
+                                                            .icon(IconName::ArrowUp)
+                                                            .compact()
+                                                            .ghost()
+                                                            .text_size(px(12.))
+                                                            .on_click(self.pane_listener(
+                                                                cx,
+                                                                move |root, _, _, cx| {
+                                                                    root.steer_queued(
+                                                                        steer_run.clone(),
+                                                                        cx,
+                                                                    )
+                                                                },
+                                                            )),
+                                                    )
+                                                })
+                                                .when(editing, |row| {
+                                                    row.child("Editing in the composer")
+                                                })
+                                                .child(
+                                                    Button::new(("queue-edit", i))
+                                                        .when(!editing, |button| {
+                                                            button.icon(
+                                                                gpui_kit::assets::IconName::Pencil,
+                                                            )
+                                                        })
+                                                        .when(editing, |button| {
+                                                            button.label("Cancel")
+                                                        })
+                                                        .ghost()
+                                                        .compact()
+                                                        .text_size(px(12.))
+                                                        .accessibility_label(if editing {
+                                                            "Cancel editing queued message"
+                                                        } else {
+                                                            "Edit queued message"
+                                                        })
+                                                        .on_click(self.pane_listener(
+                                                            cx,
+                                                            move |root, _, window, cx| {
+                                                                if editing {
+                                                                    root.cancel_queue_edit(
+                                                                        window, cx,
+                                                                    );
+                                                                } else {
+                                                                    root.edit_queued(
+                                                                        edit_run.clone(),
+                                                                        window,
+                                                                        cx,
+                                                                    );
+                                                                }
+                                                            },
+                                                        )),
+                                                )
+                                                .when(!editing, |row| {
+                                                    row.child(
+                                                        Button::new(("queue-cancel", i))
+                                                            .icon(gpui_kit::assets::IconName::X)
+                                                            .accessibility_label(
+                                                                "Remove queued message",
+                                                            )
+                                                            .compact()
+                                                            .ghost()
+                                                            .on_click(self.pane_listener(
+                                                                cx,
+                                                                move |root, _, _, cx| {
+                                                                    root.cancel_queued(
+                                                                        cancel_run.clone(),
+                                                                        cx,
+                                                                    )
+                                                                },
+                                                            )),
+                                                    )
+                                                }),
+                                        )
+                                }),
+                        )
+                        .when(count > 3, |view| {
+                            view.child(
+                                Button::new("queue-expand")
+                                    .label(if self.conversation.queue_expanded {
+                                        "Show fewer".into()
+                                    } else {
+                                        format!("Show all {count} queued")
+                                    })
+                                    .ghost()
+                                    .compact()
+                                    .text_size(px(12.))
+                                    .on_click(self.pane_listener(cx, |root, _, _, cx| {
+                                        root.conversation.queue_expanded =
+                                            !root.conversation.queue_expanded;
+                                        cx.notify();
+                                    })),
+                            )
+                        }),
+                )
                 .into_any_element(),
         )
     }
@@ -1434,6 +1568,11 @@ impl Root {
             .child(div().flex_1())
             .child(
                 Button::new("model")
+                    .accessibility_label(
+                        selected_model
+                            .map(|model| model.full_name.clone())
+                            .unwrap_or_else(|| "Pick a model".into()),
+                    )
                     .label(label)
                     .text_color(theme.foreground.opacity(0.8))
                     .icon(
@@ -1884,13 +2023,13 @@ impl Root {
                                 if self.conversation.dictation.recording.is_some() {
                                     "Stop dictation"
                                 } else {
-                                    "Start dictation"
+                                    "Start voice input"
                                 },
                             )
                             .tooltip(if self.conversation.dictation.recording.is_some() {
                                 "Stop dictation"
                             } else {
-                                "Start dictation"
+                                "Start voice input"
                             })
                             .disabled(self.conversation.dictation.busy)
                             .on_click(self.pane_listener(cx, |root, _, window, cx| {
@@ -1911,12 +2050,18 @@ impl Root {
             .unwrap_or_default();
         let (runtime_label, description, icon) = permissions::presentation(&runtime_mode);
         let trigger = Button::new("permissions")
-            .label(runtime_label)
+            .child(
+                h_flex()
+                    .gap(px(6.))
+                    .child(Icon::new(icon).size(px(12.)))
+                    .child(div().text_size(px(12.)).child(runtime_label)),
+            )
             .accessibility_label(format!("Permissions: {runtime_label}"))
-            .icon(icon)
             .tooltip(format!("Permissions: {runtime_label}. {description}"))
             .compact()
             .ghost()
+            .h(px(24.))
+            .px(px(7.))
             .text_size(px(12.))
             .text_color(theme.muted_foreground)
             .selected(self.conversation.permissions_menu.is_some())
@@ -1985,6 +2130,7 @@ impl Root {
                             .on_click(self.pane_listener(cx, move |root, _, _, cx| {
                                 if i < root.conversation.attachments.len() {
                                     root.conversation.attachments.remove(i);
+                                    root.stash_composer(cx);
                                 }
                                 cx.notify();
                             }))
@@ -2042,6 +2188,9 @@ impl Root {
             })
             .into_any_element();
         h_flex()
+            .id("composer-input")
+            .role(accesskit::Role::Region)
+            .aria_label("Message input")
             .w_full()
             .px_4()
             .justify_center()
@@ -2058,24 +2207,34 @@ impl Root {
         let selected = groups
             .iter()
             .find(|group| draft.group.as_ref() == Some(&group.key));
+        let scratch = self.is_scratch_draft();
         let title = selected
             .map(|group| group.title.clone())
             .unwrap_or_else(|| "Choose a project".into());
+        let title = if scratch { "No project".into() } else { title };
+        let heading_label = if scratch {
+            "What should we work on?".to_string()
+        } else if selected.is_some() {
+            format!("What should we build in {title} ?")
+        } else {
+            format!("{title} to start")
+        };
         let choices = groups.to_vec();
         let selected_key = draft.group.clone();
         let focus = self.focus.clone();
         let project = Button::new("draft-project")
             .child(
                 div()
-                    .text_size(px(30.))
-                    .line_height(px(36.))
+                    .text_size(px(if scratch { 14. } else { 30. }))
+                    .line_height(px(if scratch { 24. } else { 36. }))
                     .font_weight(FontWeight::MEDIUM)
-                    .child(title),
+                    .child(title.clone()),
             )
-            .accessibility_label("Choose project")
+            .accessibility_label(title)
+            .role(accesskit::Role::ComboBox)
             .ghost()
             .compact()
-            .h(px(36.))
+            .h(px(if scratch { 24. } else { 36. }))
             .px_0()
             .text_size(px(30.))
             .font_weight(FontWeight::MEDIUM)
@@ -2091,24 +2250,61 @@ impl Root {
                 }
                 menu.action_context(focus.clone())
             });
+        let mut project = Some(project);
         let heading = h_flex()
+            .id("draft-heading")
+            .role(accesskit::Role::Heading)
+            .aria_label(heading_label)
             .justify_center()
             .items_center()
             .flex_wrap()
             .gap_2()
             .text_size(px(30.))
             .line_height(px(36.))
-            .child(if selected.is_some() {
+            .child(if scratch {
+                "What should we work on?"
+            } else if selected.is_some() {
                 "What should we build in"
             } else {
                 ""
             })
-            .child(
-                h_flex()
-                    .items_center()
-                    .child(project)
-                    .child(if selected.is_some() { "?" } else { " to start" }),
-            );
+            .when(!scratch, |heading| {
+                heading.child(
+                    h_flex()
+                        .items_center()
+                        .child(project.take().expect("project selector"))
+                        .child(if selected.is_some() { "?" } else { " to start" }),
+                )
+            });
+        let heading = v_flex().items_center().child(heading).when(
+            self.can_start_without_project(),
+            |heading| {
+                heading.child(
+                    h_flex()
+                        .mt_2()
+                        .h(px(24.))
+                        .justify_center()
+                        .child(if scratch {
+                            project
+                                .take()
+                                .expect("scratch project selector")
+                                .into_any_element()
+                        } else {
+                            Button::new("draft-without-project")
+                                .label("or start without a project")
+                                .ghost()
+                                .compact()
+                                .h(px(24.))
+                                .text_size(px(14.))
+                                .text_color(cx.theme().muted_foreground)
+                                .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                                    root.new_without_project(window, cx);
+                                }))
+                                .into_any_element()
+                        }),
+                )
+            },
+        );
         v_flex()
             .flex_1()
             .h_full()
@@ -2123,7 +2319,11 @@ impl Root {
                             .absolute()
                             .bottom_full()
                             .w_full()
-                            .pb_4()
+                            .pb(px(if self.conversation.prompts.store.entries.is_empty() {
+                                16.
+                            } else {
+                                0.
+                            }))
                             .px_4()
                             .children((!self.conversation.prompts.open).then_some(heading)),
                     )
@@ -2132,20 +2332,19 @@ impl Root {
                     .child(
                         h_flex().w_full().justify_center().px_4().child(
                             h_flex()
+                                .id("composer-context")
+                                .role(accesskit::Role::Region)
+                                .aria_label("Message input")
                                 .w_full()
                                 .max_w(px(736.))
                                 .h(px(52.))
                                 .px_2()
                                 .items_start()
-                                .pt_1()
+                                .pt_2()
                                 .child(self.render_composer_context(cx))
                                 .child(div().flex_1())
                                 .when(self.conversation.workspace_status.is_repo(), |row| {
-                                    row.child(
-                                        div().w(px(140.)).child(
-                                            self.render_branch_control("composer-branch", cx),
-                                        ),
-                                    )
+                                    row.child(self.render_branch_control("composer-branch", cx))
                                 })
                                 .child(self.render_permissions_control(false, cx)),
                         ),

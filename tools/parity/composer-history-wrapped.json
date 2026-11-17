@@ -1,0 +1,95 @@
+{
+  "name": "composer-history-wrapped-boundary",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "press",
+      "value": "up"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture"
+      },
+      "value": "Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary"
+    },
+    {
+      "action": "press",
+      "value": "up"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture"
+      },
+      "value": "Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+home"
+    },
+    {
+      "action": "press",
+      "value": "up"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture"
+      },
+      "value": "Prior prompt"
+    },
+    {
+      "action": "press",
+      "value": "down"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture"
+      },
+      "value": "Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary Wrapped prompt boundary"
+    },
+    {
+      "action": "press",
+      "value": "down"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture",
+        "value": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "name": "composer-new-thread-heading-and-projectless-link",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 800,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "heading",
+        "name": "What should we build in UI parity ?"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "or start without a project"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "or start without a project"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "heading",
+        "name": "What should we work on?"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": ""
+      },
+      "native": {
+        "role": "combobox",
+        "name": "No project"
+      }
+    }
+  ]
+}

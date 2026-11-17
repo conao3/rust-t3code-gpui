@@ -149,6 +149,17 @@ impl Root {
             .map(|(config, _)| config)
             .unwrap_or(&Value::Null);
         let label = environment.clone();
+        let workspace_label = if self
+            .conversation
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.workspace_strategy["type"] == "worktree")
+        {
+            "New worktree"
+        } else {
+            "Current checkout"
+        };
+        let host_accessibility_label = format!("Run context: {label}, {workspace_label}");
         let groups = self.project_groups();
         let members = self
             .conversation
@@ -169,6 +180,7 @@ impl Root {
                     .gap_2p5()
                     .child(Icon::new(gpui_kit::assets::IconName::Monitor).size(px(16.)))
                     .child(div().flex_1().text_size(px(13.)).child(label))
+                    .child(Icon::new(IconName::Folder).size(px(16.)))
                     .child(Icon::new(IconName::ChevronDown).size(px(16.))),
             )
             .ghost()
@@ -176,7 +188,7 @@ impl Root {
             .h(px(32.))
             .px_2p5()
             .rounded(px(8.))
-            .accessibility_label("Environment")
+            .accessibility_label(host_accessibility_label)
             .tooltip(cwd.clone())
             .dropdown_menu(move |mut menu, _, _| {
                 for member in &members {
@@ -434,15 +446,23 @@ impl Root {
         let button = Button::new(id)
             .child(
                 h_flex()
-                    .w_full()
-                    .gap_2p5()
-                    .child(Icon::new(gpui_kit::assets::IconName::GitBranch).size(px(16.)))
+                    .when(id == "details-branch", |row| row.w_full())
+                    .gap(px(if id == "details-branch" { 10. } else { 6. }))
+                    .child(
+                        Icon::new(gpui_kit::assets::IconName::GitBranch)
+                            .size(px(if id == "details-branch" { 16. } else { 12. })),
+                    )
                     .child(div().flex_1().truncate().child(branch)),
             )
             .ghost()
-            .w_full()
-            .h(px(32.))
-            .px_2p5()
+            .when(id == "details-branch", |button| button.w_full())
+            .h(px(if id == "details-branch" { 32. } else { 24. }))
+            .px(px(if id == "details-branch" { 10. } else { 7. }))
+            .when(id != "details-branch", |button| {
+                button
+                    .text_size(px(12.))
+                    .text_color(cx.theme().muted_foreground)
+            })
             .rounded(px(8.))
             .accessibility_label("Select branch")
             .role(accesskit::Role::ComboBox)

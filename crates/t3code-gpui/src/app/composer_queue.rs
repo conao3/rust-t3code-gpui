@@ -22,8 +22,13 @@ impl Root {
         {
             return;
         }
-        if let Some(run) = self.conversation.queued.last() {
+        if self.conversation.queue_edit.is_none()
+            && let Some(run) = self.conversation.queued.last()
+        {
             self.edit_queued(run.run_id.clone(), window, cx);
+            if self.conversation.queue_edit.is_some() {
+                self.conversation.queue_expanded = true;
+            }
         }
     }
     pub(super) fn steer_next_queued(&mut self, cx: &mut Context<Self>) {
@@ -204,23 +209,6 @@ impl Root {
         )
     }
 
-    pub(super) fn move_queued(&mut self, index: usize, forward: bool, cx: &mut Context<Self>) {
-        let Some(run) = self.conversation.queued.get(index) else {
-            return;
-        };
-        let run_id = run.run_id.clone();
-        let before = if forward {
-            self.conversation.queued.get(index + 2)
-        } else {
-            index
-                .checked_sub(1)
-                .and_then(|i| self.conversation.queued.get(i))
-        }
-        .map(|r| r.run_id.clone());
-        self.dispatch_on_open("Reordering queued message",cx,move |connection,thread_id| Box::pin(async move {
-            connection.dispatch(json!({"type":"queued-run.reorder","threadId":thread_id,"runId":run_id,"beforeRunId":before})).await
-        }));
-    }
     pub(super) fn render_force_stop(&self, cx: &Context<Self>) -> Option<AnyElement> {
         let open = self.conversation.open.as_ref()?;
         if !self

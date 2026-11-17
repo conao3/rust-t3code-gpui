@@ -41,7 +41,10 @@ pub struct ConversationState {
     pub(super) composer_sends: HashSet<String>,
     pub(super) dictation: composer_dictation::Dictation,
     pub(super) composer_attachments: HashMap<String, Vec<attachments::Pending>>,
+    pub(super) attachments_dirty: bool,
+    pub(super) attachment_writer: Arc<composer_images::DraftWriter>,
     pub(super) queue_edit: Option<composer_queue::Edit>,
+    pub(super) queue_expanded: bool,
     pub(super) prompts: composer_prompts::Prompts,
     pub(super) composer_choices: composer_controls::Controls,
     pub(super) queued: Vec<timeline::Queued>,
@@ -92,6 +95,15 @@ impl ConversationState {
             state.set_auto_grow(1, 12, cx);
             state
         });
+        let (composer_attachments, attachment_error) = match composer_images::load_attachment_drafts(
+            &composer_images::attachment_drafts_path(drafts_path, id),
+        ) {
+            Ok(attachments) => (attachments, None),
+            Err(error) => (
+                HashMap::new(),
+                Some(format!("Could not load draft attachments: {error:#}")),
+            ),
+        };
         let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
         let subscriptions = vec![
             cx.subscribe(&composer, move |root, _, event: &InputEvent, cx| {
@@ -143,7 +155,7 @@ impl ConversationState {
             composer,
             composer_controls: cx.new(|_| ComposerControlsPane { root, pane_id: id }),
             composer_controls_stamp: None,
-            message: message.or(prompt_error),
+            message: message.or(prompt_error).or(attachment_error),
             picker_open: false,
             picker_instance: None,
             permissions_menu: None,
@@ -162,8 +174,11 @@ impl ConversationState {
             workspace_status: workspace::Status::default(),
             composer_sends: HashSet::new(),
             dictation: composer_dictation::Dictation::default(),
-            composer_attachments: HashMap::new(),
+            composer_attachments,
+            attachments_dirty: false,
+            attachment_writer: Arc::new(composer_images::DraftWriter::default()),
             queue_edit: None,
+            queue_expanded: false,
             prompts: composer_prompts::Prompts {
                 store: prompt_store,
                 ..Default::default()
@@ -397,6 +412,7 @@ impl Root {
                             root.open_thread(environment, thread, cx);
                         }
                         root.conversation.draft = pane.draft;
+                        root.load_composer();
                         root.conversation.pending_composer = Some(pane.composer);
                     });
                 }
@@ -448,6 +464,19 @@ impl Root {
         }
         self.stash_composer(cx);
         let id = self.conversation.id;
+        if let Err(error) = self
+            .conversation
+            .attachment_writer
+            .request(
+                composer_images::attachment_drafts_path(&self.drafts_path, id),
+                self.conversation.composer_attachments.clone(),
+            )
+            .save()
+        {
+            self.conversation.message = Some(format!("Saving draft attachments failed: {error:#}"));
+            cx.notify();
+            return;
+        }
         self.pane_closed.push(pane_layout::SavedPane {
             id,
             draft: self.conversation.draft.clone(),
@@ -485,6 +514,7 @@ impl Root {
                 self.close_thread(cx);
             }
             self.conversation.draft = pane.draft;
+            self.load_composer();
             self.conversation.pending_composer = Some(pane.composer);
             self.save_conversations();
         }
@@ -573,6 +603,7 @@ impl Root {
                     save = true;
                 }
                 root.follow_workspace();
+                root.sync_prompt_thumbnails(cx);
                 root.sync_composer_controls(window, cx);
                 let controls = ComposerControlsStamp {
                     width: root.composer_width().to_bits(),
@@ -641,6 +672,23 @@ impl Root {
                         .map(|completion| completion.selected)
                 );
                 let stamp = format!(
+                    "{stamp}:{:?}",
+                    root.conversation.prompts.open.then(|| root
+                        .conversation
+                        .prompts
+                        .store
+                        .entries
+                        .iter()
+                        .map(|entry| crate::prompt_store::relative_time(
+                            entry.created_at,
+                            SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .expect("current time")
+                                .as_secs()
+                        ))
+                        .collect::<Vec<_>>())
+                );
+                let stamp = format!(
                     "{stamp}:{:?}:{:?}",
                     root.open_entry().map(|entry| &entry.title),
                     root.conversation.draft.as_ref().map(|_| root
@@ -650,9 +698,10 @@ impl Root {
                         .collect::<Vec<_>>())
                 );
                 let stamp = format!(
-                    "{stamp}:{}:{}",
+                    "{stamp}:{}:{}:{}",
                     root.conversation.find_input.read(cx).value(),
-                    root.conversation.find_hits.len()
+                    root.conversation.find_hits.len(),
+                    root.conversation.queue_expanded
                 );
                 let stamp = format!(
                     "{stamp}:{}:{}:{}:{:?}",
