@@ -7681,6 +7681,7 @@ dependencies = [
  "serde_json",
  "sys-locale",
  "t3-client",
+ "t3-terminal",
  "tempfile",
  "tokio",
  "uuid",

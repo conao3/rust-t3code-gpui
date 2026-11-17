@@ -20,6 +20,7 @@ humantime = "2.4"
 markdown = "1.0.0"
 serde_json.workspace = true
 t3-client = { path = "../t3-client" }
+t3-terminal = { path = "../t3-terminal" }
 notify-rust = "4.19"
 tokio.workspace = true
 uuid.workspace = true

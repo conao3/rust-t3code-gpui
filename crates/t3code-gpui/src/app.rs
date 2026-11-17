@@ -81,12 +81,22 @@ actions!(
         ToggleThreadDetails,
         OpenBranchPicker,
         OpenFavoriteEditor,
+        ToggleTerminal,
+        SplitTerminal,
+        SplitTerminalVertical,
+        NewTerminal,
+        CloseTerminal,
     ]
 );
 
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
+        "terminal.toggle" => Box::new(ToggleTerminal),
+        "terminal.split" => Box::new(SplitTerminal),
+        "terminal.splitVertical" => Box::new(SplitTerminalVertical),
+        "terminal.new" => Box::new(NewTerminal),
+        "terminal.close" => Box::new(CloseTerminal),
         "thread.nextDone" => Box::new(NextDone),
         "thread.previousDone" => Box::new(PreviousDone),
         "chat.nextUserMessage" => Box::new(NextUserMessage),
@@ -414,6 +424,13 @@ impl Render for DetailsPane {
 }
 
 pub struct Root {
+    terminal_store: crate::terminal::Store,
+    terminal_drawers: HashMap<String, Entity<crate::terminal::Drawer>>,
+    terminal_subscriptions: HashMap<String, Subscription>,
+    terminal_recent: Vec<String>,
+    terminal_revision: u64,
+    terminal_stamp: Option<(Option<String>, u64, u64, bool, u32)>,
+    terminal_save_scheduled: bool,
     editor_picker_focus: FocusHandle,
     details_pane: Entity<DetailsPane>,
     details_stamp: Option<DetailsStamp>,
@@ -628,7 +645,17 @@ impl Root {
         let list_state = ListState::new(0, ListAlignment::Top, px(800.));
         list_state.set_follow_mode(FollowMode::Tail);
         let sidebar_root = cx.entity().downgrade();
+        let mut terminal_store =
+            crate::terminal::Store::load(drafts_path.with_file_name("terminals.json"));
+        let terminal_error = terminal_store.error.take();
         Self {
+            terminal_store,
+            terminal_drawers: HashMap::new(),
+            terminal_subscriptions: HashMap::new(),
+            terminal_recent: Vec::new(),
+            terminal_revision: 0,
+            terminal_stamp: None,
+            terminal_save_scheduled: false,
             editor_picker_focus: cx.focus_handle(),
             details_pane: cx.new(|_| DetailsPane {
                 root: sidebar_root.clone(),
@@ -679,7 +706,7 @@ impl Root {
             user_cursor: None,
             hovered_message: None,
             composer,
-            message: None,
+            message: terminal_error,
             picker_open: false,
             picker_instance: None,
             permissions_menu: None,
@@ -996,24 +1023,233 @@ impl Root {
             .cloned()
     }
 
+    fn terminal_key(&self) -> Option<String> {
+        if let Some(draft) = &self.draft {
+            let (environment, _) = self.draft_project()?;
+            return Some(drafts::thread_key(&environment, &draft.id));
+        }
+        self.current()
+            .map(|(environment, id)| drafts::thread_key(&environment, &id))
+    }
+
+    fn terminal_target(&self) -> Option<(String, t3_terminal::session::Target)> {
+        let (environment, cwd) = self.composer_cwd()?;
+        let (id, project_id) = if let Some(draft) = &self.draft {
+            (draft.id.clone(), self.draft_project()?.1)
+        } else {
+            let (_, id) = self.current()?;
+            let thread = self.thread_value(&environment, &id)?;
+            (id, thread.get("projectId")?.as_str()?.to_owned())
+        };
+        let project = self.project_value(&environment, &project_id)?;
+        let project_root = project.get("workspaceRoot")?.as_str()?.to_owned();
+        let worktree_path = (cwd != project_root).then(|| cwd.clone());
+        Some((
+            environment,
+            t3_terminal::session::Target {
+                thread_id: id,
+                terminal_id: String::new(),
+                cwd,
+                worktree_path,
+                project_root,
+                read_only: false,
+                restart_if_not_running: false,
+            },
+        ))
+    }
+
+    fn save_terminal_layout(&mut self, cx: &mut Context<Self>) {
+        if self.terminal_save_scheduled {
+            return;
+        }
+        self.terminal_save_scheduled = true;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(1)).await;
+            let Ok(store) = this.update(cx, |root, _| {
+                root.terminal_save_scheduled = false;
+                root.terminal_store.clone()
+            }) else {
+                return;
+            };
+            let result = cx
+                .background_executor()
+                .spawn(async move { store.save() })
+                .await;
+            if let Err(error) = result {
+                let _ = this.update(cx, |root, cx| {
+                    root.message = Some(format!("Cannot save terminal layout: {error:#}"));
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn sync_terminal_drawers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let key = self.terminal_key();
+        let stamp = (
+            key.clone(),
+            self.terminal_revision,
+            self.entries_revision,
+            self.settings.light_theme,
+            self.settings.font_size_code.to_bits(),
+        );
+        if self.terminal_stamp.as_ref() == Some(&stamp) {
+            return;
+        }
+        self.terminal_stamp = Some(stamp);
+        let active = key
+            .as_ref()
+            .filter(|key| self.terminal_store.get(key).open)
+            .cloned();
+        let mut existing: HashSet<_> = self
+            .entries
+            .iter()
+            .map(|entry| drafts::thread_key(&entry.environment, &entry.thread_id))
+            .collect();
+        if let Some(key) = &key {
+            existing.insert(key.clone());
+        }
+        self.terminal_recent
+            .retain(|key| existing.contains(key) && self.terminal_store.get(key).open);
+        if let Some(key) = &active {
+            self.terminal_recent.retain(|recent| recent != key);
+            self.terminal_recent.insert(0, key.clone());
+        }
+        self.terminal_recent
+            .truncate(10 + usize::from(active.is_some()));
+        self.terminal_drawers
+            .retain(|key, _| self.terminal_recent.contains(key));
+        self.terminal_subscriptions
+            .retain(|key, _| self.terminal_recent.contains(key));
+        let terminal_configuration = crate::terminal::DrawerConfig {
+            light: self.settings.light_theme,
+            font_size: self.settings.font_size_code,
+            shortcuts: [
+                "terminal.split",
+                "terminal.splitVertical",
+                "terminal.new",
+                "terminal.close",
+            ]
+            .map(|command| {
+                keymap::command_label(&self.key_rules, command, &|name| {
+                    matches!(name, "terminalFocus" | "terminalOpen")
+                        || self.key_context(name, window, cx)
+                })
+            }),
+        };
+        if let Some(key) = &active
+            && !self.terminal_drawers.contains_key(key)
+            && let Some((environment, target)) = self.terminal_target()
+            && let Some(connection) = self.connection(&environment)
+        {
+            let layout = self.terminal_store.get(key);
+            let drawer = cx.new(|cx| {
+                crate::terminal::Drawer::new(
+                    layout,
+                    target,
+                    connection,
+                    self.runtime.clone(),
+                    terminal_configuration.clone(),
+                    window,
+                    cx,
+                )
+            });
+            let key = key.clone();
+            let saved_key = key.clone();
+            let subscription = cx.subscribe(&drawer, move |root, _, event, cx| match event {
+                crate::terminal::DrawerEvent::Changed(layout) => {
+                    root.terminal_store.set(saved_key.clone(), layout);
+                    root.terminal_revision = root.terminal_revision.wrapping_add(1);
+                    root.save_terminal_layout(cx);
+                    cx.notify();
+                }
+                crate::terminal::DrawerEvent::Focus => {
+                    if root.jump_hints {
+                        root.jump_hints = false;
+                        cx.notify();
+                    }
+                }
+            });
+            self.terminal_subscriptions
+                .insert(key.clone(), subscription);
+            self.terminal_drawers.insert(key, drawer);
+        }
+        for (key, drawer) in &self.terminal_drawers {
+            drawer.update(cx, |drawer, cx| {
+                drawer.configure(
+                    active.as_ref() == Some(key),
+                    terminal_configuration.clone(),
+                    window,
+                    cx,
+                )
+            });
+        }
+    }
+
+    fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(key) = self.terminal_key() else {
+            return;
+        };
+        let mut layout = self.terminal_store.get(&key);
+        layout.open = !layout.open;
+        if layout.open && layout.ids().is_empty() {
+            layout.add("term-1".into(), None);
+        }
+        let open = layout.open;
+        self.terminal_store.set(key.clone(), &layout);
+        self.terminal_revision = self.terminal_revision.wrapping_add(1);
+        self.sync_terminal_drawers(window, cx);
+        if open {
+            if let Some(drawer) = self.terminal_drawers.get(&key).cloned() {
+                drawer.update(cx, |drawer, cx| drawer.focus(window, cx));
+            }
+        } else {
+            window.focus(&self.composer.read(cx).focus_handle(cx), cx);
+        }
+        self.save_terminal_layout(cx);
+        cx.notify();
+    }
+
+    fn add_terminal(&mut self, split: Option<bool>, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(key) = self.terminal_key() else {
+            return;
+        };
+        if !self.terminal_store.get(&key).open {
+            self.toggle_terminal(window, cx);
+            return;
+        }
+        if let Some(drawer) = self.terminal_drawers.get(&key).cloned() {
+            drawer.update(cx, |drawer, cx| drawer.add(split, window, cx));
+        }
+    }
+
     fn key_context(&self, name: &str, window: &Window, cx: &App) -> bool {
         match name {
+            "terminalOpen" => self
+                .terminal_key()
+                .is_some_and(|key| self.terminal_store.get(&key).open),
+            "terminalFocus" => self
+                .terminal_key()
+                .and_then(|key| self.terminal_drawers.get(&key))
+                .is_some_and(|drawer| drawer.read(cx).is_focused(window, cx)),
             "isDesktop" => true,
             "modelPickerOpen" => self.picker_open,
             "rightPanelOpen" => self.file_panel.is_some() || self.explorer.is_some(),
             "composerFocus" => self.composer.read(cx).focus_handle(cx).is_focused(window),
             "editableFocus" => {
-                [
-                    self.composer.read(cx).focus_handle(cx),
-                    self.find_input.read(cx).focus_handle(cx),
-                    self.file_find_input.read(cx).focus_handle(cx),
-                    self.palette.read(cx).focus_handle(cx),
-                    self.file_picker.read(cx).focus_handle(cx),
-                    self.branch_picker.read(cx).focus_handle(cx),
-                    self.model_picker.read(cx).focus_handle(cx),
-                ]
-                .iter()
-                .any(|handle| handle.contains_focused(window, cx))
+                self.key_context("terminalFocus", window, cx)
+                    || [
+                        self.composer.read(cx).focus_handle(cx),
+                        self.find_input.read(cx).focus_handle(cx),
+                        self.file_find_input.read(cx).focus_handle(cx),
+                        self.palette.read(cx).focus_handle(cx),
+                        self.file_picker.read(cx).focus_handle(cx),
+                        self.branch_picker.read(cx).focus_handle(cx),
+                        self.model_picker.read(cx).focus_handle(cx),
+                    ]
+                    .iter()
+                    .any(|handle| handle.contains_focused(window, cx))
                     || self
                         .host_inputs
                         .iter()
@@ -3462,7 +3698,11 @@ impl Root {
             .as_ref()
             .map(|draft| draft.workspace_strategy.clone())
             .unwrap_or_else(|| json!({"type":"root"}));
-        let thread_id = uuid::Uuid::new_v4().to_string();
+        let thread_id = self
+            .draft
+            .as_ref()
+            .map(|draft| draft.id.clone())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let title = projects::title_seed(&text);
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
@@ -6226,6 +6466,7 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_terminal_drawers(window, cx);
         if self.draft.is_none() && !self.picker_open {
             self.permissions_menu = None;
             self.permissions_subscription = None;
@@ -6341,6 +6582,18 @@ impl Render for Root {
             Some(draft) => self.render_draft(draft, draft_groups.as_ref().unwrap(), cx),
             None => self.render_thread(cx),
         };
+        let terminal_drawer = self
+            .terminal_key()
+            .and_then(|key| self.terminal_drawers.get(&key))
+            .cloned();
+        let terminal_height = terminal_drawer.as_ref().map_or(0., |drawer| {
+            drawer.read(cx).layout.height.clamp(
+                180.,
+                (f32::from(window.viewport_size().height) * 0.75)
+                    .floor()
+                    .max(180.),
+            )
+        });
         v_flex()
             .id("application-content")
             .role(accesskit::Role::Group)
@@ -6391,6 +6644,15 @@ impl Render for Root {
                 cx.notify();
             }))
             .on_action(cx.listener(|root, _: &ToggleExplorer, _, cx| root.toggle_explorer(cx)))
+            .on_action(cx.listener(|root, _: &ToggleTerminal, window, cx| root.toggle_terminal(window, cx)))
+            .on_action(cx.listener(|root, _: &SplitTerminal, window, cx| root.add_terminal(Some(false), window, cx)))
+            .on_action(cx.listener(|root, _: &SplitTerminalVertical, window, cx| root.add_terminal(Some(true), window, cx)))
+            .on_action(cx.listener(|root, _: &NewTerminal, window, cx| root.add_terminal(None, window, cx)))
+            .on_action(cx.listener(|root, _: &CloseTerminal, window, cx| {
+                if let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() {
+                    drawer.update(cx, |drawer, cx| drawer.close_active(window, cx));
+                }
+            }))
             .on_action(
                 cx.listener(|root, _: &ManageHosts, window, cx| root.toggle_hosts(window, cx)),
             )
@@ -6498,6 +6760,10 @@ impl Render for Root {
             .text_color(cx.theme().foreground)
             .font_family(UI_FONT)
             .on_mouse_move(cx.listener(|root, event: &MouseMoveEvent, window, cx| {
+                if event.pressed_button == Some(MouseButton::Left)
+                    && let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() {
+                    drawer.update(cx, |drawer, cx| drawer.drag_resize(f32::from(event.position.y), f32::from(window.viewport_size().height), cx));
+                }
                 if root.sidebar_resizing && event.pressed_button == Some(MouseButton::Left) {
                     let max = (f32::from(window.viewport_size().width) - 640.).max(208.);
                     root.settings.sidebar_width = f32::from(event.position.x).clamp(208., max);
@@ -6507,6 +6773,7 @@ impl Render for Root {
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|root, _, _, cx| {
+                    if let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() { drawer.update(cx, |drawer, cx| drawer.end_resize(cx)); }
                     root.window_drag_pending = false;
                     if root.sidebar_resizing {
                         root.sidebar_resizing = false;
@@ -6554,7 +6821,9 @@ impl Render for Root {
                                 ),
                         )
                     })
-                    .child(self.render_workspace_canvas(pane, cx))
+                    .child(v_flex().flex_1().h_full().min_w_0().min_h_0()
+                        .child(div().flex_1().h_0().min_h_0().child(self.render_workspace_canvas(pane, cx)))
+                        .children(terminal_drawer.map(|drawer| drawer.cached(StyleRefinement::default().w_full().h(px(terminal_height)).flex_none()).into_any_element())))
                     .children(self.render_explorer(cx))
                     .children(self.render_file_panel(cx)),
             )

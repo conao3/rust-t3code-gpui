@@ -22,6 +22,19 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    def test_native_text_keeps_ascii_speed_and_all_unicode_in_order(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.xdo = Mock()
+        text = "ASCII界🙂tail"
+        app.type(text)
+        calls = app.xdo.call_args_list
+        self.assertEqual("".join(call.args[4] for call in calls), text)
+        self.assertEqual([call.args[3] for call in calls], [20, 300, 20])
+        app.focus.assert_called_once()
+
     async def test_appearance_observes_the_applied_document_color_scheme(self):
         app = Cdp("http://127.0.0.1:39991")
         app.evaluate = AsyncMock(return_value="light")

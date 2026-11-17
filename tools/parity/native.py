@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import time
+from itertools import groupby
 from pathlib import Path
 
 
@@ -103,7 +104,7 @@ class Native:
             except NotImplementedError:
                 bounds = None
             value = None
-            if role in ["entry", "text", "label", "document frame"]:
+            if role in ["entry", "text", "label", "document frame", "terminal"]:
                 try:
                     content = node.queryText()
                     value = content.getText(0, content.characterCount)
@@ -181,14 +182,17 @@ class Native:
         if any(ord(character) < 32 or ord(character) == 127 for character in text):
             raise ValueError("Use explicit key or paste actions for control characters")
         self.focus()
-        self.xdo(
-            "type",
-            "--clearmodifiers",
-            "--delay",
-            20,
-            text,
-            timeout=max(10, len(text) * 0.02 + 5),
-        )
+        for ascii_only, characters in groupby(text, str.isascii):
+            segment = "".join(characters)
+            delay = 20 if ascii_only else 300
+            self.xdo(
+                "type",
+                "--clearmodifiers",
+                "--delay",
+                delay,
+                segment,
+                timeout=max(10, len(segment) * delay / 1000 + 5),
+            )
 
     def content_bounds(self):
         groups = [node for node in self.tree() if node["name"] == "Application content"]

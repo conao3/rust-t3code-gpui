@@ -65,6 +65,10 @@ The shared draft scenario exercises text retention, sidebar toggling, permission
 
 `messages.json` opens the deterministic fixture thread named `Fixture response` in `UI parity`, checks the rendered assistant text including Japanese, opens a new thread and returns to the fixture. Prepare the same completed response on both servers. Message documents expose the text of the parsed Markdown through AT-SPI; snapshots cover the currently rendered timeline chunks. `text_contains` checks actual text content within the selected nodes, while `value` continues to require an exact input value. The saved images independently check message layout.
 
+`terminal.json` opens that completed fixture, toggles its terminal, splits horizontally and vertically, hides and reopens the drawer, and checks that all three panes and the original response remain present. Use a fresh profile with no saved terminals. Terminal checkpoints count the original input textareas and native terminal surfaces independently; a toolbar alone does not prove that panes exist. The scenario does not certify terminal contents, mouse reporting, IME or rendering parity.
+
+The native text driver keeps ASCII input at 20 ms and gives Unicode keymap substitutions 300 ms. Fast consecutive XTest Unicode substitutions can lose characters in both Electron and GPUI; input completeness must be checked in the application. This cadence belongs to functional input tests and must not be presented as application latency or used as the typing performance workload.
+
 Inventory the reference commands separately:
 
 ```sh

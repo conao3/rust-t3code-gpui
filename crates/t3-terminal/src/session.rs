@@ -84,10 +84,20 @@ pub struct State {
     pub has_running_subprocess: bool,
     pub grid: Grid,
     pub revision: u64,
+    pub modes: Modes,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Modes {
+    pub alternate_screen: bool,
+    pub mouse_tracking: bool,
+    pub application_cursor_keys: bool,
+    pub synchronized_output: bool,
 }
 
 pub enum Input {
     Key(KeyboardEvent),
+    KeyWithFallback(KeyboardEvent, Option<String>),
     Text(String),
     Paste(String),
     Mouse(Mouse),
@@ -153,6 +163,7 @@ impl Session {
             has_running_subprocess: false,
             grid,
             revision: 0,
+            modes: Modes::default(),
         };
         let (updates, receiver) = watch::channel(state.clone());
         let (commands, inputs) = crossbeam_channel::bounded(64);
@@ -416,6 +427,7 @@ impl Worker {
                         self.apply(event)?;
                     }
                     chunk.accept();
+                    self.refresh_modes()?;
                     if before != self.metadata() {
                         self.publish_metadata();
                     }
@@ -437,6 +449,8 @@ impl Worker {
                 self.term().end_synchronized_output()?;
                 self.sync_due = None;
                 self.schedule(true)?;
+                self.refresh_modes()?;
+                self.publish_metadata();
             }
             if self.frame_due.is_some_and(|due| due <= now) {
                 self.frame_due = None;
@@ -452,7 +466,7 @@ impl Worker {
         self.terminal.as_mut().unwrap()
     }
 
-    fn metadata(&self) -> (String, String, Option<String>, bool, bool, Grid) {
+    fn metadata(&self) -> (String, String, Option<String>, bool, bool, Grid, Modes) {
         (
             self.state.status.clone(),
             self.state.label.clone(),
@@ -460,6 +474,7 @@ impl Worker {
             self.state.connected,
             self.state.has_running_subprocess,
             self.state.grid,
+            self.state.modes,
         )
     }
 
@@ -472,11 +487,22 @@ impl Worker {
         if !self.visible || !self.dirty {
             return Ok(());
         }
+        self.refresh_modes()?;
         self.state.snapshot = Some(Arc::new(self.term().snapshot()?));
         self.state.scrollbar = self.term().scrollbar()?.map(Arc::new);
         self.state.selection = self.term().selection_range()?;
         self.dirty = false;
         self.publish_metadata();
+        Ok(())
+    }
+
+    fn refresh_modes(&mut self) -> Result<()> {
+        self.state.modes = Modes {
+            alternate_screen: self.term().is_alternate_screen()?,
+            mouse_tracking: self.term().mouse_tracking()?,
+            application_cursor_keys: self.term().mode(1)?,
+            synchronized_output: self.term().mode(2026)?,
+        };
         Ok(())
     }
 
@@ -628,7 +654,21 @@ impl Worker {
                     self.frame_due = None;
                 }
             }
-            Input::Key(event) => self.key(event)?,
+            Input::Key(event) => {
+                self.key(event)?;
+            }
+            Input::KeyWithFallback(event, text) => {
+                let release = event.release;
+                let composing = event.composing;
+                if !self.key(event)?
+                    && !release
+                    && !composing
+                    && let Some(text) = text
+                {
+                    self.write(text.into_bytes())?;
+                    self.schedule(true)?;
+                }
+            }
             Input::Text(text) => self.write(text.into_bytes())?,
             Input::Paste(text) => {
                 let bytes = self.term().encode_paste(&text)?;
@@ -702,20 +742,21 @@ impl Worker {
         Ok(())
     }
 
-    fn key(&mut self, event: KeyboardEvent) -> Result<()> {
+    fn key(&mut self, event: KeyboardEvent) -> Result<bool> {
         if event.release {
             if !self.encoded_keys.remove(&event.code) {
-                return Ok(());
+                return Ok(true);
             }
         } else if !event.repeat {
             self.encoded_keys.remove(&event.code);
         }
         if event.composing {
-            return Ok(());
+            return Ok(false);
         }
         if !event.release {
             if let Some(data) = event.local_data() {
-                return self.write(data.as_bytes().to_vec());
+                self.write(data.as_bytes().to_vec())?;
+                return Ok(true);
             }
             let command = if event.mac {
                 event.meta && !event.control
@@ -728,7 +769,8 @@ impl Worker {
                 && if event.mac { !event.shift } else { event.shift }
             {
                 self.term().select_all()?;
-                return self.schedule(true);
+                self.schedule(true)?;
+                return Ok(true);
             }
             let page = event.shift
                 && !event.alt
@@ -754,25 +796,29 @@ impl Worker {
                     _ => scrollbar.len.max(1).min(i32::MAX as u64) as i32,
                 };
                 self.term().scroll(amount)?;
-                return self.schedule(true);
+                self.schedule(true)?;
+                return Ok(true);
             }
             if event.is_copy() && self.term().selection_range()?.is_some() {
-                return self
-                    .copy(!event.mac && !event.shift && !event.key.eq_ignore_ascii_case("insert"));
+                self.copy(!event.mac && !event.shift && !event.key.eq_ignore_ascii_case("insert"))?;
+                return Ok(true);
             }
         }
         if self.read_only {
-            return Ok(());
+            return Ok(true);
         }
         let bytes = self.term().encode_key(&event.encoded())?;
-        if !bytes.is_empty() {
+        if bytes.is_empty() {
+            return Ok(false);
+        }
+        {
             if !event.release {
                 self.encoded_keys.insert(event.code);
             }
             self.write(bytes)?;
             self.schedule(true)?;
         }
-        Ok(())
+        Ok(true)
     }
 }
 
@@ -823,6 +869,7 @@ mod tests {
             has_running_subprocess: false,
             grid,
             revision: 0,
+            modes: Modes::default(),
         };
         let (updates, _) = watch::channel(state.clone());
         let (writes, outgoing) = async_channel::bounded(64);
@@ -1011,5 +1058,42 @@ mod tests {
         target.read_only = true;
         assert_eq!(target.attach(grid, false), target.identity());
         assert_eq!(target.attach(grid, true), target.identity());
+    }
+
+    #[test]
+    fn keyboard_text_fallback_preserves_unicode_without_duplicating_encoded_input() -> Result<()> {
+        for (mode, expected) in [
+            ("", ["a", "界", "🙂"]),
+            (
+                "\u{1b}[>11u",
+                ["\u{1b}[97u", "\u{1b}[30028u", "\u{1b}[128578u"],
+            ),
+        ] {
+            let (mut worker, writes, _) = worker();
+            worker.term().write(mode.as_bytes())?;
+            for (key, expected) in ["a", "界", "🙂"].into_iter().zip(expected) {
+                worker.input(Input::KeyWithFallback(
+                    KeyboardEvent {
+                        key: key.into(),
+                        code: "Unidentified".into(),
+                        ..KeyboardEvent::default()
+                    },
+                    Some(key.into()),
+                ))?;
+                assert!(matches!(writes.try_recv()?, Write::Text(text) if text == expected));
+                assert!(writes.is_empty());
+            }
+            worker.input(Input::KeyWithFallback(
+                KeyboardEvent {
+                    key: "e".into(),
+                    code: "KeyE".into(),
+                    composing: true,
+                    ..KeyboardEvent::default()
+                },
+                Some("é".into()),
+            ))?;
+            assert!(writes.is_empty());
+        }
+        Ok(())
     }
 }
