@@ -42,6 +42,7 @@ pub struct ConversationState {
     pub(super) dictation: composer_dictation::Dictation,
     pub(super) composer_attachments: HashMap<String, Vec<attachments::Pending>>,
     pub(super) queue_edit: Option<composer_queue::Edit>,
+    pub(super) queue_expanded: bool,
     pub(super) prompts: composer_prompts::Prompts,
     pub(super) composer_choices: composer_controls::Controls,
     pub(super) queued: Vec<timeline::Queued>,
@@ -164,6 +165,7 @@ impl ConversationState {
             dictation: composer_dictation::Dictation::default(),
             composer_attachments: HashMap::new(),
             queue_edit: None,
+            queue_expanded: false,
             prompts: composer_prompts::Prompts {
                 store: prompt_store,
                 ..Default::default()
@@ -668,9 +670,10 @@ impl Root {
                         .collect::<Vec<_>>())
                 );
                 let stamp = format!(
-                    "{stamp}:{}:{}",
+                    "{stamp}:{}:{}:{}",
                     root.conversation.find_input.read(cx).value(),
-                    root.conversation.find_hits.len()
+                    root.conversation.find_hits.len(),
+                    root.conversation.queue_expanded
                 );
                 let stamp = format!(
                     "{stamp}:{}:{}:{}:{:?}",

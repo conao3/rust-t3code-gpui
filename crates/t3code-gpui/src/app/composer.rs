@@ -348,6 +348,7 @@ impl Root {
             .cloned()
             .unwrap_or_default();
         self.conversation.prompts.history = None;
+        self.conversation.queue_expanded = false;
         self.conversation.prompts.open = false;
         self.conversation.hovered_message = None;
         let text = self
@@ -1079,108 +1080,185 @@ impl Root {
     }
 
     pub(super) fn render_queue(&self, cx: &Context<Self>) -> Option<AnyElement> {
-        if self.conversation.queued.is_empty() {
+        let count = self.conversation.queued.len();
+        if count == 0 {
             return None;
         }
         let theme = cx.theme();
-        let rows = self
-            .conversation
-            .queued
-            .iter()
-            .enumerate()
-            .map(|(i, queued)| {
-                let steer_run = queued.run_id.clone();
-                let cancel_run = queued.run_id.clone();
-                let edit_run = queued.run_id.clone();
-                let editing = self
-                    .conversation
-                    .queue_edit
-                    .as_ref()
-                    .is_some_and(|edit| edit.run_id == queued.run_id);
-                h_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child("Queued"),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .child(queued.text.clone()),
-                    )
-                    .child(
-                        Button::new(("queue-steer", i))
-                            .disabled(editing)
-                            .label("Send now")
-                            .compact()
-                            .outline()
-                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
-                                root.steer_queued(steer_run.clone(), cx)
-                            })),
-                    )
-                    .child(
-                        Button::new(("queue-edit", i))
-                            .icon(gpui_kit::assets::IconName::Pencil)
-                            .ghost()
-                            .compact()
-                            .accessibility_label(if editing {
-                                "Cancel editing queued message"
-                            } else {
-                                "Edit queued message"
-                            })
-                            .on_click(self.pane_listener(cx, move |root, _, window, cx| {
-                                if editing {
-                                    root.cancel_queue_edit(window, cx);
-                                } else {
-                                    root.edit_queued(edit_run.clone(), window, cx);
-                                }
-                            })),
-                    )
-                    .child(
-                        Button::new(("queue-up", i))
-                            .icon(IconName::ArrowUp)
-                            .ghost()
-                            .compact()
-                            .disabled(i == 0)
-                            .accessibility_label("Move queued message up")
-                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
-                                root.move_queued(i, false, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new(("queue-down", i))
-                            .icon(IconName::ArrowDown)
-                            .ghost()
-                            .compact()
-                            .disabled(i + 1 == self.conversation.queued.len())
-                            .accessibility_label("Move queued message down")
-                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
-                                root.move_queued(i, true, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new(("queue-cancel", i))
-                            .label("Cancel")
-                            .accessibility_label("Remove queued message")
-                            .disabled(editing)
-                            .compact()
-                            .outline()
-                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
-                                root.cancel_queued(cancel_run.clone(), cx)
-                            })),
-                    )
-            });
+        let visible = if count > 4 && !self.conversation.queue_expanded {
+            3
+        } else {
+            count
+        };
         Some(
-            v_flex()
-                .px_3()
-                .pt_2()
-                .gap_1()
-                .children(rows)
+            h_flex()
+                .w_full()
+                .px_4()
+                .justify_center()
+                .child(
+                    v_flex()
+                        .id("queued-messages")
+                        .role(accesskit::Role::Region)
+                        .aria_label(format!(
+                            "{count} queued message{}",
+                            if count == 1 { "" } else { "s" }
+                        ))
+                        .w_full()
+                        .max_w(px(736.))
+                        .items_end()
+                        .gap_3()
+                        .pb_4()
+                        .children(
+                            self.conversation
+                                .queued
+                                .iter()
+                                .take(visible)
+                                .enumerate()
+                                .map(|(i, queued)| {
+                                    let steer_run = queued.run_id.clone();
+                                    let cancel_run = queued.run_id.clone();
+                                    let edit_run = queued.run_id.clone();
+                                    let editing = self
+                                        .conversation
+                                        .queue_edit
+                                        .as_ref()
+                                        .is_some_and(|edit| edit.run_id == queued.run_id);
+                                    v_flex()
+                                        .id(("queued-message", i))
+                                        .role(accesskit::Role::ListItem)
+                                        .aria_label(format!(
+                                            "Queued message {} of {count}, not sent",
+                                            i + 1
+                                        ))
+                                        .w_full()
+                                        .items_end()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .max_w(relative(0.8))
+                                                .px_3()
+                                                .py_2()
+                                                .rounded(px(16.))
+                                                .border_1()
+                                                .border_dashed()
+                                                .border_color(if editing {
+                                                    theme.primary.opacity(0.6)
+                                                } else {
+                                                    theme.muted_foreground.opacity(0.4)
+                                                })
+                                                .text_sm()
+                                                .text_color(if editing {
+                                                    theme.foreground
+                                                } else {
+                                                    theme.muted_foreground
+                                                })
+                                                .child(queued.text.clone()),
+                                        )
+                                        .child(
+                                            h_flex()
+                                                .gap_0p5()
+                                                .pr_1()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .when(!editing, |row| {
+                                                    row.child(
+                                                        Button::new(("queue-steer", i))
+                                                            .label("Send now")
+                                                            .icon(IconName::ArrowUp)
+                                                            .compact()
+                                                            .ghost()
+                                                            .text_size(px(12.))
+                                                            .on_click(self.pane_listener(
+                                                                cx,
+                                                                move |root, _, _, cx| {
+                                                                    root.steer_queued(
+                                                                        steer_run.clone(),
+                                                                        cx,
+                                                                    )
+                                                                },
+                                                            )),
+                                                    )
+                                                })
+                                                .when(editing, |row| {
+                                                    row.child("Editing in the composer")
+                                                })
+                                                .child(
+                                                    Button::new(("queue-edit", i))
+                                                        .when(!editing, |button| {
+                                                            button.icon(
+                                                                gpui_kit::assets::IconName::Pencil,
+                                                            )
+                                                        })
+                                                        .when(editing, |button| {
+                                                            button.label("Cancel")
+                                                        })
+                                                        .ghost()
+                                                        .compact()
+                                                        .text_size(px(12.))
+                                                        .accessibility_label(if editing {
+                                                            "Cancel editing queued message"
+                                                        } else {
+                                                            "Edit queued message"
+                                                        })
+                                                        .on_click(self.pane_listener(
+                                                            cx,
+                                                            move |root, _, window, cx| {
+                                                                if editing {
+                                                                    root.cancel_queue_edit(
+                                                                        window, cx,
+                                                                    );
+                                                                } else {
+                                                                    root.edit_queued(
+                                                                        edit_run.clone(),
+                                                                        window,
+                                                                        cx,
+                                                                    );
+                                                                }
+                                                            },
+                                                        )),
+                                                )
+                                                .when(!editing, |row| {
+                                                    row.child(
+                                                        Button::new(("queue-cancel", i))
+                                                            .icon(gpui_kit::assets::IconName::X)
+                                                            .accessibility_label(
+                                                                "Remove queued message",
+                                                            )
+                                                            .compact()
+                                                            .ghost()
+                                                            .on_click(self.pane_listener(
+                                                                cx,
+                                                                move |root, _, _, cx| {
+                                                                    root.cancel_queued(
+                                                                        cancel_run.clone(),
+                                                                        cx,
+                                                                    )
+                                                                },
+                                                            )),
+                                                    )
+                                                }),
+                                        )
+                                }),
+                        )
+                        .when(count > 4, |view| {
+                            view.child(
+                                Button::new("queue-expand")
+                                    .label(if self.conversation.queue_expanded {
+                                        "Show fewer".into()
+                                    } else {
+                                        format!("Show all {count} queued")
+                                    })
+                                    .ghost()
+                                    .compact()
+                                    .text_size(px(12.))
+                                    .on_click(self.pane_listener(cx, |root, _, _, cx| {
+                                        root.conversation.queue_expanded =
+                                            !root.conversation.queue_expanded;
+                                        cx.notify();
+                                    })),
+                            )
+                        }),
+                )
                 .into_any_element(),
         )
     }

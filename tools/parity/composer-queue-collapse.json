@@ -1,0 +1,56 @@
+{
+  "name": "composer-queue-collapse",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Composer queue fixture, Done, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Edit queued message"
+      },
+      "count": 3
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Show all 5 queued"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Edit queued message"
+      },
+      "count": 5
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Show fewer"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Edit queued message"
+      },
+      "count": 3
+    }
+  ]
+}
