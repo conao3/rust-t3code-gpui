@@ -217,6 +217,7 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_startup_waits_for_the_single_renderer_after_connection_refusal(self):
         page = Cdp("http://127.0.0.1:1")
+        page.wait_document = AsyncMock()
         socket = Mock()
         with (
             patch(
@@ -248,6 +249,16 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
             await page.__aenter__()
         self.assertIs(page.socket, socket)
         self.assertEqual(page.page_url, "t3code://app/")
+        page.wait_document.assert_awaited_once()
+
+    async def test_initial_document_waits_for_controls_before_accessibility_requests(
+        self,
+    ):
+        page = Cdp("http://127.0.0.1:1")
+        page.evaluate = AsyncMock(side_effect=[False, False, True])
+        with patch("cdp.asyncio.sleep", new=AsyncMock()):
+            await page.wait_document()
+        self.assertEqual(page.evaluate.await_count, 3)
 
     async def test_a_disabled_control_is_not_reported_as_a_successful_click(self):
         page = Cdp("http://127.0.0.1:1")

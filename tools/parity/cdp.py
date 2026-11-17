@@ -59,7 +59,28 @@ class Cdp:
         self.socket = await websockets.connect(
             pages[0]["webSocketDebuggerUrl"], max_size=32 * 1024 * 1024
         )
+        try:
+            try:
+                await self.wait_document()
+            except TimeoutError:
+                await self.socket.close()
+                self.socket = await websockets.connect(
+                    pages[0]["webSocketDebuggerUrl"], max_size=32 * 1024 * 1024
+                )
+                await self.wait_document()
+        except BaseException:
+            await self.socket.close()
+            raise
         return self
+
+    async def wait_document(self):
+        deadline = time.monotonic() + 60
+        while not await self.evaluate(
+            "document.readyState === 'complete' && !!document.querySelector('button')"
+        ):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("The application document did not finish loading")
+            await asyncio.sleep(0.1)
 
     async def __aexit__(self, *_):
         try:
