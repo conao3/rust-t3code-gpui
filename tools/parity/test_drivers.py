@@ -21,6 +21,7 @@ from private_session import cleanup_bus_processes
 from run import (
     assert_visible_regions,
     compare,
+    execute,
     matches,
     wait_for,
 )
@@ -245,6 +246,67 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         for index in [-1, True, "1"]:
             with self.assertRaises(ValueError):
                 matches(nodes, {"role": "button", "index": index})
+
+    async def test_scoped_duplicates_dispatch_to_the_matching_global_occurrence(self):
+        nodes = [
+            {
+                "role": "button",
+                "name": "Settle thread",
+                "ancestors": [{"role": "button", "name": title}],
+            }
+            for title in ["First thread", "Second thread"]
+        ]
+        selector = {
+            "role": "button",
+            "name": "Settle thread",
+            "ancestor": {"role": "button", "name": "Second thread"},
+        }
+        self.assertEqual(matches(nodes, selector), [nodes[1]])
+        app = Mock()
+        app.tree = AsyncMock(return_value=nodes)
+        app.click = AsyncMock()
+        with tempfile.TemporaryDirectory() as directory:
+            result = await execute(
+                app,
+                "reference",
+                {"steps": [{"action": "click", "selector": selector}]},
+                Path(directory),
+            )
+        self.assertEqual(result[0]["status"], "passed")
+        app.click.assert_awaited_once_with("button", "Settle thread", 1)
+
+    async def test_cdp_keeps_visible_ancestors_across_ignored_layout_nodes(self):
+        app = Cdp("http://127.0.0.1:39991")
+        app.call = AsyncMock(
+            return_value={
+                "nodes": [
+                    {
+                        "nodeId": "row",
+                        "role": {"value": "button"},
+                        "name": {"value": "Second thread"},
+                    },
+                    {"nodeId": "layout", "parentId": "row", "ignored": True},
+                    {
+                        "nodeId": "control",
+                        "parentId": "layout",
+                        "role": {"value": "button"},
+                        "name": {"value": "Settle thread"},
+                    },
+                ]
+            }
+        )
+        nodes = await app.tree()
+        self.assertEqual(
+            matches(
+                nodes,
+                {
+                    "role": "button",
+                    "name": "Settle thread",
+                    "ancestor": {"role": "button", "name": "Second thread"},
+                },
+            ),
+            [nodes[1]],
+        )
 
     async def test_rendered_text_checkpoint_checks_text_content(self):
         app = Mock()

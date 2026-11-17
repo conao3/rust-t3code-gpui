@@ -137,12 +137,33 @@ class Cdp:
 
     async def tree(self):
         result = await self.call("Accessibility.getFullAXTree")
+        nodes = {node["nodeId"]: node for node in result["nodes"]}
+
+        def ancestors(node):
+            path = []
+            seen = set()
+            while node.get("parentId") in nodes:
+                parent_id = node["parentId"]
+                if parent_id in seen:
+                    raise RuntimeError("Accessible tree contains a parent cycle")
+                seen.add(parent_id)
+                node = nodes[parent_id]
+                if not node.get("ignored"):
+                    path.append(
+                        {
+                            "role": node.get("role", {}).get("value"),
+                            "name": node.get("name", {}).get("value", ""),
+                        }
+                    )
+            return path
+
         return [
             {
                 "role": n.get("role", {}).get("value"),
                 "name": n.get("name", {}).get("value", ""),
                 "value": n.get("value", {}).get("value"),
                 "backend_id": n.get("backendDOMNodeId"),
+                "ancestors": ancestors(n),
                 "disabled": any(
                     p["value"].get("value") is True
                     for p in n.get("properties", [])

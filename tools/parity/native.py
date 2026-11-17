@@ -70,16 +70,20 @@ class Native:
         )
 
     def nodes(self):
-        queue = [self.app()]
+        queue = [(self.app(), [])]
         result = []
+        self.parent_paths = {}
         while queue:
-            node = queue.pop(0)
+            node, parents = queue.pop(0)
+            self.parent_paths[id(node)] = parents
             result.append(node)
             if len(result) > 5000:
                 raise RuntimeError(
                     "Accessible tree exceeds 5000 nodes; refusing an incomplete snapshot"
                 )
-            queue.extend(child for child in node if child is not None)
+            queue.extend(
+                (child, parents + [id(node)]) for child in node if child is not None
+            )
         return result
 
     def tree(self):
@@ -100,9 +104,11 @@ class Native:
     def snapshot(self):
         result = []
         controls = {}
+        identities = {}
         for node in self.nodes():
             role = node.getRoleName()
             name = node.name
+            identities[id(node)] = {"role": role, "name": name}
             controls.setdefault((role, name), []).append(node)
             try:
                 rect = node.queryComponent().getExtents(self.atspi.DESKTOP_COORDS)
@@ -127,6 +133,9 @@ class Native:
                     "role": role,
                     "name": name,
                     "value": value,
+                    "ancestors": [
+                        identities[parent] for parent in self.parent_paths[id(node)]
+                    ],
                     "focused": state.contains(self.atspi.STATE_FOCUSED),
                     "disabled": not state.contains(self.atspi.STATE_ENABLED),
                     "checked": state.contains(self.atspi.STATE_CHECKED)
@@ -134,6 +143,8 @@ class Native:
                     in [
                         "radio menu item",
                         "check menu item",
+                        "toggle button",
+                        "switch",
                         "check box",
                         "radio button",
                     ]

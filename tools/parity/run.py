@@ -69,7 +69,11 @@ def matches(nodes, selector):
             (roles.get(node["role"], node["role"]) if key == "role" else node.get(key))
             == value
             for key, value in selector.items()
-            if key != "index"
+            if key not in ["index", "ancestor"]
+        )
+        and (
+            "ancestor" not in selector
+            or matches(node.get("ancestors", []), selector["ancestor"])
         )
     ]
     return found if index is None else found[index : index + 1]
@@ -110,7 +114,13 @@ async def execute(app, target, scenario, directory):
             action = step["action"]
             if action in ["click", "focus"]:
                 selector = step.get(target, step.get("selector"))
-                await wait_for(app, selector)
+                nodes = await wait_for(app, selector)
+                chosen = matches(nodes, selector)[0]
+                index = [
+                    node
+                    for node in nodes
+                    if node["role"] == chosen["role"] and node["name"] == chosen["name"]
+                ].index(chosen)
                 role = selector["role"]
                 if target == "native":
                     role = {
@@ -123,7 +133,7 @@ async def execute(app, target, scenario, directory):
                     "focus_control" if action == "focus" else "click",
                     role,
                     selector["name"],
-                    selector.get("index", 0),
+                    index,
                 )
             elif action in ["press", "type"]:
                 await invoke(app, action, step["value"])

@@ -1,5 +1,7 @@
 # T3 behavioral and visual comparison
 
+Selectors can include `ancestor: {role, name}` to select a control inside a specific accessible container. Both drivers retain ancestry, and the runner resolves the selected control's global occurrence before sending real input. This scopes repeated row actions such as Settle thread to the intended thread instead of relying on sidebar position.
+
 `node tools/parity/snooze_oracle.mjs ORIGINAL_ROOT crates/t3code-gpui/tests/fixtures/snooze-oracle.json` executes the original Snooze state, scheduling, selection and custom-input functions. Its 407 states, 140 schedules with nested selections, and 2,100 custom inputs cover five IANA zones, spring/fall daylight-saving changes and the skipped Apia date. Preset labels use an explicit HH:mm adapter with en-US weekday labels. This calculation oracle does not certify native dialog controls or images.
 
 `node tools/parity/sidebar_status_oracle.mjs ORIGINAL_ROOT crates/t3code-gpui/tests/fixtures/sidebar-status-oracle.json` executes the original status, receding, unread and work-duration functions: 864 status combinations, 144 receding conditions, 30 unread cases, 108 start-time cases and 11 elapsed durations. Explicit-null activity start times prevent fallback, and offset dates and invalid visit timestamps are included.
