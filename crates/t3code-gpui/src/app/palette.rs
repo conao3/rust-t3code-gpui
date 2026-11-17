@@ -17,7 +17,8 @@ impl Root {
 
     pub(super) fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 20] = [
+        let commands: [(&str, Box<dyn Action>); 21] = [
+            ("Search project contents", Box::new(ToggleProjectSearch)),
             (self.reference_label(), Box::new(CopyThreadReference)),
             ("Regenerate thread title", Box::new(RegenerateTitle)),
             ("Undo thread action", Box::new(UndoThreadAction)),
@@ -55,8 +56,14 @@ impl Root {
         let closer = move |window: &mut Window, cx: &mut App| {
             let _ = weak.update(cx, |root, cx| {
                 root.palette_open = false;
-                root.composer
-                    .update(cx, |state, cx| state.focus(window, cx));
+                if root.project_search.open {
+                    root.project_search
+                        .input
+                        .update(cx, |state, cx| state.focus(window, cx));
+                } else {
+                    root.composer
+                        .update(cx, |state, cx| state.focus(window, cx));
+                }
                 cx.notify();
             });
         };

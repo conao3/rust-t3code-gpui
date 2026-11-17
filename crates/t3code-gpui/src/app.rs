@@ -49,6 +49,7 @@ mod hosts;
 mod lineage;
 mod palette;
 mod pane_layout;
+mod project_search;
 mod settings;
 mod sidebar_branding;
 mod sidebar_controls;
@@ -89,6 +90,7 @@ actions!(
         TogglePin,
         Find,
         TogglePalette,
+        ToggleProjectSearch,
         ToggleFilePicker,
         ToggleDiff,
         ToggleExplorer,
@@ -161,6 +163,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "sidebar.toggle" => Box::new(ToggleSidebar),
         "thread.pin" => Box::new(TogglePin),
         "chat.find" => Box::new(Find),
+        "projectSearch.toggle" => Box::new(ToggleProjectSearch),
         "commandPalette.toggle" => Box::new(TogglePalette),
         "filePicker.toggle" => Box::new(ToggleFilePicker),
         "diff.toggle" => Box::new(ToggleDiff),
@@ -423,6 +426,7 @@ pub struct Root {
     host_filter: Option<String>,
     palette: Entity<CommandState>,
     palette_open: bool,
+    project_search: project_search::ProjectSearch,
     file_picker: Entity<CommandState>,
     file_picker_open: bool,
     file_hits: Vec<String>,
@@ -640,6 +644,7 @@ impl Root {
             host_filter: None,
             palette,
             palette_open: false,
+            project_search: project_search::ProjectSearch::new(window, cx),
             file_picker,
             file_picker_open: false,
             file_hits: Vec::new(),
@@ -1102,6 +1107,7 @@ impl Render for Root {
                 .map(|group| group.title.clone())
                 .unwrap_or_else(|| "Pick a project".into())
         });
+        self.reveal_project_match();
         let pane = self.render_conversations(window, cx);
         let terminal_drawer = self
             .terminal_key()
@@ -1152,6 +1158,8 @@ impl Render for Root {
             .on_action(
                 cx.listener(|root, _: &TogglePalette, window, cx| root.toggle_palette(window, cx)),
             )
+            .on_action(cx.listener(|root, _: &ToggleProjectSearch, window, cx| root.toggle_project_search(window, cx)))
+            .on_action(cx.listener(|root, action: &project_search::OpenMatch, _, cx| root.open_project_match(action, cx)))
             .on_action(cx.listener(|root, _: &ToggleFilePicker, window, cx| {
                 root.toggle_file_picker(window, cx)
             }))
@@ -1365,6 +1373,7 @@ impl Render for Root {
                     .children(self.render_explorer(cx))
                     .children(self.render_file_panel(cx)),
             )
+            .when(self.project_search.open, |root_el| root_el.child(self.render_project_search(cx)))
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))
             })
