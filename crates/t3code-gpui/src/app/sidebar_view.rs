@@ -891,56 +891,78 @@ impl Root {
                     .p_2()
                     .children(rows),
             )
-            .child(statuses)
-            .child(
-                h_flex()
-                    .px_2()
-                    .pt_1()
-                    .gap_1()
-                    .child(
-                        Button::new("hosts")
-                            .icon(IconName::Globe)
-                            .tooltip("Connections")
-                            .accessibility_label("Connections")
-                            .compact()
+            .when(!self.pr_state.page, |sidebar| sidebar.child(statuses))
+            .when(self.pr_state.page, |sidebar| {
+                sidebar.child(
+                    h_flex().px_2().py_2().gap_1().child(
+                        Button::new("pr-back")
+                            .icon(IconName::ArrowLeft)
+                            .label("Back")
+                            .justify_start()
                             .ghost()
-                            .on_click(
-                                cx.listener(|root, _, window, cx| root.toggle_hosts(window, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("usage")
-                            .label("Usage")
-                            .compact()
-                            .ghost()
-                            .on_click(
-                                cx.listener(|root, _, window, cx| root.toggle_usage(window, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("pull-requests")
-                            .icon(gpui_kit::assets::IconName::GitPullRequest)
-                            .tooltip("Pull requests")
-                            .accessibility_label("Pull requests")
-                            .compact()
-                            .ghost()
-                            .on_click(
-                                cx.listener(|root, _, _, cx| root.open_pull_requests(true, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("settings")
-                            .icon(IconName::Settings)
-                            .tooltip("Settings")
-                            .accessibility_label("Settings")
-                            .compact()
-                            .ghost()
+                            .flex_1()
                             .on_click(cx.listener(|root, _, _, cx| {
-                                root.usage_page = None;
-                                root.settings_open = !root.settings_open;
+                                root.pr_state.page = false;
                                 cx.notify();
                             })),
                     ),
-            )
+                )
+            })
+            .when(!self.pr_state.page, |sidebar| {
+                sidebar.child(
+                    h_flex()
+                        .px_2()
+                        .pt_1()
+                        .gap_1()
+                        .child(
+                            Button::new("hosts")
+                                .icon(IconName::Globe)
+                                .tooltip("Connections")
+                                .accessibility_label("Connections")
+                                .compact()
+                                .ghost()
+                                .on_click(
+                                    cx.listener(|root, _, window, cx| {
+                                        root.toggle_hosts(window, cx)
+                                    }),
+                                ),
+                        )
+                        .child(
+                            Button::new("usage")
+                                .label("Usage")
+                                .compact()
+                                .ghost()
+                                .on_click(
+                                    cx.listener(|root, _, window, cx| {
+                                        root.toggle_usage(window, cx)
+                                    }),
+                                ),
+                        )
+                        .child(
+                            Button::new("pull-requests")
+                                .icon(gpui_kit::assets::IconName::GitPullRequest)
+                                .tooltip("Pull requests")
+                                .accessibility_label("Pull requests")
+                                .compact()
+                                .ghost()
+                                .on_click(
+                                    cx.listener(|root, _, _, cx| root.open_pull_requests(true, cx)),
+                                ),
+                        )
+                        .child(
+                            Button::new("settings")
+                                .icon(IconName::Settings)
+                                .tooltip("Settings")
+                                .accessibility_label("Settings")
+                                .compact()
+                                .ghost()
+                                .on_click(cx.listener(|root, _, _, cx| {
+                                    root.usage_page = None;
+                                    root.settings_open = !root.settings_open;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+            })
     }
 }

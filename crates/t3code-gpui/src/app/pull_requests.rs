@@ -3,8 +3,11 @@ use super::*;
 #[derive(Default)]
 pub(super) struct State {
     pub page: bool,
+    pub page_panel_open: bool,
     pub selected: Option<String>,
     pub list_state: String,
+    pub filters: HashMap<String, String>,
+    pub sort: String,
     pub entries: Vec<Value>,
     pub cursors: HashMap<String, Value>,
     pub loading: bool,
@@ -41,6 +44,225 @@ impl Render for Pane {
 }
 
 impl Root {
+    fn render_pr_filters(&self, cx: &Context<Self>) -> AnyElement {
+        use gpui_kit::component::menu::PopupMenuItem;
+        let weak = cx.entity().downgrade();
+        let sort_root = weak.clone();
+        let filters_root = weak.clone();
+        let current_sort = self.pr_state.sort.clone();
+        let current_state = self.pr_state.list_state.clone();
+        let current_filters = self.pr_state.filters.clone();
+        h_flex()
+            .gap_2()
+            .child(
+                div().flex_1().min_w_0().child(
+                    Input::new(&self.pr_search)
+                        .role(accesskit::Role::SearchInput)
+                        .aria_label("Search pull requests")
+                        .prefix(Icon::new(IconName::Search).size(px(16.))),
+                ),
+            )
+            .child(
+                Button::new("pr-sort")
+                    .outline()
+                    .label("Sort")
+                    .icon(gpui_kit::assets::IconName::ArrowDownUp)
+                    .accessibility_label(format!(
+                        "Sort pull requests: {}",
+                        sort_label(&current_sort)
+                    ))
+                    .dropdown_menu(move |mut menu, _, _| {
+                        for (value, label) in SORTS {
+                            let weak = sort_root.clone();
+                            menu = menu.item(
+                                PopupMenuItem::new(*label)
+                                    .checked(
+                                        current_sort == *value
+                                            || current_sort.is_empty() && *value == "ready",
+                                    )
+                                    .on_click(move |_, _, cx| {
+                                        let _ = weak.update(cx, |root, cx| {
+                                            root.pr_state.sort = (*value).into();
+                                            root.panel_revision += 1;
+                                            cx.notify();
+                                        });
+                                    }),
+                            );
+                        }
+                        menu.radio_group()
+                    }),
+            )
+            .child(
+                Button::new("pr-filters")
+                    .outline()
+                    .label("Filters")
+                    .icon(gpui_kit::assets::IconName::ListFilter)
+                    .dropdown_menu(move |mut menu, window, cx| {
+                        for (key, label, options) in FILTERS {
+                            let selected = if *key == "state" {
+                                current_state.clone()
+                            } else {
+                                current_filters.get(*key).cloned().unwrap_or_default()
+                            };
+                            let weak = filters_root.clone();
+                            let current_label = options
+                                .iter()
+                                .find(|(value, _)| *value == selected)
+                                .map(|(_, label)| *label)
+                                .unwrap_or(options[0].1);
+                            menu = menu.submenu(
+                                format!("{label} {current_label}"),
+                                window,
+                                cx,
+                                move |mut menu, _, _| {
+                                    for (value, label) in *options {
+                                        let weak = weak.clone();
+                                        menu = menu.item(
+                                            PopupMenuItem::new(*label)
+                                                .checked(selected == *value)
+                                                .on_click(move |_, _, cx| {
+                                                    let _ = weak.update(cx, |root, cx| {
+                                                        if *key == "state" {
+                                                            root.pr_state.list_state =
+                                                                (*value).into();
+                                                        } else if value.is_empty() {
+                                                            root.pr_state.filters.remove(*key);
+                                                        } else {
+                                                            root.pr_state.filters.insert(
+                                                                (*key).into(),
+                                                                (*value).into(),
+                                                            );
+                                                        }
+                                                        root.load_pull_requests(false, cx);
+                                                    });
+                                                }),
+                                        );
+                                    }
+                                    menu.radio_group()
+                                },
+                            );
+                        }
+                        menu
+                    }),
+            )
+            .child(
+                Button::new("pr-provider")
+                    .outline()
+                    .label("All")
+                    .icon(gpui_kit::assets::IconName::Plug2)
+                    .accessibility_label("Filter by provider: All")
+                    .dropdown_menu(move |menu, _, _| {
+                        let weak = weak.clone();
+                        menu.item(PopupMenuItem::new("All").checked(true).on_click(
+                            move |_, _, cx| {
+                                let _ = weak.update(cx, |root, cx| {
+                                    root.pr_state.filters.remove("host");
+                                    root.load_pull_requests(false, cx);
+                                });
+                            },
+                        ))
+                    }),
+            )
+            .child(
+                Button::new("pr-refresh")
+                    .outline()
+                    .icon(IconName::RefreshCw)
+                    .accessibility_label("Refresh pull requests")
+                    .disabled(self.pr_state.loading)
+                    .on_click(cx.listener(|root, _, _, cx| root.load_pull_requests(false, cx))),
+            )
+            .into_any_element()
+    }
+
+    fn render_pr_empty(&self, cx: &Context<Self>) -> AnyElement {
+        let query = self.pr_search.read(cx).value().trim().to_string();
+        let filtered = !self.pr_state.filters.is_empty()
+            || !matches!(self.pr_state.list_state.as_str(), "" | "open");
+        let title = if !query.is_empty() {
+            format!(
+                "Nothing matches “{}{}”",
+                query.chars().take(48).collect::<String>(),
+                if query.chars().count() > 48 {
+                    "…"
+                } else {
+                    ""
+                }
+            )
+        } else if filtered {
+            "Nothing under these filters".into()
+        } else {
+            "No pull requests".into()
+        };
+        let description = if !query.is_empty() {
+            "The hosts were searched for it. Try fewer words, or search by number, author or branch."
+        } else if filtered {
+            "Widen the state, involvement or project filter to see more."
+        } else {
+            "Pull requests from every project in this workspace appear here."
+        };
+        v_flex()
+            .flex_1()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .gap_6()
+            .child(
+                svg()
+                    .path("icons/pr-empty.svg")
+                    .w(px(128.))
+                    .h(px(80.))
+                    .text_color(cx.theme().muted_foreground.opacity(0.6)),
+            )
+            .child(
+                v_flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(20.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(text!(title)),
+                    )
+                    .child(
+                        div()
+                            .max_w(px(384.))
+                            .text_center()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(text!(description)),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .when(!query.is_empty(), |row| {
+                        row.child(
+                            Button::new("pr-clear-search")
+                                .outline()
+                                .icon(IconName::Search)
+                                .label("Clear search")
+                                .small()
+                                .on_click(cx.listener(|root, _, window, cx| {
+                                    root.pr_search
+                                        .update(cx, |input, cx| input.set_value("", window, cx));
+                                    root.load_pull_requests(false, cx);
+                                })),
+                        )
+                    })
+                    .child(
+                        Button::new("pr-check-again")
+                            .outline()
+                            .icon(IconName::RefreshCw)
+                            .label("Check again")
+                            .small()
+                            .on_click(
+                                cx.listener(|root, _, _, cx| root.load_pull_requests(false, cx)),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+
     pub(super) fn open_pull_requests(&mut self, page: bool, cx: &mut Context<Self>) {
         self.pr_state.page = page;
         self.pr_state.selected = None;
@@ -120,6 +342,7 @@ impl Root {
         }
         .to_string();
         let query = self.pr_search.read(cx).value().trim().to_string();
+        let filters = self.pr_state.filters.clone();
         let cursors = self.pr_state.cursors.clone();
         let connections = self.connections.clone();
         let runtime = self.runtime.clone();
@@ -127,7 +350,18 @@ impl Root {
             let result = on_runtime(&runtime, async move {
                 let mut results = Vec::new();
                 for connection in connections {
-                    let mut input = json!({"state":state,"limit":100});
+                    let mut input = json!({"state":state,"limit":99});
+                    let mut qualifiers = serde_json::Map::new();
+                    for (key, value) in &filters {
+                        if matches!(key.as_str(), "involvement" | "host" | "projectId") {
+                            input[key] = json!(value);
+                        } else {
+                            qualifiers.insert(key.clone(), json!(value));
+                        }
+                    }
+                    if !qualifiers.is_empty() {
+                        input["filters"] = Value::Object(qualifiers);
+                    }
                     if !query.is_empty() {
                         input["query"] = json!(query);
                     }
@@ -218,6 +452,7 @@ impl Root {
             self.activate_panel(id.clone(), cx);
         }
         self.pr_state.selected = Some(id.clone());
+        self.pr_state.page_panel_open = true;
         self.pr_state.views.entry(id.clone()).or_insert(Detail {
             environment,
             reference,
@@ -467,7 +702,7 @@ impl Root {
             dialog
                 .title(format!("{} pull request", action_label(action)))
                 .footer(git_controls::dialog_footer(action_label(action)))
-                .child("Confirm this action on the pull request host.")
+                .child(text!("Confirm this action on the pull request host."))
                 .on_ok(move |_, _, cx| {
                     let _ = weak.update(cx, |root, cx| {
                         if root.pull_request_id().as_ref() != Some(&id) {
@@ -485,66 +720,23 @@ impl Root {
     }
 
     pub(super) fn render_pull_requests(&self, cx: &Context<Self>) -> AnyElement {
-        if let Some(id) = self.pull_request_id()
+        if !self.pr_state.page
+            && let Some(id) = self.pull_request_id()
             && let Some(view) = self.pr_state.views.get(&id)
         {
             return self.render_pr_detail(view, cx);
         }
         let mut body = v_flex()
             .id("pull-request-list")
+            .role(accesskit::Role::Region)
+            .aria_label("Pull requests")
             .size_full()
             .min_h_0()
-            .gap_2()
-            .p_4()
-            .child(
-                h_flex()
-                    .child(div().flex_1().text_lg().child("Pull requests"))
-                    .child(
-                        Button::new("close-pr-page")
-                            .label("Close")
-                            .ghost()
-                            .on_click(cx.listener(|root, _, _, cx| {
-                                root.pr_state.page = false;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&self.pr_search).role(accesskit::Role::SearchInput)),
-                    )
-                    .child(Button::new("pr-search").label("Search").on_click(
-                        cx.listener(|root, _, _, cx| root.load_pull_requests(false, cx)),
-                    )),
-            )
-            .child(
-                h_flex().gap_1().children(
-                    [
-                        ("open", "Open"),
-                        ("closed", "Closed"),
-                        ("merged", "Merged"),
-                        ("all", "All"),
-                    ]
-                    .into_iter()
-                    .map(|(state, label)| {
-                        Button::new(label)
-                            .label(label)
-                            .ghost()
-                            .selected(
-                                self.pr_state.list_state == state
-                                    || state == "open" && self.pr_state.list_state.is_empty(),
-                            )
-                            .on_click(cx.listener(move |root, _, _, cx| {
-                                root.pr_state.list_state = state.into();
-                                root.load_pull_requests(false, cx);
-                            }))
-                    }),
-                ),
-            )
+            .gap_4()
+            .px_6()
+            .pt_6()
+            .pb_12()
+            .child(self.render_pr_filters(cx))
             .children(
                 self.pr_state
                     .error
@@ -556,7 +748,9 @@ impl Root {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll();
-        for entry in &self.pr_state.entries {
+        let mut entries = self.pr_state.entries.iter().collect::<Vec<_>>();
+        entries.sort_by(|a, b| compare_entries(a, b, &self.pr_state.sort));
+        for entry in entries {
             let label = format!(
                 "#{} {}",
                 entry["number"],
@@ -596,17 +790,38 @@ impl Root {
             );
         }
         if self.pr_state.loading {
-            list = list.child("Loading pull requests…");
+            list = list.child(div().h(px(160.)));
         } else if self.pr_state.entries.is_empty() && self.pr_state.error.is_none() {
-            list = list.child("No pull requests");
+            list = list.child(self.render_pr_empty(cx));
         }
         body = body.child(list);
         if !self.pr_state.cursors.is_empty() {
             body = body.child(
                 Button::new("more-prs")
-                    .label("Load more")
+                    .label("Load more pull requests")
                     .on_click(cx.listener(|root, _, _, cx| root.load_pull_requests(true, cx))),
             );
+        }
+        if self.pr_state.page
+            && self.pr_state.page_panel_open
+            && let Some(view) = self
+                .pr_state
+                .selected
+                .as_ref()
+                .and_then(|id| self.pr_state.views.get(id))
+        {
+            return h_flex()
+                .size_full()
+                .child(body.flex_1().w_0())
+                .child(
+                    div()
+                        .w(px(self.right_panel_width))
+                        .h_full()
+                        .border_l_1()
+                        .border_color(cx.theme().border)
+                        .child(self.render_pr_detail(view, cx)),
+                )
+                .into_any_element();
         }
         body.into_any_element()
     }
@@ -621,7 +836,7 @@ impl Root {
             .gap_3()
             .p_4();
         if view.loading {
-            content = content.child("Loading pull request…");
+            content = content.child(text!("Loading pull request…"));
         }
         if let Some(error) = &view.error {
             content = content.child(div().text_color(cx.theme().danger).child(error.clone()));
@@ -856,4 +1071,107 @@ fn action_label(action: &str) -> &'static str {
         "disable-auto-merge" => "Disable auto-merge",
         _ => "Confirm",
     }
+}
+
+const SORTS: &[(&str, &str)] = &[
+    ("ready", "Merge readiness"),
+    ("blocked", "Blocked on me"),
+    ("updated", "Recently updated"),
+    ("newest", "Newest shown"),
+    ("oldest", "Oldest shown"),
+    ("largest", "Largest shown"),
+    ("smallest", "Smallest shown"),
+];
+
+type FilterOptions = (
+    &'static str,
+    &'static str,
+    &'static [(&'static str, &'static str)],
+);
+const FILTERS: &[FilterOptions] = &[
+    (
+        "state",
+        "State",
+        &[
+            ("all", "All"),
+            ("", "Open"),
+            ("closed", "Closed"),
+            ("merged", "Merged"),
+        ],
+    ),
+    (
+        "involvement",
+        "Involvement",
+        &[
+            ("", "All"),
+            ("reviewing", "Reviewing"),
+            ("authored", "Authored"),
+        ],
+    ),
+    (
+        "draft",
+        "Draft",
+        &[
+            ("", "All"),
+            ("only", "Drafts only"),
+            ("hide", "Hide drafts"),
+        ],
+    ),
+    (
+        "review",
+        "Review",
+        &[
+            ("", "All"),
+            ("approved", "Approved"),
+            ("changes-requested", "Changes requested"),
+            ("review-required", "Review required"),
+            ("none", "No reviews"),
+        ],
+    ),
+    (
+        "checks",
+        "Checks",
+        &[("", "All"), ("passing", "Passing"), ("failing", "Failing")],
+    ),
+];
+
+fn sort_label(sort: &str) -> &'static str {
+    SORTS
+        .iter()
+        .find(|(value, _)| *value == sort)
+        .unwrap_or(&SORTS[0])
+        .1
+}
+
+fn compare_entries(a: &Value, b: &Value, sort: &str) -> std::cmp::Ordering {
+    let size = |entry: &Value| {
+        entry["additions"].as_i64().unwrap_or(0) + entry["deletions"].as_i64().unwrap_or(0)
+    };
+    let ready = |entry: &Value| {
+        if entry["mergeability"] == "conflicting" {
+            4
+        } else if entry["state"] != "open" {
+            3
+        } else if entry["isDraft"] == true {
+            2
+        } else if entry["checksState"] == "passing" && entry["reviewDecision"] == "approved" {
+            0
+        } else if entry["checksState"] == "passing" {
+            1
+        } else {
+            2
+        }
+    };
+    let order = match sort {
+        "newest" => b["createdAt"].as_str().cmp(&a["createdAt"].as_str()),
+        "oldest" => a["createdAt"].as_str().cmp(&b["createdAt"].as_str()),
+        "largest" => size(b).cmp(&size(a)),
+        "smallest" => size(a).cmp(&size(b)),
+        "ready" | "" => ready(a)
+            .cmp(&ready(b))
+            .then_with(|| (size(b) > 0).cmp(&(size(a) > 0)))
+            .then_with(|| size(a).cmp(&size(b))),
+        _ => std::cmp::Ordering::Equal,
+    };
+    order.then_with(|| b["updatedAt"].as_str().cmp(&a["updatedAt"].as_str()))
 }

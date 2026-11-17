@@ -378,6 +378,9 @@ impl AssetSource for Assets {
             return Ok(Some(std::borrow::Cow::Borrowed(*data)));
         }
         match path {
+            "icons/pr-empty.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/pr-empty.svg"
+            )))),
             "icons/t3-stop.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
                 "../assets/stop.svg"
             )))),

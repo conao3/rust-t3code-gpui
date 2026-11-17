@@ -281,11 +281,14 @@ impl Root {
             .as_ref()
             .map(|e| (e.directories.len(), e.expanded.len(), e.error.clone()));
         let stamp = format!(
-            "{}:{file:?}:{explorer:?}:{}:{}:{}",
+            "{}:{file:?}:{explorer:?}:{}:{}:{}:{:?}:{}:{}",
             self.panel_revision,
             self.file_find_open,
             self.file_find_input.read(cx).value(),
-            self.settings.light_theme
+            self.settings.light_theme,
+            self.branch_anchor,
+            self.branch_refs.len(),
+            self.branch_query
         );
         if self.panel_stamp != stamp {
             self.panel_stamp = stamp;
@@ -294,11 +297,14 @@ impl Root {
         }
     }
 
-    fn render_panel_contents(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_panel_tabs(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let tabs = h_flex()
+        h_flex()
             .id("panel-tabs")
             .h(px(40.))
+            .min_w_0()
+            .w_full()
+            .overflow_hidden()
             .gap_1()
             .px_2()
             .children(self.right_panel.tabs.iter().map(|id| {
@@ -307,8 +313,57 @@ impl Root {
                 let close = id.clone();
                 let menu_id = id.clone();
                 let focus = self.focus.clone();
+                let drop_id = id.clone();
+                let middle_id = id.clone();
                 h_flex()
                     .id(SharedString::from(format!("tab-context-{id}")))
+                    .h(px(24.))
+                    .rounded_md()
+                    .when(self.right_panel.active.as_ref() == Some(id), |tab| {
+                        tab.bg(theme.accent)
+                    })
+                    .on_drag(PanelTabDrag(id.clone()), |drag, _, _, cx| {
+                        cx.new(|_| drag.clone())
+                    })
+                    .on_drop(cx.listener(move |root, drag: &PanelTabDrag, _, cx| {
+                        if let (Some(from), Some(to)) = (
+                            root.right_panel.tabs.iter().position(|id| id == &drag.0),
+                            root.right_panel.tabs.iter().position(|id| id == &drop_id),
+                        ) {
+                            let id = root.right_panel.tabs.remove(from);
+                            root.right_panel.tabs.insert(to, id);
+                            root.panel_revision += 1;
+                            root.save_right_panel();
+                            cx.notify();
+                        }
+                    }))
+                    .on_mouse_up(
+                        MouseButton::Middle,
+                        cx.listener(move |root, _, _, cx| root.close_panel_tab(&middle_id, cx)),
+                    )
+                    .min_w_0()
+                    .child(
+                        Button::new(SharedString::from(format!("close-{id}")))
+                            .icon(surface_icon(id))
+                            .ghost()
+                            .size(px(20.))
+                            .accessibility_label(format!("Close {label}"))
+                            .on_click(
+                                cx.listener(move |root, _, _, cx| root.close_panel_tab(&close, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new(SharedString::from(id.clone()))
+                            .label(label.clone())
+                            .ghost()
+                            .compact()
+                            .text_xs()
+                            .max_w(px(116.))
+                            .on_click(cx.listener(move |root, _, _, cx| {
+                                root.activate_panel(select.clone(), cx);
+                                root.load_active_surface(cx);
+                            })),
+                    )
                     .context_menu(move |mut menu, _, _| {
                         for (label, kind) in [
                             ("Close", "close"),
@@ -326,28 +381,6 @@ impl Root {
                         }
                         menu.action_context(focus.clone())
                     })
-                    .min_w_0()
-                    .child(
-                        Button::new(SharedString::from(id.clone()))
-                            .label(label.clone())
-                            .ghost()
-                            .compact()
-                            .selected(self.right_panel.active.as_ref() == Some(id))
-                            .on_click(cx.listener(move |root, _, _, cx| {
-                                root.activate_panel(select.clone(), cx);
-                                root.load_active_surface(cx);
-                            })),
-                    )
-                    .child(
-                        Button::new(SharedString::from(format!("close-{id}")))
-                            .icon(IconName::Close)
-                            .ghost()
-                            .size(px(20.))
-                            .accessibility_label(format!("Close {label}"))
-                            .on_click(
-                                cx.listener(move |root, _, _, cx| root.close_panel_tab(&close, cx)),
-                            ),
-                    )
             }))
             .child(
                 Button::new("add-panel")
@@ -379,7 +412,12 @@ impl Root {
                         root.panel_revision += 1;
                         cx.notify();
                     })),
-            );
+            )
+            .into_any_element()
+    }
+
+    fn render_panel_contents(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
         let body = if self.right_panel.active.is_none() {
             self.render_surface_launcher(cx)
         } else {
@@ -400,10 +438,10 @@ impl Root {
                     .into_any_element(),
                 Some("files") => self
                     .render_explorer(cx)
-                    .unwrap_or_else(|| div().child("Loading files…").into_any_element()),
+                    .unwrap_or_else(|| div().child(text!("Loading files…")).into_any_element()),
                 _ => self
                     .render_file_panel(cx)
-                    .unwrap_or_else(|| div().child("Loading…").into_any_element()),
+                    .unwrap_or_else(|| div().child(text!("Loading…")).into_any_element()),
             }
         };
         v_flex()
@@ -442,7 +480,6 @@ impl Root {
             .bg(theme.background)
             .border_l_1()
             .border_color(theme.border)
-            .child(tabs)
             .child(div().flex_1().min_h_0().child(body))
             .when(
                 self.right_panel.launcher && self.right_panel.active.is_some(),
@@ -453,7 +490,7 @@ impl Root {
                             .role(accesskit::Role::Menu)
                             .aria_label("Add panel surface")
                             .absolute()
-                            .top(px(40.))
+                            .top(px(0.))
                             .right(px(4.))
                             .w(px(240.))
                             .p_1()
@@ -506,7 +543,7 @@ impl Root {
             .justify_center()
             .px_6()
             .gap_1()
-            .child(div().text_sm().mb_3().child("Open a surface"))
+            .child(div().text_sm().mb_3().child(text!("Open a surface")))
             .children(
                 [
                     ("Files", "F"),
@@ -576,5 +613,34 @@ fn panel_title(id: &str) -> String {
             .next()
             .unwrap_or(id)
             .into(),
+    }
+}
+
+#[derive(Clone)]
+struct PanelTabDrag(String);
+
+impl Render for PanelTabDrag {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .bg(cx.theme().accent)
+            .text_xs()
+            .child(panel_title(&self.0))
+    }
+}
+
+fn surface_icon(id: &str) -> gpui_kit::assets::IconName {
+    use gpui_kit::assets::IconName;
+    match id {
+        "files" => IconName::Files,
+        "diff" => IconName::FileDiff,
+        "browser" => IconName::Globe,
+        "terminal" => IconName::Terminal,
+        "device" => IconName::Smartphone,
+        "side-chat" => IconName::MessagesSquare,
+        _ if id.starts_with("pull-request") => IconName::GitPullRequest,
+        _ => IconName::File,
     }
 }

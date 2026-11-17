@@ -319,6 +319,7 @@ pub struct PopupMenu {
     /// Indexes of the items added as options that can be checked, so an
     /// unchecked one reports its state rather than reading as a command.
     checkable: HashSet<usize>,
+    radio_group: bool,
 
     /// The parent menu of this menu, if this is a submenu
     parent_menu: Option<WeakEntity<Self>>,
@@ -367,6 +368,7 @@ impl PopupMenu {
             max_height: None,
             check_side: Side::Left,
             checkable: HashSet::new(),
+            radio_group: false,
             bounds: Bounds::default(),
             scrollable: false,
             scroll_to_checked_frames: SCROLL_TO_CHECKED_FRAMES,
@@ -588,6 +590,8 @@ impl PopupMenu {
         self.add_menu_item(label, Some(icon.into()), action, disabled, false);
         self
     }
+
+    pub fn radio_group(mut self) -> Self { self.radio_group = true; self }
 
     /// Add Menu Item with check icon
     pub fn menu_with_check(
@@ -1377,8 +1381,9 @@ impl PopupMenu {
                 cx.notify();
             }))
             .when_some(item.a11y_label(), |this, label| this.aria_label(label))
+            .radio(self.radio_group && !is_submenu)
             .checked(
-                (item.is_checked() || self.checkable.contains(&ix)).then(|| item.is_checked()),
+                (self.radio_group && !is_submenu || item.is_checked() || self.checkable.contains(&ix)).then(|| item.is_checked()),
             );
 
         match item {

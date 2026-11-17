@@ -328,13 +328,13 @@ impl Root {
                                             Icon::new(gpui_kit::assets::IconName::FileDiff)
                                                 .size(px(16.)),
                                         )
-                                        .child("Changes")
+                                        .child(text!("Changes"))
                                         .child(
                                             div()
                                                 .flex_1()
                                                 .text_xs()
                                                 .text_color(theme.muted_foreground)
-                                                .child("Uncommitted"),
+                                                .child(text!("Uncommitted")),
                                         )
                                         .child(div().text_xs().text_color(theme.success).child(
                                             format!(
@@ -550,7 +550,7 @@ impl Root {
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().muted_foreground)
-                                            .child("Start from remote"),
+                                            .child(text!("Start from remote")),
                                     )
                                     .child(
                                         gpui_kit::component::switch::Switch::new(
@@ -605,7 +605,7 @@ impl Root {
         cx.notify();
     }
 
-    fn search_branches(&mut self, query: String, more: bool, cx: &mut Context<Self>) {
+    pub(super) fn search_branches(&mut self, query: String, more: bool, cx: &mut Context<Self>) {
         let Some((environment, cwd)) = self.composer_cwd() else {
             return;
         };
@@ -678,6 +678,13 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match action.kind.as_str() {
+            "diff-base" => {
+                self.diff_view.base_ref = action.value.as_str().map(str::to_string);
+                self.branch_anchor = None;
+                self.refresh_diff(cx);
+                self.panel_focus.focus(window, cx);
+                return;
+            }
             "detach-agent" => {
                 self.lineage_action("detach", window, cx);
                 return;

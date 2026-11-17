@@ -137,7 +137,8 @@ where
                         menu_state.update(cx, |state, _| {
                             state.menu = Some(menu.clone());
                         });
-                        menu.focus_handle(cx).focus(window, cx);
+                        let focus = menu.focus_handle(cx);
+                        window.defer(cx, move |window, cx| focus.focus(window, cx));
 
                         // Listen for dismiss events from the PopupMenu to close the popover.
                         //

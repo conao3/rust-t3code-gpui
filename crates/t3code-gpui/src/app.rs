@@ -323,6 +323,7 @@ struct NewThreadDraft {
 #[derive(PartialEq)]
 struct SidebarStamp {
     catalog_revision: u64,
+    pull_requests_page: bool,
     jump_labels: Vec<Option<String>>,
     history_available: (bool, bool),
     entries_revision: u64,
@@ -585,6 +586,9 @@ impl Root {
             state
         });
         let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
+        let pr_search = cx.new(|cx| {
+            InputState::new(window, cx).placeholder("Search pull requests, or label:bug")
+        });
         let file_find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in file"));
         let host_inputs = [
             cx.new(|cx| InputState::new(window, cx).placeholder("Name (eos, helios)")),
@@ -595,6 +599,11 @@ impl Root {
         let file_picker = cx.new(|cx| CommandState::new(window, cx));
         let weak = cx.entity().downgrade();
         let subscriptions = vec![
+            cx.subscribe(&pr_search, |root, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change | InputEvent::PressEnter { .. }) {
+                    root.load_pull_requests(false, cx);
+                }
+            }),
             cx.intercept_keystrokes(move |event, window, cx| {
                 let handled = weak
                     .update(cx, |root, cx| root.intercept(event, window, cx))
@@ -662,7 +671,7 @@ impl Root {
             context_usage_stamp: None,
             context_usage: None,
             pr_state: pull_requests::State::default(),
-            pr_search: cx.new(|cx| InputState::new(window, cx).placeholder("Search pull requests")),
+            pr_search,
             pr_comment: cx.new(|cx| TextareaState::new(window, cx).placeholder("Leave a comment")),
             pr_pane: cx.new(|_| pull_requests::Pane {
                 root: sidebar_root.clone(),
@@ -1130,6 +1139,7 @@ impl Render for Root {
         );
         let sidebar_stamp = SidebarStamp {
             catalog_revision: self.model_catalog_revision,
+            pull_requests_page: self.pr_state.page,
             jump_labels: if self.jump_hints && !self.picker_open && !self.palette_open {
                 keymap::jump_labels(&self.key_rules, &|name| self.key_context(name, window, cx))
             } else {

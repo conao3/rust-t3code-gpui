@@ -15,6 +15,7 @@ pub(crate) struct MenuItemElement {
     disabled: bool,
     selected: bool,
     checked: Option<bool>,
+    radio: bool,
     on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     on_hover: Option<Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>>,
     children: SmallVec<[AnyElement; 2]>,
@@ -31,11 +32,14 @@ impl MenuItemElement {
             disabled: false,
             selected: false,
             checked: None,
+            radio: false,
             on_click: None,
             on_hover: None,
             children: SmallVec::new(),
         }
     }
+
+    pub(crate) fn radio(mut self, radio: bool) -> Self { self.radio = radio; self }
 
     /// Set ListItem as the selected item style.
     pub(crate) fn selected(mut self, selected: bool) -> Self {
@@ -104,7 +108,7 @@ impl RenderOnce for MenuItemElement {
         h_flex()
             .id(self.id)
             .test_support()
-            .role(Role::MenuItem)
+            .role(if self.radio { Role::MenuItemRadio } else { Role::MenuItem })
             .when_some(self.aria_label, |this, label| this.aria_label(label))
             .aria_selected(self.selected)
             .when_some(self.checked, |this, checked| {
