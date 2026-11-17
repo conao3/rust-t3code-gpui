@@ -247,20 +247,25 @@ impl Root {
                 .absolute()
                 .bottom_full()
                 .right_0()
-                .mb_1()
                 .when(open, |view| {
-                    view.w_full()
-                        .p_2()
+                    view.left_4()
+                        .right_4()
+                        .px_1()
+                        .py_1()
                         .rounded_md()
                         .border_1()
                         .border_color(cx.theme().border)
-                        .bg(cx.theme().popover)
+                        .bg(crate::appearance::composer(cx))
                         .shadow_md()
                 })
                 .gap_1()
                 .child(
                     Button::new("stash-toggle")
                         .label(format!("Stash {count}"))
+                        .icon(gpui_kit::assets::IconName::Bookmark)
+                        .justify_start()
+                        .h(px(24.))
+                        .text_xs()
                         .accessibility_label(if open {
                             "Close stash".to_string()
                         } else {
@@ -297,6 +302,10 @@ impl Root {
                                                 "restore-{id}"
                                             )))
                                             .label(snippet.clone())
+                                            .icon(IconName::FileText)
+                                            .justify_start()
+                                            .h(px(26.))
+                                            .text_xs()
                                             .accessibility_label(format!(
                                                 "Restore stashed prompt: {snippet}"
                                             ))
@@ -311,7 +320,8 @@ impl Root {
                                             Button::new(SharedString::from(format!(
                                                 "delete-{delete}"
                                             )))
-                                            .label("Delete")
+                                            .icon(gpui_kit::assets::IconName::X)
+                                            .size(px(24.))
                                             .accessibility_label("Delete stashed prompt")
                                             .ghost()
                                             .compact()

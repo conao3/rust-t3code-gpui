@@ -353,6 +353,7 @@ struct ComposerControlsStamp {
     status: Option<ThreadStatus>,
     delivery: Delivery,
     dictation: (bool, bool),
+    effort_cursor: Option<Value>,
     queue_edit: Option<(String, bool)>,
     question: bool,
     empty: bool,
@@ -1162,6 +1163,7 @@ impl Render for Root {
             status: self.open_entry().map(|entry| entry.status),
             delivery: self.composer_delivery(false),
             dictation: (self.dictation.busy, self.dictation.recording.is_some()),
+            effort_cursor: self.composer_choices.effort_cursor.clone(),
             queue_edit: self
                 .queue_edit
                 .as_ref()
