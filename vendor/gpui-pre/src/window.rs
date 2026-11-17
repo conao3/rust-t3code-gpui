@@ -1267,6 +1267,7 @@ pub struct Window {
     mouse_hit_test: HitTest,
     modifiers: Modifiers,
     capslock: Capslock,
+    keyboard_input_context: Option<crate::KeyboardInputContext>,
     scale_factor: f32,
     pub(crate) bounds_observers: SingleSubscriberSet<AnyObserver>,
     appearance: WindowAppearance,
@@ -2243,7 +2244,9 @@ impl Window {
             let mut cx = cx.to_async();
             Box::new(move |event| {
                 handle
-                    .update(&mut cx, |_, window, cx| window.dispatch_event(event, cx))
+                    .update(&mut cx, |_, window, cx| {
+                        window.dispatch_platform_event(event, cx)
+                    })
                     .with_context(|| {
                         format!("dispatching input for window {:?}", handle.window_id())
                     })
@@ -2390,6 +2393,7 @@ impl Window {
             mouse_hit_test: HitTest::default(),
             modifiers,
             capslock,
+            keyboard_input_context: None,
             scale_factor,
             bounds_observers: SingleSubscriberSet::new(),
             appearance,
@@ -5869,6 +5873,47 @@ impl Window {
     /// Dispatch a mouse, keyboard, or touch event on the window.
     #[profiling::function]
     pub fn dispatch_event(&mut self, event: PlatformInput, cx: &mut App) -> DispatchEventResult {
+        self.dispatch_event_with_keyboard_context(event, None, cx)
+    }
+
+    #[allow(missing_docs)]
+    pub fn current_keyboard_input_context(&self) -> Option<&crate::KeyboardInputContext> {
+        self.keyboard_input_context.as_ref()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    #[allow(missing_docs)]
+    pub fn simulate_keyboard_input(
+        &mut self,
+        event: PlatformInput,
+        context: crate::KeyboardInputContext,
+        cx: &mut App,
+    ) -> DispatchEventResult {
+        self.dispatch_event_with_keyboard_context(event, Some(context), cx)
+    }
+
+    fn dispatch_platform_event(
+        &mut self,
+        event: PlatformInput,
+        cx: &mut App,
+    ) -> DispatchEventResult {
+        let context = self.platform_window.current_keyboard_input_context();
+        self.dispatch_event_with_keyboard_context(event, context, cx)
+    }
+
+    fn dispatch_event_with_keyboard_context(
+        &mut self,
+        event: PlatformInput,
+        context: Option<crate::KeyboardInputContext>,
+        cx: &mut App,
+    ) -> DispatchEventResult {
+        let previous = std::mem::replace(&mut self.keyboard_input_context, context);
+        let result = self.dispatch_event_inner(event, cx);
+        self.keyboard_input_context = previous;
+        result
+    }
+
+    fn dispatch_event_inner(&mut self, event: PlatformInput, cx: &mut App) -> DispatchEventResult {
         #[cfg(feature = "profiler")]
         self.window_profiler.begin_input(event.kind_name());
         let update_count_before = self.invalidator.update_count();
@@ -6719,6 +6764,7 @@ impl Window {
     }
 
     fn replay_pending_input(&mut self, replays: SmallVec<[Replay; 1]>, cx: &mut App) {
+        let keyboard_context = self.keyboard_input_context.take();
         let node_id = self.focus_node_id_in_rendered_frame(self.focus);
         let dispatch_path = self.rendered_frame.dispatch_tree.dispatch_path(node_id);
 
@@ -6755,6 +6801,7 @@ impl Window {
                 self.platform_window.set_input_handler(input_handler)
             }
         }
+        self.keyboard_input_context = keyboard_context;
     }
 
     fn focus_node_id_in_rendered_frame(&self, focus_id: Option<FocusId>) -> DispatchNodeId {

@@ -121,6 +121,7 @@ pub struct WaylandWindowState {
     bounds: Bounds<Pixels>,
     scale: f32,
     input_handler: Option<PlatformInputHandler>,
+    keyboard_input_context: Option<gpui::KeyboardInputContext>,
     decorations: WindowDecorations,
     background_appearance: WindowBackgroundAppearance,
     fullscreen: bool,
@@ -623,6 +624,7 @@ impl WaylandWindowState {
             bounds: options.bounds,
             scale: 1.0,
             input_handler: None,
+            keyboard_input_context: None,
             decorations: WindowDecorations::Client,
             background_appearance: WindowBackgroundAppearance::Opaque,
             fullscreen: false,
@@ -1606,6 +1608,16 @@ impl WaylandWindowStatePtr {
         }
     }
 
+    pub fn handle_keyboard_input(&self, input: PlatformInput, context: gpui::KeyboardInputContext) {
+        let previous = self
+            .state
+            .borrow_mut()
+            .keyboard_input_context
+            .replace(context);
+        self.handle_input(input);
+        self.state.borrow_mut().keyboard_input_context = previous;
+    }
+
     pub fn set_focused(&self, focus: bool) {
         self.state.borrow_mut().active = focus;
         let callback = self.callbacks.borrow_mut().active_status_change.take();
@@ -1719,6 +1731,9 @@ impl rwh::HasDisplayHandle for WaylandWindow {
 }
 
 impl PlatformWindow for WaylandWindow {
+    fn current_keyboard_input_context(&self) -> Option<gpui::KeyboardInputContext> {
+        self.0.state.borrow().keyboard_input_context.clone()
+    }
     fn bounds(&self) -> Bounds<Pixels> {
         self.borrow().bounds
     }

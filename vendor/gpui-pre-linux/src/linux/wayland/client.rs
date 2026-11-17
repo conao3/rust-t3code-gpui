@@ -2183,6 +2183,12 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                     wl_keyboard::KeyState::Pressed if !keysym.is_modifier_key() => {
                         let mut keystroke =
                             keystroke_from_xkb(keymap_state, state.modifiers, keycode);
+                        let keyboard_context = crate::linux::keyboard_input_context(
+                            keymap_state,
+                            state.modifiers,
+                            keycode,
+                            gpui::KeyboardInputAction::Press,
+                        );
                         if let Some(mut compose) = state.compose_state.take() {
                             compose.feed(keysym);
                             match compose.status() {
@@ -2259,9 +2265,16 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
 
                                     let focused_window =
                                         state.keyboard_focused_window.as_ref().unwrap().clone();
+                                    let keyboard_context = crate::linux::keyboard_input_context(
+                                        state.keymap_state.as_ref().unwrap(),
+                                        state.modifiers,
+                                        keycode,
+                                        gpui::KeyboardInputAction::Repeat,
+                                    );
 
                                     drop(state);
-                                    focused_window.handle_input(input.clone());
+                                    focused_window
+                                        .handle_keyboard_input(input.clone(), keyboard_context);
 
                                     // If the new scheduled time is in the past the event will repeat as soon as possible
                                     TimeoutAction::ToInstant(event_timestamp + repeat_interval)
@@ -2270,19 +2283,25 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                             .unwrap();
 
                         drop(state);
-                        focused_window.handle_input(input);
+                        focused_window.handle_keyboard_input(input, keyboard_context);
                     }
                     wl_keyboard::KeyState::Released if !keysym.is_modifier_key() => {
                         let input = PlatformInput::KeyUp(KeyUpEvent {
                             keystroke: keystroke_from_xkb(keymap_state, state.modifiers, keycode),
                         });
+                        let keyboard_context = crate::linux::keyboard_input_context(
+                            keymap_state,
+                            state.modifiers,
+                            keycode,
+                            gpui::KeyboardInputAction::Release,
+                        );
 
                         if state.repeat.current_keycode == Some(keycode) {
                             state.repeat.current_keycode = None;
                         }
 
                         drop(state);
-                        focused_window.handle_input(input);
+                        focused_window.handle_keyboard_input(input, keyboard_context);
                     }
                     _ => {}
                 }

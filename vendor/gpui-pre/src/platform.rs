@@ -3,6 +3,28 @@ mod keyboard;
 mod keystroke;
 mod platform_info;
 
+#[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyboardInputAction {
+    Press,
+    Repeat,
+    Release,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyboardInputContext {
+    pub physical_key: crate::SharedString,
+    pub text: Option<crate::SharedString>,
+    pub unshifted_codepoint: u32,
+    pub modifiers: crate::Modifiers,
+    pub caps_lock: bool,
+    pub num_lock: bool,
+    pub alt_graph: bool,
+    pub is_modifier: bool,
+    pub action: KeyboardInputAction,
+}
+
 #[cfg(all(target_os = "linux", feature = "wayland"))]
 #[expect(missing_docs)]
 pub mod layer_shell;
@@ -1275,6 +1297,10 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn mouse_position(&self) -> Point<Pixels>;
     fn modifiers(&self) -> Modifiers;
     fn capslock(&self) -> Capslock;
+    #[allow(missing_docs)]
+    fn current_keyboard_input_context(&self) -> Option<KeyboardInputContext> {
+        None
+    }
     fn set_input_handler(&mut self, input_handler: PlatformInputHandler);
     fn take_input_handler(&mut self) -> Option<PlatformInputHandler>;
     /// Apply the focused text region's [`TextInputConfiguration`] to the

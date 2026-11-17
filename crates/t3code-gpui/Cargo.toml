@@ -28,6 +28,7 @@ uuid.workspace = true
 gpui-fast = ["gpui-kit/gpui-fast"]
 
 [dev-dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.12", features = ["test-support"] }
 chrono-tz = "=0.10.4"
 tempfile.workspace = true
 

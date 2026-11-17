@@ -274,6 +274,7 @@ pub struct X11WindowState {
     renderer: Option<WgpuRenderer>,
     display: Rc<dyn PlatformDisplay>,
     input_handler: Option<PlatformInputHandler>,
+    keyboard_input_context: Option<gpui::KeyboardInputContext>,
     appearance: WindowAppearance,
     background_appearance: WindowBackgroundAppearance,
     maximized_vertical: bool,
@@ -839,6 +840,7 @@ impl X11WindowState {
                 renderer: Some(renderer),
                 atoms: *atoms,
                 input_handler: None,
+                keyboard_input_context: None,
                 active: false,
                 // The window is not mapped until the client sees `MapNotify`.
                 visibility: WindowVisibility::Hidden,
@@ -1221,6 +1223,16 @@ impl X11WindowStatePtr {
         }
     }
 
+    pub fn handle_keyboard_input(&self, input: PlatformInput, context: gpui::KeyboardInputContext) {
+        let previous = self
+            .state
+            .borrow_mut()
+            .keyboard_input_context
+            .replace(context);
+        self.handle_input(input);
+        self.state.borrow_mut().keyboard_input_context = previous;
+    }
+
     pub fn handle_ime_commit(&self, text: String) {
         if self.is_blocked() {
             return;
@@ -1385,6 +1397,9 @@ impl X11WindowStatePtr {
 }
 
 impl PlatformWindow for X11Window {
+    fn current_keyboard_input_context(&self) -> Option<gpui::KeyboardInputContext> {
+        self.0.state.borrow().keyboard_input_context.clone()
+    }
     fn bounds(&self) -> Bounds<Pixels> {
         self.0.state.borrow().bounds
     }
