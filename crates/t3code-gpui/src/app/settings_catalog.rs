@@ -5,6 +5,7 @@ pub(super) enum Control {
     Switch,
     Select(&'static [(&'static str, &'static str)]),
     Number(f64, f64),
+    Range(f32, f32, f32),
     Font(&'static str, f64, f64),
     Text,
 }
@@ -251,6 +252,26 @@ pub(super) fn settings() -> Vec<Setting> {
         json!(false),
         false,
         Switch,
+    );
+    add(
+        "appearance",
+        "Interface",
+        "appearanceContrast",
+        "Contrast",
+        "Adjust the contrast of colors and borders across the interface.",
+        json!(100),
+        false,
+        Range(50., 200., 5.),
+    );
+    add(
+        "appearance",
+        "Interface",
+        "glassOpacity",
+        "Glass opacity",
+        "Higher values make menus, dialogs, and the composer more solid.",
+        json!(80),
+        false,
+        Range(40., 100., 5.),
     );
     add(
         "appearance",

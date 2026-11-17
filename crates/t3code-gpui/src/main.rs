@@ -1,5 +1,6 @@
 mod app;
 mod appearance;
+mod appearance_presets;
 mod attachments;
 mod client_settings;
 mod completion;

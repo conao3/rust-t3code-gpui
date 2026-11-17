@@ -20,10 +20,18 @@ impl Root {
                 {
                     self.conversation.message = Some(format!("Timestamp format failed: {error:#}"));
                 }
-                if key == "gpuiAppearance" {
-                    crate::appearance::apply(self.settings.light_theme, cx);
+                if matches!(
+                    key,
+                    "gpuiAppearance"
+                        | "gpuiThemeLight"
+                        | "gpuiThemeDark"
+                        | "appearanceContrast"
+                        | "glassOpacity"
+                ) {
+                    crate::appearance::apply(&self.settings, cx);
                 }
                 crate::appearance::apply_typography(&self.settings, cx);
+                self.settings.light_theme = !cx.theme().mode.is_dark();
             }
             Err(error) => {
                 self.conversation.message = Some(format!("Saving the settings failed: {error:#}"))
@@ -471,6 +479,9 @@ impl Root {
                     .child(error.clone()),
             );
         }
+        if page == "appearance" {
+            content = content.child(self.render_appearance_library(cx));
+        }
         let mut section = "";
         let group = || {
             v_flex()
@@ -482,10 +493,14 @@ impl Root {
         };
         let mut section_rows = group();
         let mut advanced_started = false;
-        for mut definition in settings_catalog::settings()
+        let mut definitions = settings_catalog::settings()
             .into_iter()
-            .filter(|setting| setting.page == page)
-        {
+            .filter(|setting| setting.page == page && setting.key != "gpuiAppearance")
+            .collect::<Vec<_>>();
+        if page == "appearance" {
+            definitions.sort_by_key(|setting| if setting.section == "Interface" { 0 } else { 1 });
+        }
+        for mut definition in definitions {
             let separate_fonts = self.settings.values["gpuiSeparateFonts"] == true;
             if !separate_fonts && matches!(definition.key, "fontSizePrompt" | "fontSizeTerminal") {
                 continue;
@@ -612,7 +627,11 @@ impl Root {
                     definition.label,
                     environment,
                     self.settings_project,
-                    value,
+                    if matches!(definition.control, settings_catalog::Control::Range(..)) {
+                        Value::Null
+                    } else {
+                        value.clone()
+                    },
                     match definition.control {
                         settings_catalog::Control::Font(key, _, _) =>
                             self.settings.values[key].clone(),
@@ -626,12 +645,13 @@ impl Root {
                         environment,
                         self.settings_project.clone(),
                         definition,
-                        (value, font_family),
+                        (value.clone(), font_family),
                         window,
                         cx,
                     )
                 },
             );
+            control.update(cx, |control, cx| control.sync_range(value, window, cx));
             section_rows = section_rows.child(control);
         }
         if !section.is_empty() {

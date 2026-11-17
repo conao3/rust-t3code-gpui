@@ -64,6 +64,7 @@ mod project_search;
 mod pull_requests;
 mod right_panel;
 mod settings;
+mod settings_appearance;
 mod settings_archive;
 mod settings_catalog;
 mod settings_controls;
@@ -647,6 +648,14 @@ impl Root {
         let file_picker = cx.new(|cx| CommandState::new(window, cx));
         let weak = cx.entity().downgrade();
         let subscriptions = vec![
+            cx.observe_window_appearance(window, |root, _, cx| {
+                if root.settings.values["gpuiAppearance"] == "system" {
+                    crate::appearance::apply(&root.settings, cx);
+                    root.settings.light_theme = !cx.theme().mode.is_dark();
+                    crate::appearance::apply_typography(&root.settings, cx);
+                    cx.notify();
+                }
+            }),
             cx.subscribe(&pr_search, |root, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change | InputEvent::PressEnter { .. }) {
                     root.load_pull_requests(false, cx);
@@ -1691,7 +1700,9 @@ pub fn run(
             gpui_kit::init(cx);
             crate::timestamp::initialize(settings.timestamp_format, cx)
                 .expect("initialize timestamp formatting");
-            crate::appearance::apply(settings.light_theme, cx);
+            let mut settings = settings;
+            crate::appearance::apply(&settings, cx);
+            settings.light_theme = !cx.theme().mode.is_dark();
             crate::appearance::apply_typography(&settings, cx);
             Theme::update(cx, |theme| {
                 theme.cursor_blink =
