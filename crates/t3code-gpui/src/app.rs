@@ -44,6 +44,7 @@ mod composer;
 mod composer_controls;
 mod composer_prompts;
 mod composer_queue;
+mod composer_scratch;
 mod diff;
 mod files;
 mod find;
@@ -82,6 +83,7 @@ actions!(
     t3code_gpui,
     [
         Send,
+        NewWithoutProject,
         SteerQueuedMessage,
         EditQueuedMessage,
         StashPrompt,
@@ -135,6 +137,7 @@ actions!(
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
+        "chat.newWithoutProject" => Box::new(NewWithoutProject),
         "thread.steerQueuedMessage" => Box::new(SteerQueuedMessage),
         "thread.editQueuedMessage" => Box::new(EditQueuedMessage),
         "composer.stash" => Box::new(StashPrompt),
@@ -1322,6 +1325,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &StashPrompt, window, cx| root.stash_prompt(window, cx)))
             .on_action(cx.listener(|root, _: &EditQueuedMessage, window, cx| root.edit_latest_queued(window, cx)))
             .on_action(cx.listener(|root, _: &SteerQueuedMessage, _, cx| root.steer_next_queued(cx)))
+            .on_action(cx.listener(|root, _: &NewWithoutProject, window, cx| root.new_without_project(window, cx)))
             .on_action(cx.listener(|root, _: &SendAlternate, window, cx| root.send_intent(composer::SubmissionIntent::Alternate, window, cx)))
             .on_action(cx.listener(|root, _: &SendBackground, window, cx| {
                 if root.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
