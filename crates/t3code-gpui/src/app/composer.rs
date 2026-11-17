@@ -1,0 +1,1660 @@
+use super::*;
+
+pub(super) struct ComposerControlsPane {
+    pub(super) root: WeakEntity<Root>,
+}
+impl Render for ComposerControlsPane {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.root
+            .update(cx, |root, cx| root.render_composer_controls(cx))
+            .expect("composer root is alive")
+    }
+}
+
+impl Root {
+    /// Runs the keybinding of a typed chord, and submits the composer on the key the send shortcut
+    /// names. Returns whether the keystroke was used.
+    /// The directory a file mention searches: the open thread's worktree or its project, or the
+    /// project the new thread starts in.
+    pub(super) fn composer_cwd(&self) -> Option<(String, String)> {
+        if self.draft.is_some() {
+            let (environment, project_id) = self.draft_project()?;
+            let project = self.project_value(&environment, &project_id)?;
+            let root = self
+                .draft
+                .as_ref()
+                .and_then(|draft| draft.workspace_strategy.get("worktreePath"))
+                .and_then(Value::as_str)
+                .or_else(|| project.get("workspaceRoot").and_then(Value::as_str))?
+                .to_string();
+            return Some((environment, root));
+        }
+        let (environment, thread_id) = self.current()?;
+        let thread = self.thread_value(&environment, &thread_id)?;
+        if let Some(worktree) = thread.get("worktreePath").and_then(Value::as_str) {
+            return Some((environment, worktree.to_string()));
+        }
+        let project_id = thread.get("projectId")?.as_str()?;
+        let project = self.project_value(&environment, project_id)?;
+        let root = project.get("workspaceRoot")?.as_str()?.to_string();
+        Some((environment, root))
+    }
+
+    /// Attaches an image on the clipboard. Returns whether there was one, so text pastes as usual.
+    pub(super) fn paste_image(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(item) = cx.read_from_clipboard() else {
+            return false;
+        };
+        let image = item.into_entries().find_map(|entry| match entry {
+            ClipboardEntry::Image(image) => Some(image),
+            _ => None,
+        });
+        let Some(image) = image else {
+            return false;
+        };
+        let mime = image.format.mime_type().to_string();
+        let extension = mime.rsplit('/').next().unwrap_or("png").to_string();
+        let name = format!("pasted-{}.{extension}", self.attachments.len() + 1);
+        match attachments::Pending::new(name, mime, image.bytes) {
+            Ok(pending) => self.attachments.push(pending),
+            Err(error) => self.message = Some(format!("{error:#}")),
+        }
+        cx.notify();
+        true
+    }
+
+    fn attach_paths(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
+        for path in paths.paths() {
+            match attachments::Pending::from_path(path) {
+                Ok(pending) => self.attachments.push(pending),
+                Err(error) => self.message = Some(format!("{error:#}")),
+            }
+        }
+        cx.notify();
+    }
+
+    pub(super) fn update_completion(&mut self, cx: &mut Context<Self>) {
+        let state = self.composer.read(cx);
+        let text = state.value().to_string();
+        let cursor = state.cursor();
+        self.completion_seq += 1;
+        let Some(trigger) = completion::trigger(&text, cursor) else {
+            if self.completion.take().is_some() {
+                cx.notify();
+            }
+            return;
+        };
+        if trigger.kind == completion::TriggerKind::Path {
+            let Some((environment, cwd)) = self.composer_cwd() else {
+                return;
+            };
+            let Some(connection) = self.connection(&environment) else {
+                return;
+            };
+            let seq = self.completion_seq;
+            let runtime = self.runtime.clone();
+            let query = trigger.query.clone();
+            cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(Duration::from_millis(120))
+                    .await;
+                if this
+                    .read_with(cx, |root, _| root.completion_seq != seq)
+                    .unwrap_or(true)
+                {
+                    return;
+                }
+                let found = on_runtime(&runtime, async move {
+                    connection.search_entries(&cwd, &query, 20).await
+                })
+                .await;
+                let _ = this.update(cx, |root, cx| {
+                    if root.completion_seq != seq {
+                        return;
+                    }
+                    root.completion = found.ok().map(|result| Completion {
+                        trigger,
+                        suggestions: completion::path_suggestions(&result),
+                        selected: 0,
+                    });
+                    cx.notify();
+                });
+            })
+            .detach();
+            return;
+        }
+        let provider = self.composer_target().and_then(|(environment, model, ..)| {
+            let instance = model?.get("instanceId")?.as_str()?.to_string();
+            let config = self.config_of(&environment)?;
+            config
+                .get("providers")?
+                .as_array()?
+                .iter()
+                .find(|p| p.get("instanceId").and_then(Value::as_str) == Some(&instance))
+                .cloned()
+        });
+        let suggestions = provider
+            .map(|p| completion::provider_suggestions(&p, trigger.kind, &trigger.query))
+            .unwrap_or_default();
+        self.completion = Some(Completion {
+            trigger,
+            suggestions,
+            selected: 0,
+        });
+        cx.notify();
+    }
+
+    /// Moves through and accepts the completion list while it is open. Returns whether the key
+    /// was used.
+    pub(super) fn completion_key(
+        &mut self,
+        keystroke: &Keystroke,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(open) = self
+            .completion
+            .as_mut()
+            .filter(|c| !c.suggestions.is_empty())
+        else {
+            return false;
+        };
+        if !self.composer.read(cx).focus_handle(cx).is_focused(window) {
+            return false;
+        }
+        let n = open.suggestions.len().min(8);
+        match keystroke.key.as_str() {
+            "down" => open.selected = (open.selected + 1) % n,
+            "up" => open.selected = (open.selected + n - 1) % n,
+            "escape" => self.completion = None,
+            "enter" | "tab" if !keystroke.modifiers.control => {
+                let text = self.composer.read(cx).value().to_string();
+                let (value, at) =
+                    completion::apply(&text, &open.trigger, &open.suggestions[open.selected]);
+                let (line, column) = completion::line_column(&value, at);
+                self.completion = None;
+                self.composer.update(cx, |state, cx| {
+                    state.set_value(value, window, cx);
+                    state.set_cursor_position(Position::new(line, column), window, cx);
+                });
+                self.stash_composer(cx);
+            }
+            _ => return false,
+        }
+        cx.notify();
+        true
+    }
+
+    pub(super) fn picker_shortcut(
+        &mut self,
+        command: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.picker_open {
+            return false;
+        }
+        let jump = command
+            .strip_prefix("modelPicker.jump.")
+            .and_then(|index| index.parse::<usize>().ok())
+            .filter(|index| (1..=9).contains(index))
+            .map(|index| index - 1);
+        let direction = match command {
+            "modelPicker.previousProvider" => Some(false),
+            "modelPicker.nextProvider" => Some(true),
+            _ => None,
+        };
+        if jump.is_none() && direction.is_none() {
+            return false;
+        }
+        let Some((environment, selected, ..)) = self.composer_target() else {
+            return true;
+        };
+        let Some((_, instances)) = self.model_catalogs.get(&environment) else {
+            return true;
+        };
+        if instances.is_empty() {
+            return true;
+        }
+        let current = self.picker_instance.as_deref().or_else(|| {
+            selected
+                .as_ref()
+                .and_then(|model| model.get("instanceId")?.as_str())
+        });
+        let at = instances
+            .iter()
+            .position(|instance| Some(instance.instance_id.as_str()) == current)
+            .unwrap_or(0);
+        if let Some(forward) = direction {
+            let at = if forward {
+                (at + 1) % instances.len()
+            } else {
+                (at + instances.len() - 1) % instances.len()
+            };
+            self.picker_instance = Some(instances[at].instance_id.clone());
+            self.model_picker
+                .update(cx, |state, cx| state.set_query("", window, cx));
+            cx.notify();
+        } else if let Some(index) = jump {
+            let query = self.model_picker.read(cx).query(cx).to_lowercase();
+            let instance = &instances[at];
+            if let Some(model) = instance
+                .models
+                .iter()
+                .filter(|model| model.full_name.to_lowercase().contains(&query))
+                .nth(index)
+            {
+                self.pick_model(instance.instance_id.clone(), model.slug.clone(), cx);
+                self.composer
+                    .update(cx, |state, cx| state.focus(window, cx));
+            }
+        }
+        true
+    }
+
+    fn composer_key(&self) -> Option<String> {
+        if self.draft.is_some() {
+            return Some(drafts::NEW_THREAD.to_string());
+        }
+        self.current()
+            .map(|(environment, thread_id)| drafts::thread_key(&environment, &thread_id))
+    }
+
+    /// Keeps the composer text as the draft of what the composer is for now. Call before the
+    /// composer changes what it is for.
+    pub(super) fn stash_composer(&mut self, cx: &mut Context<Self>) {
+        let Some(key) = self.composer_key() else {
+            return;
+        };
+        let text = self.composer.read(cx).value().to_string();
+        if self.drafts.set(&key, &text) {
+            self.schedule_drafts_save(cx);
+        }
+    }
+
+    /// Puts the draft of what the composer is for now into it, at the next render.
+    pub(super) fn load_composer(&mut self) {
+        self.hovered_message = None;
+        let text = self
+            .composer_key()
+            .and_then(|key| self.drafts.get(&key).map(str::to_string))
+            .unwrap_or_default();
+        self.pending_composer = Some(text);
+    }
+
+    fn schedule_drafts_save(&mut self, cx: &mut Context<Self>) {
+        if self.drafts_save_scheduled {
+            return;
+        }
+        self.drafts_save_scheduled = true;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(1)).await;
+            let _ = this.update(cx, |root, cx| {
+                root.drafts_save_scheduled = false;
+                if let Err(error) = root.drafts.save(&root.drafts_path) {
+                    root.message = Some(format!("Saving drafts failed: {error:#}"));
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.draft.is_some() {
+            self.launch(window, cx);
+            return;
+        }
+        if let Some((view, request_id)) = self.pending_question() {
+            self.submit_answers(view, request_id, window, cx);
+            return;
+        }
+        let Some((environment, thread_id)) = self.current() else {
+            return;
+        };
+        let text = self.composer.read(cx).value().trim().to_string();
+        if text.is_empty() && self.attachments.is_empty() {
+            return;
+        }
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let delivery = match self.open_entry().map(|e| e.status) {
+            Some(ThreadStatus::Working) if self.settings.steer_follow_ups => Delivery::Steer,
+            Some(ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval) => {
+                Delivery::Queue
+            }
+            _ => Delivery::Start,
+        };
+        let runtime = self.runtime.clone();
+        let pending = std::mem::take(&mut self.attachments);
+        self.composer
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.stash_composer(cx);
+        cx.spawn_in(window, async move |this, cx| {
+            let sent = on_runtime(&runtime, {
+                let text = text.clone();
+                let pending = pending.clone();
+                async move {
+                    let attachments = upload_all(&connection, &pending).await?;
+                    connection
+                        .send_message(&thread_id, &text, attachments, delivery)
+                        .await
+                }
+            })
+            .await;
+            let _ = this.update_in(cx, |root, window, cx| {
+                root.message = sent.as_ref().err().map(|e| format!("Send failed: {e:#}"));
+                if sent.is_err() {
+                    root.composer
+                        .update(cx, |state, cx| state.set_value(text, window, cx));
+                    root.stash_composer(cx);
+                    root.attachments = pending;
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub(super) fn stop(&mut self, cx: &mut Context<Self>) {
+        let Some((environment, thread_id)) = self.current() else {
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let runtime = self.runtime.clone();
+        cx.spawn(async move |this, cx| {
+            let stopped = on_runtime(
+                &runtime,
+                async move { connection.stop_thread(&thread_id).await },
+            )
+            .await;
+            let _ = this.update(cx, |root, cx| {
+                root.message = stopped.err().map(|e| format!("Stop failed: {e:#}"));
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub(super) fn project_groups(&self) -> Vec<ProjectGroup> {
+        let shells: Vec<_> = self.connections.iter().map(|c| c.shell()).collect();
+        let guards: Vec<_> = shells
+            .iter()
+            .map(|s| s.lock().expect("shell lock"))
+            .collect();
+        projects::groups(
+            self.connections
+                .iter()
+                .zip(&guards)
+                .map(|(c, shell)| (c.label(), &**shell)),
+        )
+    }
+
+    /// The environment and project of the new thread.
+    pub(super) fn draft_project(&self) -> Option<(String, String)> {
+        let draft = self.draft.as_ref()?;
+        let groups = self.project_groups();
+        let group = groups
+            .iter()
+            .find(|g| Some(&g.key) == draft.group.as_ref())?;
+        let member = draft
+            .environment
+            .as_ref()
+            .and_then(|environment| {
+                group
+                    .members
+                    .iter()
+                    .find(|member| &member.environment == environment)
+            })
+            .unwrap_or_else(|| group.target())
+            .clone();
+        Some((member.environment, member.project_id))
+    }
+
+    pub(super) fn draft_target(&self) -> Option<(String, String, Option<Value>, String)> {
+        let draft = self.draft.as_ref()?;
+        let (environment, project_id) = self.draft_project()?;
+        let project = self.project_value(&environment, &project_id)?;
+        let config = self.config_of(&environment);
+        let defaults = models::new_thread(config.as_ref(), &project, draft.carry.as_ref());
+        let model = draft
+            .model
+            .clone()
+            .or_else(|| defaults.as_ref().map(|(m, _)| m.clone()));
+        let runtime_mode = draft
+            .runtime_mode
+            .clone()
+            .or_else(|| defaults.map(|(_, r)| r))
+            .unwrap_or_else(|| "full-access".into());
+        Some((environment, project_id, model, runtime_mode))
+    }
+
+    pub(super) fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.begin_new_thread(cx);
+        self.composer
+            .update(cx, |state, cx| state.focus(window, cx));
+    }
+
+    pub(super) fn begin_new_thread(&mut self, cx: &mut Context<Self>) {
+        self.stash_composer(cx);
+        let groups = self.project_groups();
+        let from_open = self.open_entry().and_then(|entry| {
+            groups
+                .iter()
+                .find(|g| g.contains(&entry.environment, &entry.project_id))
+        });
+        let group = from_open.or(groups.first()).map(|g| g.key.clone());
+        let carry = self
+            .current()
+            .and_then(|(env, id)| self.thread_value(&env, &id))
+            .and_then(|t| t.get("modelSelection").cloned())
+            .filter(|m| !m.is_null());
+        self.draft = Some(NewThreadDraft {
+            id: uuid::Uuid::new_v4().to_string(),
+            environment: None,
+            workspace_strategy: json!({"type":"root"}),
+            group,
+            carry,
+            model: None,
+            runtime_mode: None,
+            interaction_mode: "default".into(),
+        });
+        self.message = None;
+        self.picker_open = false;
+        self.branch_anchor = None;
+        self.branch_request += 1;
+        self.close_thread(cx);
+        self.load_composer();
+        cx.notify();
+    }
+
+    pub(super) fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.branch_anchor.take().is_some() {
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+            cx.notify();
+            return;
+        }
+        if self.permissions_menu.take().is_some() {
+            self.permissions_subscription = None;
+            if self.picker_open {
+                self.model_picker
+                    .update(cx, |state, cx| state.focus(window, cx));
+            } else {
+                self.composer
+                    .update(cx, |state, cx| state.focus(window, cx));
+            }
+            cx.notify();
+            return;
+        }
+        if self.picker_open {
+            self.picker_open = false;
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+            cx.notify();
+        }
+    }
+
+    fn launch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = self.composer.read(cx).value().trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        let Some((environment, project_id, model, runtime_mode)) = self.draft_target() else {
+            self.message = Some("Pick a project first.".into());
+            cx.notify();
+            return;
+        };
+        let Some(model) = model else {
+            self.message = Some("No model is available on this host. Pick one first.".into());
+            cx.notify();
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let interaction_mode = self
+            .draft
+            .as_ref()
+            .map(|d| d.interaction_mode.clone())
+            .unwrap_or_else(|| "default".into());
+        let workspace_strategy = self
+            .draft
+            .as_ref()
+            .map(|draft| draft.workspace_strategy.clone())
+            .unwrap_or_else(|| json!({"type":"root"}));
+        let thread_id = self
+            .draft
+            .as_ref()
+            .map(|draft| draft.id.clone())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let promoting = (environment.clone(), thread_id.clone());
+        self.promoting.insert(promoting.clone());
+        self.rebuild_entries();
+        self.schedule_wake(window, cx);
+        let title = projects::title_seed(&text);
+        self.composer
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.stash_composer(cx);
+        let runtime = self.runtime.clone();
+        let pending = std::mem::take(&mut self.attachments);
+        cx.spawn_in(window, async move |this, cx| {
+            let launched = on_runtime(&runtime, {
+                let text = text.clone();
+                let pending = pending.clone();
+                async move {
+                    let attachments = upload_all(&connection, &pending).await?;
+                    connection
+                        .launch_thread(Launch {
+                            thread_id: &thread_id,
+                            project_id: &project_id,
+                            title: &title,
+                            workspace_strategy,
+                            model,
+                            runtime_mode: &runtime_mode,
+                            interaction_mode: &interaction_mode,
+                            attachments,
+                            text: &text,
+                        })
+                        .await
+                }
+            })
+            .await;
+            let _ = this.update_in(cx, |root, window, cx| {
+                root.promoting.remove(&promoting);
+                root.rebuild_entries();
+                root.schedule_wake(window, cx);
+                match launched {
+                    Ok(thread_id) => root.open_thread(environment, thread_id, cx),
+                    Err(error) => {
+                        root.message = Some(format!("New thread failed: {error:#}"));
+                        root.composer
+                            .update(cx, |state, cx| state.set_value(text, window, cx));
+                        root.stash_composer(cx);
+                        root.attachments = pending;
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// The host, model, runtime mode and interaction mode the composer acts on: the open thread's,
+    /// or the draft's.
+    pub(super) fn composer_target(&self) -> Option<(String, Option<Value>, String, String)> {
+        if let Some(draft) = &self.draft {
+            let (environment, _, model, runtime_mode) = self.draft_target()?;
+            return Some((
+                environment,
+                model,
+                runtime_mode,
+                draft.interaction_mode.clone(),
+            ));
+        }
+        let (environment, thread_id) = self.current()?;
+        let thread = self.thread_value(&environment, &thread_id)?;
+        let get = |key: &str| {
+            thread
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        };
+        let model = thread
+            .get("modelSelection")
+            .cloned()
+            .filter(|m| !m.is_null());
+        Some((
+            environment,
+            model,
+            get("runtimeMode"),
+            get("interactionMode"),
+        ))
+    }
+
+    fn dispatch_on_open(
+        &mut self,
+        what: &'static str,
+        cx: &mut Context<Self>,
+        command: impl FnOnce(Arc<Connection>, String) -> CommandFuture,
+    ) {
+        let Some((environment, thread_id)) = self.current() else {
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let runtime = self.runtime.clone();
+        let future = command(connection, thread_id);
+        cx.spawn(async move |this, cx| {
+            if let Err(error) = on_runtime(&runtime, future).await {
+                let _ = this.update(cx, |root, cx| {
+                    root.message = Some(format!("{what} failed: {error:#}"));
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    pub(super) fn toggle_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.picker_open = !self.picker_open;
+        if self.picker_open {
+            self.picker_instance =
+                self.composer_target()
+                    .and_then(|(_, m, _, _)| m)
+                    .and_then(|m| {
+                        m.get("instanceId")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                    });
+            self.model_picker.update(cx, |state, cx| {
+                state.set_query("", window, cx);
+                state.focus(window, cx);
+            });
+        } else {
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    fn ensure_permissions_menu(
+        &mut self,
+        keyboard: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<permissions::Menu>> {
+        if let Some(menu) = &self.permissions_menu {
+            return Some(menu.clone());
+        }
+        let (environment, model, current, _) = self.composer_target()?;
+        let instance_id = model.as_ref()?.get("instanceId")?.as_str()?;
+        let modes = self
+            .model_catalogs
+            .get(&environment)?
+            .1
+            .iter()
+            .find(|instance| instance.instance_id == instance_id)?
+            .runtime_modes
+            .clone();
+        let menu = cx.new(|cx| permissions::Menu::new(modes, current, keyboard, window, cx));
+        self.permissions_subscription = Some(cx.subscribe_in(
+            &menu,
+            window,
+            |root, _, event: &permissions::Event, window, cx| {
+                if let permissions::Event::Select(mode) = event
+                    && root
+                        .composer_target()
+                        .is_some_and(|(_, _, current, _)| current != *mode)
+                {
+                    root.set_runtime_mode(mode.clone(), cx);
+                }
+                root.permissions_menu = None;
+                root.permissions_subscription = None;
+                if root.picker_open {
+                    root.model_picker
+                        .update(cx, |state, cx| state.focus(window, cx));
+                } else {
+                    root.composer
+                        .update(cx, |state, cx| state.focus(window, cx));
+                }
+                cx.notify();
+            },
+        ));
+        self.permissions_menu = Some(menu.clone());
+        let focus = menu.focus_handle(cx);
+        window.on_next_frame(move |window, cx| focus.focus(window, cx));
+        Some(menu)
+    }
+
+    pub(super) fn open_permissions(
+        &mut self,
+        keyboard: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.composer_target().is_none() {
+            return;
+        }
+        if self.permissions_menu.take().is_some() {
+            self.permissions_subscription = None;
+            if self.picker_open {
+                self.model_picker
+                    .update(cx, |state, cx| state.focus(window, cx));
+            } else {
+                self.composer
+                    .update(cx, |state, cx| state.focus(window, cx));
+            }
+        } else {
+            if keyboard && !self.picker_open {
+                self.toggle_model_picker(window, cx);
+            }
+            self.ensure_permissions_menu(keyboard, window, cx);
+        }
+        cx.notify();
+    }
+
+    fn choose_attachments(&mut self, cx: &mut Context<Self>) {
+        let selected = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some("Attach files".into()),
+        });
+        cx.spawn(async move |this, cx| {
+            let result = selected.await;
+            let _ = this.update(cx, |root, cx| {
+                match result {
+                    Ok(Ok(Some(paths))) => {
+                        root.attach_paths(&ExternalPaths(paths.into_iter().collect()), cx)
+                    }
+                    Ok(Ok(None)) => {}
+                    Ok(Err(error)) => {
+                        root.message = Some(format!("Choosing attachments failed: {error:#}"))
+                    }
+                    Err(error) => {
+                        root.message = Some(format!("Choosing attachments failed: {error}"))
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn set_runtime_mode(&mut self, mode: String, cx: &mut Context<Self>) {
+        if let Some(draft) = self.draft.as_mut() {
+            draft.runtime_mode = Some(mode);
+            cx.notify();
+        } else {
+            self.dispatch_on_open("Runtime mode change", cx, move |connection, thread_id| {
+                Box::pin(async move { connection.set_runtime_mode(&thread_id, &mode).await })
+            });
+        }
+    }
+
+    pub(super) fn set_model_option(&mut self, id: &str, value: Value, cx: &mut Context<Self>) {
+        let Some((_, Some(current), _, _)) = self.composer_target() else {
+            return;
+        };
+        let Some(chosen) = models::with_option(&current, id, value) else {
+            self.message = Some("The model's option selection is malformed".into());
+            cx.notify();
+            return;
+        };
+        if let Some(draft) = self.draft.as_mut() {
+            draft.model = Some(chosen);
+            cx.notify();
+        } else {
+            self.dispatch_on_open("Model option change", cx, move |connection, thread_id| {
+                Box::pin(async move { connection.set_model(&thread_id, chosen, false).await })
+            });
+        }
+    }
+
+    pub(super) fn pick_model(&mut self, instance_id: String, slug: String, cx: &mut Context<Self>) {
+        self.picker_open = false;
+        let chosen = models::selection(&instance_id, &slug);
+        if let Some(draft) = self.draft.as_mut() {
+            draft.model = Some(chosen);
+            cx.notify();
+            return;
+        }
+        let switch = self
+            .composer_target()
+            .and_then(|(_, model, _, _)| model)
+            .is_some_and(|m| m.get("instanceId").and_then(Value::as_str) != Some(&instance_id));
+        self.dispatch_on_open("Model change", cx, move |connection, thread_id| {
+            Box::pin(async move { connection.set_model(&thread_id, chosen, switch).await })
+        });
+        cx.notify();
+    }
+
+    pub(super) fn cycle_runtime_mode(&mut self, cx: &mut Context<Self>) {
+        let Some((environment, model, current, _)) = self.composer_target() else {
+            return;
+        };
+        let config = self.config_of(&environment);
+        let instance_id = model
+            .as_ref()
+            .and_then(|m| m.get("instanceId").and_then(Value::as_str))
+            .unwrap_or_default()
+            .to_string();
+        let modes: Vec<String> = config
+            .as_ref()
+            .and_then(|c| {
+                models::instances(c)
+                    .into_iter()
+                    .find(|i| i.instance_id == instance_id)
+            })
+            .map(|i| i.runtime_modes)
+            .unwrap_or_else(|| {
+                models::RUNTIME_MODES
+                    .iter()
+                    .map(|m| m.to_string())
+                    .collect()
+            });
+        let next = modes
+            .iter()
+            .position(|m| *m == current)
+            .map_or(0, |i| (i + 1) % modes.len());
+        let Some(next) = modes.get(next).cloned() else {
+            return;
+        };
+        if let Some(draft) = self.draft.as_mut() {
+            draft.runtime_mode = Some(next);
+            cx.notify();
+            return;
+        }
+        self.dispatch_on_open("Runtime mode change", cx, move |connection, thread_id| {
+            Box::pin(async move { connection.set_runtime_mode(&thread_id, &next).await })
+        });
+    }
+
+    fn toggle_plan(&mut self, cx: &mut Context<Self>) {
+        let Some((_, _, _, current)) = self.composer_target() else {
+            return;
+        };
+        let next = if current == "plan" { "default" } else { "plan" };
+        if let Some(draft) = self.draft.as_mut() {
+            draft.interaction_mode = next.into();
+            cx.notify();
+            return;
+        }
+        self.dispatch_on_open("Plan mode change", cx, move |connection, thread_id| {
+            Box::pin(async move { connection.set_interaction_mode(&thread_id, next).await })
+        });
+    }
+
+    pub(super) fn render_queue(&self, cx: &Context<Self>) -> Option<AnyElement> {
+        if self.queued.is_empty() {
+            return None;
+        }
+        let theme = cx.theme();
+        let rows = self.queued.iter().enumerate().map(|(i, queued)| {
+            let steer_run = queued.run_id.clone();
+            let cancel_run = queued.run_id.clone();
+            h_flex()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child("Queued"),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_sm()
+                        .child(queued.text.clone()),
+                )
+                .child(
+                    Button::new(("queue-steer", i))
+                        .label("Steer now")
+                        .compact()
+                        .outline()
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            root.steer_queued(steer_run.clone(), cx)
+                        })),
+                )
+                .child(
+                    Button::new(("queue-cancel", i))
+                        .label("Cancel")
+                        .compact()
+                        .outline()
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            root.cancel_queued(cancel_run.clone(), cx)
+                        })),
+                )
+        });
+        Some(
+            v_flex()
+                .px_3()
+                .pt_2()
+                .gap_1()
+                .children(rows)
+                .into_any_element(),
+        )
+    }
+
+    fn steer_queued(&mut self, run_id: String, cx: &mut Context<Self>) {
+        let Some((environment, thread_id)) = self.current() else {
+            return;
+        };
+        let Some(active) = self.thread_value(&environment, &thread_id).and_then(|t| {
+            t.get("activeRunId")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        }) else {
+            self.message = Some("No run is active to steer.".into());
+            cx.notify();
+            return;
+        };
+        self.dispatch_on_open("Steering", cx, move |connection, thread_id| {
+            Box::pin(async move { connection.steer_queued(&thread_id, &run_id, &active).await })
+        });
+    }
+
+    fn cancel_queued(&mut self, run_id: String, cx: &mut Context<Self>) {
+        self.dispatch_on_open(
+            "Cancelling the queued message",
+            cx,
+            move |connection, thread_id| {
+                Box::pin(async move { connection.cancel_queued(&thread_id, &run_id).await })
+            },
+        );
+    }
+
+    pub(super) fn render_message(&self, cx: &App) -> Option<Div> {
+        self.message.clone().map(|message| {
+            div()
+                .px_4()
+                .py_1()
+                .text_sm()
+                .text_color(cx.theme().danger)
+                .child(message)
+        })
+    }
+
+    fn composer_button(&self, cx: &Context<Self>) -> Button {
+        if self.draft.is_some() {
+            return Button::new("launch")
+                .icon(IconName::ArrowUp)
+                .size(px(32.))
+                .rounded(px(16.))
+                .disabled(
+                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                )
+                .when(
+                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                    |button| {
+                        button
+                            .bg(cx.theme().foreground.opacity(0.12))
+                            .text_color(cx.theme().muted_foreground)
+                    },
+                )
+                .tooltip("Send")
+                .accessibility_label("Send")
+                .primary()
+                .on_click(cx.listener(|root, _, window, cx| root.launch(window, cx)));
+        }
+        let working = self.open_entry().is_some_and(|entry| {
+            matches!(
+                entry.status,
+                ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval
+            )
+        });
+        if self.pending_question().is_some() {
+            Button::new("answer")
+                .label("Answer")
+                .primary()
+                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
+        } else if working {
+            Button::new("stop")
+                .icon(Icon::empty().path("icons/t3-stop.svg"))
+                .tooltip("Interrupt")
+                .accessibility_label("Stop generation")
+                .size(px(32.))
+                .rounded(px(16.))
+                .danger()
+                .on_click(cx.listener(|root, _, _, cx| root.stop(cx)))
+        } else {
+            Button::new("send")
+                .icon(IconName::ArrowUp)
+                .disabled(
+                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                )
+                .when(
+                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                    |button| {
+                        button
+                            .bg(cx.theme().foreground.opacity(0.12))
+                            .text_color(cx.theme().muted_foreground)
+                    },
+                )
+                .tooltip("Send")
+                .accessibility_label("Send")
+                .size(px(32.))
+                .rounded(px(16.))
+                .primary()
+                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
+        }
+    }
+
+    fn render_composer_controls(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let target = self.composer_target();
+        // Provider catalogs change on config events, not on each keystroke.
+        let catalog = target
+            .as_ref()
+            .and_then(|(env, ..)| self.model_catalogs.get(env));
+        let config = catalog.map(|(config, _)| config);
+        let instances = catalog
+            .map(|(_, instances)| instances.as_slice())
+            .unwrap_or_default();
+        let current = target.as_ref().and_then(|(_, model, ..)| model.clone());
+        let current_instance = current
+            .as_ref()
+            .and_then(|m| m.get("instanceId").and_then(Value::as_str))
+            .unwrap_or_default()
+            .to_string();
+        let current_slug = current
+            .as_ref()
+            .and_then(|m| m.get("model").and_then(Value::as_str))
+            .unwrap_or_default()
+            .to_string();
+        let selected_instance = instances.iter().find(|i| i.instance_id == current_instance);
+        let selected_model = selected_instance.and_then(|instance| {
+            instance
+                .models
+                .iter()
+                .find(|model| model.slug == current_slug)
+        });
+        let label = selected_model
+            .zip(current.as_ref())
+            .map(|(model, selection)| models::trigger_label(model, selection))
+            .unwrap_or_else(|| "Pick a model".into());
+        let toolbar = h_flex()
+            .px_2()
+            .pb_2()
+            .gap_1()
+            .w_full()
+            .child(
+                Button::new("attach-files")
+                    .icon(
+                        Icon::new(gpui_kit::assets::IconName::Paperclip)
+                            .text_color(theme.muted_foreground),
+                    )
+                    .ghost()
+                    .size(px(32.))
+                    .tooltip("Attach files")
+                    .accessibility_label("Attach files")
+                    .on_click(cx.listener(|root, _, _, cx| root.choose_attachments(cx))),
+            )
+            .child(div().flex_1())
+            .child(
+                Button::new("model")
+                    .label(label)
+                    .text_color(theme.foreground.opacity(0.8))
+                    .icon(
+                        Icon::empty()
+                            .path(match selected_instance.map(|i| i.driver.as_str()) {
+                                Some("codex") => "icons/t3-openai.svg",
+                                Some("claudeAgent") => "icons/t3-claude.svg",
+                                _ => "icons/bot.svg",
+                            })
+                            .text_color(theme.muted_foreground),
+                    )
+                    .compact()
+                    .ghost()
+                    .h(px(28.))
+                    .text_sm()
+                    .tooltip(
+                        current
+                            .as_ref()
+                            .map(|selection| {
+                                let mut label = models::label(instances, selection);
+                                if let Some(config) = &config {
+                                    for (window, percent) in
+                                        models::usage(config, &current_instance)
+                                    {
+                                        label.push_str(&format!("\n{window}: {percent:.0}% used"));
+                                    }
+                                }
+                                label
+                            })
+                            .unwrap_or_else(|| "Choose model and permissions".into()),
+                    )
+                    .selected(self.picker_open)
+                    .on_click(
+                        cx.listener(|root, _, window, cx| root.toggle_model_picker(window, cx)),
+                    ),
+            );
+        let picker = self.picker_open.then(|| {
+            let shown = instances
+                .iter()
+                .find(|i| Some(&i.instance_id) == self.picker_instance.as_ref())
+                .or(selected_instance);
+            let group = CommandGroup::new().items(shown.into_iter().flat_map(|instance| {
+                instance.models.iter().map(|model| {
+                    CommandItem::new()
+                        .label(model.full_name.clone())
+                        .checked(
+                            instance.instance_id == current_instance && model.slug == current_slug,
+                        )
+                        .action(Box::new(PickModelAction {
+                            instance_id: instance.instance_id.clone(),
+                            slug: model.slug.clone(),
+                        }))
+                })
+            }));
+            let interaction_mode = target
+                .as_ref()
+                .map(|(_, _, _, mode)| mode.as_str())
+                .unwrap_or_default();
+            let weak = cx.entity().downgrade();
+            let close = move |window: &mut Window, cx: &mut App| {
+                let _ = weak.update(cx, |root, cx| {
+                    root.picker_open = false;
+                    root.composer
+                        .update(cx, |state, cx| state.focus(window, cx));
+                    cx.notify();
+                });
+            };
+            let cancel = close.clone();
+            let reasoning = selected_model.and_then(|model| {
+                model.option_descriptors.iter().find(|d| {
+                    d.get("role").and_then(Value::as_str) == Some("reasoning")
+                        || d.get("id").and_then(Value::as_str) == Some("reasoningEffort")
+                })
+            });
+            let reasoning_column = reasoning.map(|descriptor| {
+                let id = descriptor
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let selected = current
+                    .as_ref()
+                    .and_then(|selection| models::option_value(selection, descriptor));
+                v_flex()
+                    .w(px(192.))
+                    .h_full()
+                    .border_l_1()
+                    .border_color(theme.border.opacity(0.7))
+                    .bg(theme.muted.opacity(0.4))
+                    .p_2()
+                    .child(
+                        div()
+                            .h(px(34.))
+                            .px_1()
+                            .text_sm()
+                            .text_color(theme.muted_foreground)
+                            .child("Reasoning"),
+                    )
+                    .children(
+                        descriptor
+                            .get("options")
+                            .and_then(Value::as_array)
+                            .into_iter()
+                            .flatten()
+                            .map(|option| {
+                                let value = option.get("id").cloned().unwrap_or(Value::Null);
+                                let checked = Some(&value) == selected.as_ref();
+                                let id = id.clone();
+                                h_flex()
+                                    .id(SharedString::from(format!("reasoning-{value}")))
+                                    .w_full()
+                                    .h(px(34.))
+                                    .px_2()
+                                    .rounded_sm()
+                                    .text_sm()
+                                    .cursor_pointer()
+                                    .hover(|row| row.bg(theme.list_hover))
+                                    .child(
+                                        option
+                                            .get("label")
+                                            .and_then(Value::as_str)
+                                            .unwrap_or_default()
+                                            .to_string(),
+                                    )
+                                    .child(div().flex_1())
+                                    .when(checked, |row| {
+                                        row.child(Icon::new(IconName::Check).size(px(14.)))
+                                    })
+                                    .on_click(cx.listener(move |root, _, _, cx| {
+                                        root.set_model_option(&id, value.clone(), cx)
+                                    }))
+                            }),
+                    )
+            });
+            v_flex()
+                .id("model-picker")
+                .absolute()
+                .bottom(px(40.))
+                .right(px(48.))
+                .mb_1()
+                .w(px(if reasoning.is_some() { 554. } else { 362. }))
+                .h(px(392.))
+                .rounded_md()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.popover)
+                .shadow_lg()
+                .occlude()
+                .child(
+                    h_flex()
+                        .flex_1()
+                        .min_h_0()
+                        .items_start()
+                        .child(
+                            v_flex()
+                                .w(px(44.))
+                                .h_full()
+                                .border_r_1()
+                                .border_color(theme.border)
+                                .py_2()
+                                .gap_1()
+                                .children(instances.iter().map(|instance| {
+                                    let id = instance.instance_id.clone();
+                                    Button::new(SharedString::from(format!("picker-provider-{id}")))
+                                        .icon(Icon::empty().path(match instance.driver.as_str() {
+                                            "codex" => "icons/t3-openai.svg",
+                                            "claudeAgent" => "icons/t3-claude.svg",
+                                            _ => "icons/bot.svg",
+                                        }))
+                                        .ghost()
+                                        .size(px(36.))
+                                        .tooltip(instance.name.clone())
+                                        .selected(shown.is_some_and(|i| i.instance_id == id))
+                                        .on_click(cx.listener(move |root, _, window, cx| {
+                                            root.picker_instance = Some(id.clone());
+                                            root.model_picker.update(cx, |state, cx| {
+                                                state.set_query("", window, cx);
+                                                state.focus(window, cx);
+                                            });
+                                            cx.notify();
+                                        }))
+                                })),
+                        )
+                        .child(
+                            div().flex_1().min_w_0().h_full().child(
+                                Command::new(&self.model_picker)
+                                    .placeholder("Search models...")
+                                    .max_h(px(300.))
+                                    .group(group)
+                                    .on_confirm(move |_, window, cx| close(window, cx))
+                                    .on_cancel(move |window, cx| cancel(window, cx)),
+                            ),
+                        )
+                        .children(reasoning_column),
+                )
+                .child(
+                    h_flex()
+                        .h(px(44.))
+                        .bg(theme.foreground.opacity(0.025))
+                        .px_2()
+                        .gap_1()
+                        .border_t_1()
+                        .border_color(theme.foreground.opacity(0.07))
+                        .children(
+                            selected_model
+                                .into_iter()
+                                .flat_map(|model| &model.option_descriptors)
+                                .filter(|d| {
+                                    d.get("role").and_then(Value::as_str) != Some("reasoning")
+                                        && d.get("id").and_then(Value::as_str)
+                                            != Some("reasoningEffort")
+                                })
+                                .filter_map(|descriptor| {
+                                    let id = descriptor.get("id")?.as_str()?.to_string();
+                                    let selected = current.as_ref().and_then(|selection| {
+                                        models::option_value(selection, descriptor)
+                                    });
+                                    if descriptor.get("type").and_then(Value::as_str)
+                                        == Some("boolean")
+                                    {
+                                        let checked =
+                                            selected.and_then(|v| v.as_bool()).unwrap_or(false);
+                                        return Some(
+                                            h_flex().child(
+                                                Button::new(SharedString::from(format!(
+                                                    "option-{id}"
+                                                )))
+                                                .label(
+                                                    descriptor.get("label")?.as_str()?.to_string(),
+                                                )
+                                                .ghost()
+                                                .compact()
+                                                .selected(checked)
+                                                .on_click(cx.listener(move |root, _, _, cx| {
+                                                    root.set_model_option(
+                                                        &id,
+                                                        Value::Bool(!checked),
+                                                        cx,
+                                                    )
+                                                })),
+                                            ),
+                                        );
+                                    }
+                                    Some(
+                                        h_flex()
+                                            .rounded(px(6.))
+                                            .bg(theme.foreground.opacity(0.05))
+                                            .p(px(3.))
+                                            .children(
+                                                descriptor.get("options")?.as_array()?.iter().map(
+                                                    |option| {
+                                                        let id = id.clone();
+                                                        let value = option
+                                                            .get("id")
+                                                            .cloned()
+                                                            .unwrap_or(Value::Null);
+                                                        Button::new(SharedString::from(format!(
+                                                            "option-{id}-{value}"
+                                                        )))
+                                                        .label(
+                                                            option
+                                                                .get("label")
+                                                                .and_then(Value::as_str)
+                                                                .unwrap_or_default()
+                                                                .to_string(),
+                                                        )
+                                                        .compact()
+                                                        .ghost()
+                                                        .text_size(px(12.))
+                                                        .h(px(22.))
+                                                        .px(px(8.))
+                                                        .rounded(px(3.))
+                                                        .when(
+                                                            Some(&value) == selected.as_ref(),
+                                                            |button| {
+                                                                button.bg(theme
+                                                                    .foreground
+                                                                    .opacity(0.09))
+                                                            },
+                                                        )
+                                                        .selected(Some(&value) == selected.as_ref())
+                                                        .on_click(cx.listener(
+                                                            move |root, _, _, cx| {
+                                                                root.set_model_option(
+                                                                    &id,
+                                                                    value.clone(),
+                                                                    cx,
+                                                                )
+                                                            },
+                                                        ))
+                                                    },
+                                                ),
+                                            ),
+                                    )
+                                }),
+                        )
+                        .child(div().flex_1())
+                        .when(
+                            self.settings.plan_mode_enabled
+                                && selected_instance.is_some_and(|i| i.interaction_mode_toggle),
+                            |row| {
+                                row.child(
+                                    Button::new("plan")
+                                        .label(if interaction_mode == "plan" {
+                                            "Plan"
+                                        } else {
+                                            "Build"
+                                        })
+                                        .compact()
+                                        .ghost()
+                                        .text_size(px(12.))
+                                        .selected(interaction_mode == "plan")
+                                        .on_click(
+                                            cx.listener(|root, _, _, cx| root.toggle_plan(cx)),
+                                        ),
+                                )
+                            },
+                        )
+                        .child(self.render_permissions_control(true, cx)),
+                )
+        });
+        div()
+            .relative()
+            .w_full()
+            .child(toolbar.child(self.composer_button(cx)))
+            .children(picker)
+            .into_any_element()
+    }
+
+    fn render_permissions_control(&self, inside_picker: bool, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let runtime_mode = self
+            .composer_target()
+            .map(|(_, _, mode, _)| mode)
+            .unwrap_or_default();
+        let (runtime_label, description, icon) = permissions::presentation(&runtime_mode);
+        let trigger = Button::new("permissions")
+            .label(runtime_label)
+            .accessibility_label(format!("Permissions: {runtime_label}"))
+            .icon(icon)
+            .tooltip(format!("Permissions: {runtime_label}. {description}"))
+            .compact()
+            .ghost()
+            .text_size(px(12.))
+            .text_color(theme.muted_foreground)
+            .selected(self.permissions_menu.is_some())
+            .on_click(cx.listener(|root, _, window, cx| root.open_permissions(false, window, cx)));
+        gpui_kit::base::Popup::new("permissions-popover", trigger)
+            .anchor(Anchor::BottomRight)
+            .offset(px(4.))
+            .when_some(
+                self.permissions_menu
+                    .clone()
+                    .filter(|_| inside_picker == self.picker_open),
+                |popup, menu| popup.content(menu),
+            )
+            .into_any_element()
+    }
+
+    pub(super) fn render_composer(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let suggestions = self
+            .completion
+            .as_ref()
+            .filter(|c| !c.suggestions.is_empty())
+            .map(|c| {
+                v_flex()
+                    .mx_3()
+                    .mt_2()
+                    .p_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(theme.border)
+                    .children(c.suggestions.iter().take(8).enumerate().map(|(i, s)| {
+                        h_flex()
+                            .px_2()
+                            .py_0p5()
+                            .gap_3()
+                            .rounded_sm()
+                            .when(i == c.selected, |row| row.bg(theme.list_active))
+                            .child(div().text_sm().child(s.label.clone()))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(s.detail.clone()),
+                            )
+                    }))
+            });
+        let chips = (!self.attachments.is_empty()).then(|| {
+            h_flex().px_3().pt_2().gap_1().flex_wrap().children(
+                self.attachments.iter().enumerate().map(|(i, file)| {
+                    Button::new(("attachment", i))
+                        .label(format!("{} ×", file.name))
+                        .compact()
+                        .outline()
+                        .tooltip("Remove")
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            if i < root.attachments.len() {
+                                root.attachments.remove(i);
+                            }
+                            cx.notify();
+                        }))
+                }),
+            )
+        });
+        let content = v_flex()
+            .relative()
+            .w_full()
+            .max_w(px(736.))
+            .when(self.draft.is_none(), |content| content.mb_5())
+            .rounded(px(16.))
+            .border_1()
+            .border_color(theme.border)
+            .bg(crate::appearance::composer(cx))
+            .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
+            .children(suggestions)
+            .children(chips)
+            .child(
+                h_flex().px_1p5().pt_3().pb_5().gap_2().items_end().child(
+                    div()
+                        .flex_1()
+                        .text_size(px(self.settings.font_size_prompt))
+                        .child(
+                            Textarea::new(&self.composer)
+                                .aria_label(format!(
+                                    "Message {}",
+                                    self.open_entry()
+                                        .map(|entry| entry.title.as_str())
+                                        .unwrap_or("New thread")
+                                ))
+                                .appearance(false)
+                                .bordered(false),
+                        ),
+                ),
+            )
+            .child(if self.picker_open {
+                self.composer_controls.clone().into_any_element()
+            } else {
+                self.composer_controls
+                    .clone()
+                    .cached(StyleRefinement::default().w_full().h(px(40.)))
+                    .into_any_element()
+            })
+            .into_any_element();
+        h_flex()
+            .w_full()
+            .px_4()
+            .justify_center()
+            .child(content)
+            .into_any_element()
+    }
+
+    pub(super) fn render_draft(
+        &self,
+        draft: &NewThreadDraft,
+        groups: &[ProjectGroup],
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let selected = groups
+            .iter()
+            .find(|group| draft.group.as_ref() == Some(&group.key));
+        let title = selected
+            .map(|group| group.title.clone())
+            .unwrap_or_else(|| "Choose a project".into());
+        let choices = groups.to_vec();
+        let selected_key = draft.group.clone();
+        let focus = self.focus.clone();
+        let project = Button::new("draft-project")
+            .child(
+                div()
+                    .text_size(px(30.))
+                    .line_height(px(36.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(title),
+            )
+            .accessibility_label("Choose project")
+            .ghost()
+            .compact()
+            .h(px(36.))
+            .px_0()
+            .text_size(px(30.))
+            .font_weight(FontWeight::MEDIUM)
+            .dropdown_menu(move |mut menu, _, _| {
+                for group in &choices {
+                    menu = menu.menu_with_check(
+                        group.title.clone(),
+                        selected_key.as_ref() == Some(&group.key),
+                        Box::new(PickProjectAction {
+                            key: group.key.clone(),
+                        }),
+                    );
+                }
+                menu.action_context(focus.clone())
+            });
+        let heading = h_flex()
+            .justify_center()
+            .items_center()
+            .flex_wrap()
+            .gap_2()
+            .text_size(px(30.))
+            .line_height(px(36.))
+            .child(if selected.is_some() {
+                "What should we build in"
+            } else {
+                ""
+            })
+            .child(
+                h_flex()
+                    .items_center()
+                    .child(project)
+                    .child(if selected.is_some() { "?" } else { " to start" }),
+            );
+        v_flex()
+            .flex_1()
+            .h_full()
+            .min_w_0()
+            .justify_center()
+            .child(
+                v_flex()
+                    .relative()
+                    .w_full()
+                    .child(
+                        div()
+                            .absolute()
+                            .bottom_full()
+                            .w_full()
+                            .pb_4()
+                            .px_4()
+                            .child(heading),
+                    )
+                    .children(self.render_message(cx))
+                    .child(self.render_composer(cx))
+                    .child(
+                        h_flex().w_full().justify_center().px_4().child(
+                            h_flex()
+                                .w_full()
+                                .max_w(px(736.))
+                                .h(px(52.))
+                                .px_2()
+                                .items_start()
+                                .pt_1()
+                                .child(self.render_workspace_mode(cx))
+                                .child(div().flex_1())
+                                .when(self.workspace_status.is_repo(), |row| {
+                                    row.child(
+                                        div().w(px(140.)).child(
+                                            self.render_branch_control("composer-branch", cx),
+                                        ),
+                                    )
+                                })
+                                .child(self.render_permissions_control(false, cx)),
+                        ),
+                    ),
+            )
+            .into_any_element()
+    }
+}
+
+/// Uploads the composer's attachments in order and returns what a message refers to them by.
+async fn upload_all(
+    connection: &Connection,
+    pending: &[attachments::Pending],
+) -> anyhow::Result<Vec<Value>> {
+    let mut uploaded = Vec::with_capacity(pending.len());
+    for file in pending {
+        uploaded.push(
+            connection
+                .upload_attachment(&file.name, &file.mime_type, file.bytes.as_ref().clone())
+                .await?,
+        );
+    }
+    Ok(uploaded)
+}
