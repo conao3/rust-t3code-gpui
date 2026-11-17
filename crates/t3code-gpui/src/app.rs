@@ -43,6 +43,7 @@ mod choice_select;
 mod composer;
 mod composer_controls;
 mod composer_dictation;
+mod composer_feedback;
 mod composer_images;
 mod composer_prompts;
 mod composer_queue;

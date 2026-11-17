@@ -244,13 +244,28 @@ impl Root {
         let count = self.prompts.store.entries.len();
         Some(
             v_flex()
-                .px_3()
-                .pt_2()
+                .absolute()
+                .bottom_full()
+                .right_0()
+                .mb_1()
+                .when(open, |view| {
+                    view.w_full()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .bg(cx.theme().popover)
+                        .shadow_md()
+                })
                 .gap_1()
                 .child(
                     Button::new("stash-toggle")
                         .label(format!("Stash {count}"))
-                        .accessibility_label(if open { "Close stash" } else { "Open stash" })
+                        .accessibility_label(if open {
+                            "Close stash".to_string()
+                        } else {
+                            format!("Stashed prompts: {count}. Open stash.")
+                        })
                         .ghost()
                         .compact()
                         .on_click(cx.listener(|root, _, _, cx| {
@@ -271,8 +286,7 @@ impl Root {
                                 |(index, entry)| {
                                     let id = entry.id.clone();
                                     let delete = id.clone();
-                                    let snippet =
-                                        entry.prompt.chars().take(100).collect::<String>();
+                                    let snippet = stash_snippet(entry);
                                     h_flex()
                                         .gap_1()
                                         .when(index == self.prompts.selected, |row| {
@@ -312,4 +326,43 @@ impl Root {
                 .into_any_element(),
         )
     }
+}
+
+fn stash_snippet(entry: &Entry) -> String {
+    let text = entry
+        .prompt
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !text.is_empty() {
+        let utf16: Vec<_> = text.encode_utf16().collect();
+        return if utf16.len() > 90 {
+            format!("{}…", String::from_utf16_lossy(&utf16[..90]))
+        } else {
+            text
+        };
+    }
+    let images = entry
+        .attachments
+        .iter()
+        .filter(|file| file.mime_type.starts_with("image/"))
+        .count()
+        + entry.dropped.len();
+    let files = entry
+        .attachments
+        .iter()
+        .filter(|file| !file.mime_type.starts_with("image/"))
+        .count();
+    let count = images + files;
+    if count == 0 {
+        return "(empty)".into();
+    }
+    let label = if images > 0 && files > 0 {
+        "attachment"
+    } else if files > 0 {
+        "file"
+    } else {
+        "image"
+    };
+    format!("({count} {label}{})", if count == 1 { "" } else { "s" })
 }

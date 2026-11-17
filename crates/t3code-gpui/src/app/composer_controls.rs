@@ -26,6 +26,7 @@ pub(super) struct Controls {
     workspace: Option<Entity<State>>,
     subscriptions: Vec<Subscription>,
     pub(super) effort_focus: FocusHandle,
+    pub(super) effort_cursor: Option<Value>,
 }
 impl Controls {
     pub(super) fn new(cx: &mut App) -> Self {
@@ -35,6 +36,7 @@ impl Controls {
             workspace: None,
             subscriptions: vec![],
             effort_focus: cx.focus_handle(),
+            effort_cursor: None,
         }
     }
 }
@@ -269,6 +271,7 @@ impl Root {
         if !self.picker_open {
             self.toggle_model_picker(window, cx);
         }
+        self.composer_choices.effort_cursor = None;
         self.composer_choices.effort_focus.focus(window, cx);
     }
 

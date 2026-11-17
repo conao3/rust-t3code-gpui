@@ -66,19 +66,25 @@ impl RowView {
     pub(super) fn render_images(&self) -> AnyElement {
         v_flex()
             .gap_2()
-            .children(self.images.items.iter().map(|(name, image)| {
-                div()
-                    .id(SharedString::from(format!("image-{name}")))
-                    .role(accesskit::Role::Image)
-                    .aria_label(name.clone())
-                    .child(
-                        img(image.clone())
-                            .max_w(px(400.))
-                            .max_h(px(300.))
-                            .object_fit(ObjectFit::Contain)
-                            .rounded_md(),
-                    )
-            }))
+            .children(
+                self.images
+                    .items
+                    .iter()
+                    .enumerate()
+                    .map(|(index, (name, image))| {
+                        div()
+                            .id(SharedString::from(format!("image-{index}")))
+                            .role(accesskit::Role::Image)
+                            .aria_label(name.clone())
+                            .child(
+                                img(image.clone())
+                                    .max_w(px(400.))
+                                    .max_h(px(300.))
+                                    .object_fit(ObjectFit::Contain)
+                                    .rounded_md(),
+                            )
+                    }),
+            )
             .children(self.images.error.clone())
             .into_any_element()
     }

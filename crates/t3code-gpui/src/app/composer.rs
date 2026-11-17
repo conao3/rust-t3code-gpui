@@ -413,6 +413,7 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
+        let background_thread = thread_id.clone();
         let delivery = self.composer_delivery(intent == SubmissionIntent::Alternate);
         let approvals: Vec<String> = self
             .rows
@@ -458,6 +459,7 @@ impl Root {
                     && root.composer_key().as_ref() == Some(&origin)
                 {
                     root.new_thread(window, cx);
+                    root.background_started(environment.clone(), background_thread, window, cx);
                 }
                 if sent.is_err() {
                     root.composer
@@ -694,6 +696,7 @@ impl Root {
                         }
                         if intent == SubmissionIntent::Background {
                             root.new_thread(window, cx);
+                            root.background_started(environment, thread_id, window, cx);
                         } else {
                             root.open_thread(environment, thread_id, cx);
                         }
@@ -1385,6 +1388,19 @@ impl Root {
                 let selected = current
                     .as_ref()
                     .and_then(|selection| models::option_value(selection, descriptor));
+                let options: Vec<Value> = descriptor["options"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|option| option["id"].clone())
+                    .collect();
+                let focused = self
+                    .composer_choices
+                    .effort_cursor
+                    .as_ref()
+                    .filter(|value| options.contains(value))
+                    .or(selected.as_ref())
+                    .or(options.first());
                 v_flex()
                     .id("composer-reasoning")
                     .role(accesskit::Role::RadioGroup)
@@ -1412,6 +1428,10 @@ impl Root {
                             .map(|option| {
                                 let value = option.get("id").cloned().unwrap_or(Value::Null);
                                 let checked = Some(&value) == selected.as_ref();
+                                let tracked = Some(&value) == focused;
+                                let choices = options.clone();
+                                let key_id = id.clone();
+                                let key_value = value.clone();
                                 let id = id.clone();
                                 h_flex()
                                     .id(SharedString::from(format!("reasoning-{value}")))
@@ -1424,20 +1444,42 @@ impl Root {
                                     } else {
                                         accesskit::Toggled::False
                                     })
-                                    .when(checked, |row| {
+                                    .when(tracked, |row| {
                                         row.track_focus(&self.composer_choices.effort_focus)
                                     })
                                     .on_key_down(cx.listener(
-                                        |root, event: &KeyDownEvent, window, cx| {
-                                            if matches!(event.keystroke.key.as_str(), "up" | "down")
-                                            {
-                                                root.step_effort(
-                                                    event.keystroke.key == "down",
-                                                    window,
+                                        move |root, event: &KeyDownEvent, window, cx| {
+                                            match event.keystroke.key.as_str() {
+                                                "up" | "down" => {
+                                                    if let Some(index) = choices
+                                                        .iter()
+                                                        .position(|value| value == &key_value)
+                                                    {
+                                                        let next = if event.keystroke.key == "down"
+                                                        {
+                                                            (index + 1) % choices.len()
+                                                        } else {
+                                                            (index + choices.len() - 1)
+                                                                % choices.len()
+                                                        };
+                                                        root.composer_choices.effort_cursor =
+                                                            Some(choices[next].clone());
+                                                        cx.notify();
+                                                    }
+                                                }
+                                                "enter" | "space" => root.set_model_option(
+                                                    &key_id,
+                                                    key_value.clone(),
                                                     cx,
-                                                );
-                                                cx.stop_propagation();
+                                                ),
+                                                "left" => {
+                                                    root.model_picker.update(cx, |state, cx| {
+                                                        state.focus(window, cx)
+                                                    })
+                                                }
+                                                _ => return,
                                             }
+                                            cx.stop_propagation();
                                         },
                                     ))
                                     .w_full()
