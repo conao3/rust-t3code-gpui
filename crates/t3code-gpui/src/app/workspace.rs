@@ -2,11 +2,25 @@ use super::*;
 
 pub(super) struct DetailsPane {
     pub(super) root: WeakEntity<Root>,
+    pub(super) services: Option<((String, String), Entity<ThreadServices>)>,
 }
 impl Render for DetailsPane {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let target = self.root.upgrade().and_then(|root| root.read(cx).current());
+        if self.services.as_ref().map(|(key, _)| key) != target.as_ref() {
+            self.services = target.and_then(|key| {
+                let root = self.root.upgrade()?;
+                let connection = root.read(cx).connection(&key.0)?;
+                let runtime = root.read(cx).runtime.clone();
+                let weak = self.root.clone();
+                let entity =
+                    cx.new(|cx| ThreadServices::new(weak, key.clone(), connection, runtime, cx));
+                Some((key, entity))
+            });
+        }
+        let services = self.services.as_ref().map(|(_, entity)| entity.clone());
         self.root
-            .update(cx, |root, cx| root.render_thread_details(cx))
+            .update(cx, |root, cx| root.render_thread_details(services, cx))
             .expect("details root is alive")
     }
 }
@@ -64,6 +78,12 @@ impl Root {
     ) -> AnyElement {
         let layout = workspace::layout(self.canvas_width, self.details_open);
         let card_height = self.lineage_height()
+            + self
+                .details_pane
+                .read(cx)
+                .services
+                .as_ref()
+                .map_or(0., |(_, services)| services.read(cx).height())
             + self.thread_extra_height()
             + 52.
             + if self.workspace_editor().is_some() {
@@ -138,7 +158,11 @@ impl Root {
             .into_any_element()
     }
 
-    fn render_thread_details(&self, cx: &Context<Self>) -> AnyElement {
+    fn render_thread_details(
+        &self,
+        services: Option<Entity<ThreadServices>>,
+        cx: &Context<Self>,
+    ) -> AnyElement {
         let theme = cx.theme();
         let Some((environment, cwd)) = self.composer_cwd() else {
             return div().into_any_element();
@@ -394,6 +418,7 @@ impl Root {
             )
             .child(self.render_thread_pull_requests(cx))
             .child(self.render_lineage(cx))
+            .children(services)
             .child(self.render_thread_usage(cx))
             .into_any_element()
     }
@@ -880,5 +905,418 @@ impl Root {
                 cx.notify();
             });
         }).detach();
+    }
+}
+
+pub(super) struct ThreadServices {
+    root: WeakEntity<Root>,
+    environment: String,
+    thread: String,
+    servers: Vec<Value>,
+    tasks: Vec<Value>,
+    visible: usize,
+    busy: Option<String>,
+    error: Option<String>,
+    workers: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for ThreadServices {
+    fn drop(&mut self) {
+        for worker in &self.workers {
+            worker.abort();
+        }
+    }
+}
+
+impl ThreadServices {
+    fn height(&self) -> f32 {
+        let servers = if self.servers.is_empty() {
+            0.
+        } else {
+            40. + self.servers.len().min(self.visible) as f32 * 52.
+                + if self.servers.len() > 4 { 32. } else { 0. }
+        };
+        let tasks = if self.tasks.is_empty() {
+            0.
+        } else {
+            48. + self.tasks.len() as f32 * 52.
+        };
+        servers + tasks + if self.error.is_some() { 32. } else { 0. }
+    }
+
+    fn new(
+        root: WeakEntity<Root>,
+        target: (String, String),
+        connection: Arc<Connection>,
+        runtime: Handle,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        use t3_client::rpc::StreamLimits;
+        let mut view = Self {
+            root,
+            environment: target.0,
+            thread: target.1,
+            servers: vec![],
+            tasks: vec![],
+            visible: 4,
+            busy: None,
+            error: None,
+            workers: vec![],
+        };
+        for (method, field) in [
+            ("subscribeDiscoveredLocalServers", "servers"),
+            ("scheduledTasks.subscribe", "tasks"),
+        ] {
+            let connection = connection.clone();
+            let (sender, receiver) = async_channel::bounded(8);
+            view.workers.push(runtime.spawn(async move {
+                let result: anyhow::Result<()> = async {
+                    let mut stream = connection
+                        .subscribe(
+                            method,
+                            json!({}),
+                            StreamLimits::new(8, 4 << 20).expect("positive stream limits"),
+                        )
+                        .await?;
+                    while let Some(chunk) = stream.next().await {
+                        let chunk = chunk?;
+                        for value in chunk.values() {
+                            if sender.send(Ok(value.clone())).await.is_err() {
+                                return Ok(());
+                            }
+                        }
+                        chunk.accept();
+                    }
+                    Ok(())
+                }
+                .await;
+                if let Err(error) = result {
+                    let _ = sender.send(Err(format!("{error:#}"))).await;
+                }
+            }));
+            cx.spawn(async move |this, cx| {
+                while let Ok(mut value) = receiver.recv().await {
+                    cx.background_executor().timer(REDRAW_INTERVAL).await;
+                    while let Ok(next) = receiver.try_recv() {
+                        value = next;
+                    }
+                    if this
+                        .update(cx, |view, cx| {
+                            match value {
+                                Ok(value) => {
+                                    let values =
+                                        value[field].as_array().cloned().unwrap_or_default();
+                                    if field == "servers" {
+                                        view.servers = values
+                                            .into_iter()
+                                            .filter(|v| {
+                                                v["terminal"]["threadId"] == view.thread
+                                                    || v["agent"]["threadId"] == view.thread
+                                            })
+                                            .collect();
+                                    } else {
+                                        view.tasks = values
+                                            .into_iter()
+                                            .filter(|v| v["threadId"] == view.thread)
+                                            .collect();
+                                        view.error = None;
+                                    }
+                                }
+                                Err(error) => {
+                                    view.error = Some(format!(
+                                        "Could not load {}: {error}",
+                                        if field == "tasks" {
+                                            "automations"
+                                        } else {
+                                            "servers"
+                                        }
+                                    ));
+                                }
+                            }
+                            let _ = view.root.update(cx, |root, cx| {
+                                root.details_stamp = None;
+                                cx.notify();
+                            });
+                            cx.notify();
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
+        view
+    }
+
+    fn mutate(&mut self, method: &'static str, input: Value, cx: &mut Context<Self>) {
+        if self.busy.is_some() {
+            return;
+        }
+        let Ok(Some((connection, runtime))) = self.root.update(cx, |root, _| {
+            root.connection(&self.environment)
+                .map(|connection| (connection, root.runtime.clone()))
+        }) else {
+            return;
+        };
+        self.busy = Some(method.into());
+        self.error = None;
+        cx.spawn(async move |this, cx| {
+            let result = on_runtime(
+                &runtime,
+                async move { connection.request(method, input).await },
+            )
+            .await;
+            let _ = this.update(cx, |view, cx| {
+                view.busy = None;
+                if let Err(error) = result {
+                    view.error = Some(format!("{error:#}"));
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn manage_tasks(&self, cx: &mut Context<Self>) {
+        let _ = self.root.update(cx, |root, cx| {
+            root.settings_environment = Some(self.environment.clone());
+            root.settings_page = "scheduled-tasks";
+            root.settings_open = true;
+            cx.notify();
+        });
+    }
+}
+
+impl Render for ThreadServices {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::component::switch::Switch;
+        let mut body = v_flex();
+        if !self.servers.is_empty() {
+            let supports_stop = self.root.upgrade().is_some_and(|root| {
+                root.read(cx)
+                    .config_of(&self.environment)
+                    .is_some_and(|config| {
+                        config["environment"]["capabilities"]["localServerStop"] == true
+                    })
+            });
+            let mut servers = v_flex()
+                .px_2()
+                .py_2()
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .child(div().px_2p5().text_xs().child("Servers"));
+            for (index, server) in self.servers.iter().take(self.visible).enumerate() {
+                let port = server["port"].as_u64().unwrap_or_default();
+                let mut description = if server["terminal"].is_null() {
+                    "Agent".to_string()
+                } else {
+                    "Terminal".to_string()
+                };
+                if let Some(process) = server["processName"].as_str() {
+                    description.push_str(&format!(" · {process}"));
+                }
+                let url = server["url"].as_str().unwrap_or_default().to_string();
+                let input = json!({"pid":server["pid"],"port":port});
+                servers = servers.child(
+                    h_flex()
+                        .child(
+                            Button::new(("server", index))
+                                .ghost()
+                                .flex_1()
+                                .h_auto()
+                                .py_2()
+                                .child(
+                                    v_flex()
+                                        .items_start()
+                                        .child(format!("localhost:{port}"))
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(cx.theme().muted_foreground)
+                                                .child(description.clone()),
+                                        ),
+                                )
+                                .accessibility_label(format!("localhost:{port} {description}"))
+                                .on_click(cx.listener(move |view, event: &ClickEvent, _, cx| {
+                                    if event.modifiers().control || event.modifiers().platform {
+                                        cx.open_url(&url);
+                                    } else {
+                                        let _ = view.root.update(cx, |root, cx| {
+                                            root.activate_panel("browser".into(), cx);
+                                        });
+                                    }
+                                })),
+                        )
+                        .when(supports_stop && !server["pid"].is_null(), |row| {
+                            row.child(
+                                Button::new(("stop-server", index))
+                                    .icon(gpui_kit::assets::IconName::Square)
+                                    .accessibility_label(format!("Stop localhost:{port}"))
+                                    .ghost()
+                                    .small()
+                                    .disabled(self.busy.is_some())
+                                    .on_click(cx.listener(move |view, _, _, cx| {
+                                        view.mutate("preview.stopLocalServer", input.clone(), cx)
+                                    })),
+                            )
+                        }),
+                );
+            }
+            if self.servers.len() > 4 {
+                let hidden = self.servers.len().saturating_sub(self.visible);
+                servers = servers.child(
+                    Button::new("more-servers")
+                        .ghost()
+                        .label(if hidden > 0 {
+                            format!("Show {} more", hidden.min(4))
+                        } else {
+                            "Show less".into()
+                        })
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            view.visible = if hidden > 0 { view.visible + 4 } else { 4 };
+                            let _ = view.root.update(cx, |_, cx| cx.notify());
+                            cx.notify();
+                        })),
+                );
+            }
+            body = body.child(servers);
+        }
+        if !self.tasks.is_empty() {
+            let mut tasks = v_flex()
+                .px_2()
+                .py_2()
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .child(
+                    h_flex()
+                        .justify_between()
+                        .child(div().px_2p5().text_xs().child("Automations"))
+                        .child(
+                            Button::new("manage-tasks")
+                                .icon(gpui_kit::assets::IconName::Settings2)
+                                .accessibility_label("Manage scheduled tasks")
+                                .ghost()
+                                .small()
+                                .on_click(cx.listener(|view, _, _, cx| view.manage_tasks(cx))),
+                        ),
+                );
+            for (index, task) in self.tasks.iter().enumerate() {
+                let title = task["title"].as_str().unwrap_or_default().to_string();
+                let id = task["id"].clone();
+                let toggle_id = id.clone();
+                let enabled = task["enabled"] == true;
+                let mut schedule = task_schedule_label(&task["schedule"]);
+                if let Some(blocked) = task["blockedByPolicy"].as_str() {
+                    schedule.push_str(&format!(" · {blocked}"));
+                } else if !enabled {
+                    schedule.push_str(" · paused");
+                }
+                tasks = tasks.child(
+                    h_flex()
+                        .py_1p5()
+                        .gap_2()
+                        .child(
+                            v_flex().flex_1().child(title.clone()).child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(schedule),
+                            ),
+                        )
+                        .child(
+                            Button::new(("edit-automation", index))
+                                .icon(gpui_kit::assets::IconName::Pencil)
+                                .accessibility_label(format!("Edit {title}"))
+                                .ghost()
+                                .small()
+                                .disabled(true)
+                                .tooltip("Opening an automation directly for editing is not implemented in T3 Code GPUI."),
+                        )
+                        .when(task["schedule"]["type"] != "webhook", |row| {
+                            row.child(
+                                Button::new(("run-automation", index))
+                                    .icon(gpui_kit::assets::IconName::Play)
+                                    .accessibility_label(format!("Run {title} now"))
+                                    .ghost()
+                                    .small()
+                                    .disabled(
+                                        self.busy.is_some() || task["lastRunStatus"] == "running",
+                                    )
+                                    .on_click(cx.listener(move |view, _, _, cx| {
+                                        view.mutate("scheduledTasks.runNow", json!({"id":id}), cx)
+                                    })),
+                            )
+                        })
+                        .child(
+                            Switch::new(("toggle-automation", index))
+                                .accessibility_label(format!(
+                                    "{} {title}",
+                                    if enabled { "Pause" } else { "Resume" }
+                                ))
+                                .checked(enabled)
+                                .disabled(self.busy.is_some())
+                                .on_click(cx.listener(move |view, enabled, _, cx| {
+                                    view.mutate(
+                                        "scheduledTasks.setEnabled",
+                                        json!({"id":toggle_id,"enabled":enabled}),
+                                        cx,
+                                    )
+                                })),
+                        ),
+                );
+            }
+            body = body.child(tasks);
+        }
+        body.children(self.error.clone().map(|error| {
+            div()
+                .px_3()
+                .text_xs()
+                .text_color(cx.theme().danger)
+                .child(error)
+        }))
+    }
+}
+
+fn task_schedule_label(schedule: &Value) -> String {
+    match schedule["type"].as_str() {
+        Some("webhook") => "On webhook".into(),
+        Some("once") => format!("Once, {}", schedule["runAt"].as_str().unwrap_or_default()),
+        Some("interval") => {
+            let ms = schedule["everyMs"].as_u64().unwrap_or_default();
+            if ms.is_multiple_of(60000) {
+                format!("Every {} min", ms / 60000)
+            } else {
+                format!("Every {} sec", (ms + 500) / 1000)
+            }
+        }
+        _ => {
+            let days = schedule["weekdays"].as_array().cloned().unwrap_or_default();
+            let names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            let label = if days.is_empty() {
+                "Daily".into()
+            } else if days.len() == 5
+                && days
+                    .iter()
+                    .all(|day| day.as_u64().is_some_and(|day| (1..=5).contains(&day)))
+            {
+                "Weekdays".into()
+            } else {
+                days.iter()
+                    .filter_map(|day| {
+                        day.as_u64()
+                            .and_then(|day| names.get(day as usize))
+                            .copied()
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            format!(
+                "{label} at {}",
+                schedule["timeOfDay"].as_str().unwrap_or_default()
+            )
+        }
     }
 }

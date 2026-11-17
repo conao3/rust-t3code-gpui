@@ -751,6 +751,7 @@ impl Root {
             editor_picker_focus: cx.focus_handle(),
             details_pane: cx.new(|_| DetailsPane {
                 root: sidebar_root.clone(),
+                services: None,
             }),
             details_stamp: None,
             workspace_sender,
