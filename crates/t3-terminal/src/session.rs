@@ -91,6 +91,7 @@ pub struct State {
 pub struct Modes {
     pub alternate_screen: bool,
     pub mouse_tracking: bool,
+    pub mouse_any_event: bool,
     pub application_cursor_keys: bool,
     pub synchronized_output: bool,
 }
@@ -110,6 +111,10 @@ pub enum Input {
     SelectWord(Point),
     SelectLine(Point),
     SelectRange(Point, Point),
+    BeginSelection(Point, usize),
+    ExtendSelection(Point),
+    EndSelection,
+    ScrollSelection(i32, Point),
     ClearSelection,
     CopySelection { clear: bool },
     ForgetKey(String),
@@ -205,6 +210,8 @@ impl Session {
                     last_output: None,
                     sequence: None,
                     encoded_keys: HashSet::new(),
+                    mouse_motion: Vec::new(),
+                    selection_drag: None,
                     read_only,
                 };
                 if let Err(error) = worker.run(inputs) {
@@ -385,7 +392,16 @@ struct Worker {
     last_output: Option<Instant>,
     sequence: Option<u64>,
     encoded_keys: HashSet<String>,
+    mouse_motion: Vec<u8>,
+    selection_drag: Option<SelectionDrag>,
     read_only: bool,
+}
+
+struct SelectionDrag {
+    anchor: Point,
+    base: Option<Range>,
+    mode: usize,
+    moved: bool,
 }
 
 impl Worker {
@@ -497,12 +513,17 @@ impl Worker {
     }
 
     fn refresh_modes(&mut self) -> Result<()> {
-        self.state.modes = Modes {
+        let modes = Modes {
             alternate_screen: self.term().is_alternate_screen()?,
             mouse_tracking: self.term().mouse_tracking()?,
+            mouse_any_event: self.term().mode(1003)?,
             application_cursor_keys: self.term().mode(1)?,
             synchronized_output: self.term().mode(2026)?,
         };
+        if modes.mouse_any_event != self.state.modes.mouse_any_event {
+            self.mouse_motion.clear();
+        }
+        self.state.modes = modes;
         Ok(())
     }
 
@@ -676,7 +697,16 @@ impl Worker {
             }
             Input::Mouse(mouse) => {
                 let bytes = self.term().encode_mouse(&mouse)?;
-                self.write(bytes)?;
+                let motion = matches!(mouse.action, crate::MouseAction::Motion);
+                let send = !bytes.is_empty() && (!motion || bytes != self.mouse_motion);
+                if motion {
+                    self.mouse_motion = bytes.clone();
+                } else {
+                    self.mouse_motion.clear();
+                }
+                if send {
+                    self.write(bytes)?;
+                }
             }
             Input::Resize(mut grid) => {
                 if self.read_only {
@@ -721,10 +751,27 @@ impl Worker {
                 self.schedule(true)?;
             }
             Input::SelectRange(start, end) => {
-                self.term().set_selection(start, end, 2, 2)?;
+                self.term().set_selection(start, end, 1, 1)?;
                 self.schedule(true)?;
             }
+            Input::BeginSelection(point, count) => self.begin_selection(point, count)?,
+            Input::ExtendSelection(point) => self.extend_selection(point)?,
+            Input::ScrollSelection(rows, point) => {
+                self.term().scroll(rows)?;
+                self.extend_selection(point)?;
+            }
+            Input::EndSelection => {
+                if self
+                    .selection_drag
+                    .take()
+                    .is_some_and(|drag| drag.mode == 1 && !drag.moved)
+                {
+                    self.term().clear_selection()?;
+                    self.schedule(true)?;
+                }
+            }
             Input::ClearSelection => {
+                self.selection_drag = None;
                 self.term().clear_selection()?;
                 self.schedule(true)?;
             }
@@ -740,6 +787,73 @@ impl Worker {
             }
         }
         Ok(())
+    }
+
+    fn begin_selection(&mut self, point: Point, count: usize) -> Result<()> {
+        let mode = count.clamp(1, 3);
+        let range = match mode {
+            2 => self.term().select_word(point)?,
+            3 => self.term().select_line(point)?,
+            _ => None,
+        };
+        let anchor = if let Some(range) = &range {
+            Some(range.screen.start)
+        } else {
+            self.term().convert_point(point, 1, 2)?
+        };
+        self.selection_drag = anchor.map(|anchor| SelectionDrag {
+            anchor,
+            base: range.map(|range| range.screen),
+            mode,
+            moved: false,
+        });
+        if mode == 1
+            && let Some(anchor) = anchor
+        {
+            self.term().set_selection(anchor, anchor, 2, 2)?;
+        }
+        self.schedule(true)
+    }
+
+    fn extend_selection(&mut self, point: Point) -> Result<()> {
+        let Some(mut drag) = self.selection_drag.take() else {
+            return Ok(());
+        };
+        let Some(anchor) = self.term().selection_range()?.map(|range| range.start) else {
+            return Ok(());
+        };
+        let shift = i64::from(anchor.y) - i64::from(drag.anchor.y);
+        if let Some(base) = &mut drag.base {
+            base.start.y = (i64::from(base.start.y) + shift).clamp(0, i64::from(u32::MAX)) as u32;
+            base.end.y = (i64::from(base.end.y) + shift).clamp(0, i64::from(u32::MAX)) as u32;
+        }
+        let range = match drag.mode {
+            2 => self.term().select_word(point)?,
+            3 => self.term().select_line(point)?,
+            _ => None,
+        };
+        if let Some(cell) = self.term().convert_point(point, 1, 2)? {
+            let before = drag
+                .base
+                .as_ref()
+                .is_some_and(|base| (cell.y, cell.x) < (base.start.y, base.start.x));
+            let start = drag
+                .base
+                .as_ref()
+                .map_or(anchor, |base| if before { base.end } else { base.start });
+            let end = range.map_or(cell, |range| {
+                if before {
+                    range.screen.start
+                } else {
+                    range.screen.end
+                }
+            });
+            self.term().set_selection(start, end, 2, 2)?;
+            drag.anchor = start;
+            drag.moved = true;
+        }
+        self.selection_drag = Some(drag);
+        self.schedule(true)
     }
 
     fn key(&mut self, event: KeyboardEvent) -> Result<bool> {
@@ -892,6 +1006,8 @@ mod tests {
                 last_output: None,
                 sequence: None,
                 encoded_keys: HashSet::new(),
+                mouse_motion: Vec::new(),
+                selection_drag: None,
                 read_only: false,
             },
             outgoing,
@@ -1094,6 +1210,77 @@ mod tests {
             ))?;
             assert!(writes.is_empty());
         }
+        Ok(())
+    }
+
+    #[test]
+    fn drag_selection_tracks_history_and_extends_complete_words() -> Result<()> {
+        let (mut worker, _, _) = worker();
+        for row in 0..25 {
+            worker
+                .term()
+                .write(format!("line{row:02}\r\n").as_bytes())?;
+        }
+        worker.input(Input::Scroll(-10))?;
+        let first = worker.term().snapshot()?.row_data[0]
+            .text
+            .trim_end()
+            .to_owned();
+        assert_eq!(first, "line12");
+        worker.input(Input::BeginSelection(Point { x: 2, y: 0 }, 2))?;
+        worker.input(Input::ExtendSelection(Point { x: 2, y: 2 }))?;
+        assert_eq!(worker.term().selection_text()?, "line12\nline13\nline14");
+        worker.input(Input::ScrollSelection(2, Point { x: 2, y: 2 }))?;
+        assert_eq!(
+            worker.term().selection_text()?,
+            "line12\nline13\nline14\nline15\nline16"
+        );
+        worker.input(Input::EndSelection)?;
+        assert!(worker.term().selection_range()?.is_some());
+        worker.input(Input::BeginSelection(Point { x: 2, y: 0 }, 1))?;
+        worker.input(Input::EndSelection)?;
+        assert!(worker.term().selection_range()?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn mouse_motion_is_deduplicated_until_a_button_or_tracking_change() -> Result<()> {
+        let (mut worker, writes, _) = worker();
+        worker.term().write(b"\x1b[?1003h\x1b[?1006h")?;
+        worker.refresh_modes()?;
+        let mouse = crate::Mouse {
+            action: crate::MouseAction::Motion,
+            button: Some(1),
+            mods: 0,
+            x: 12.,
+            y: 24.,
+            screen_width: 104.,
+            screen_height: 80.,
+            cell_width: 8.,
+            cell_height: 18.,
+            padding_left: 4.,
+            padding_right: 4.,
+            padding_top: 4.,
+            padding_bottom: 4.,
+            any_button_pressed: true,
+        };
+        worker.input(Input::Mouse(mouse.clone()))?;
+        assert!(matches!(writes.try_recv()?, Write::Text(text) if text == "\x1b[<32;2;2M"));
+        worker.input(Input::Mouse(mouse.clone()))?;
+        assert!(writes.is_empty());
+        worker.input(Input::Mouse(crate::Mouse {
+            action: crate::MouseAction::Press,
+            ..mouse.clone()
+        }))?;
+        assert!(matches!(writes.try_recv()?, Write::Text(text) if text == "\x1b[<0;2;2M"));
+        worker.input(Input::Mouse(mouse.clone()))?;
+        assert!(matches!(writes.try_recv()?, Write::Text(text) if text == "\x1b[<32;2;2M"));
+        worker.term().write(b"\x1b[?1003l")?;
+        worker.refresh_modes()?;
+        worker.term().write(b"\x1b[?1003h")?;
+        worker.refresh_modes()?;
+        worker.input(Input::Mouse(mouse))?;
+        assert!(matches!(writes.try_recv()?, Write::Text(text) if text == "\x1b[<32;2;2M"));
         Ok(())
     }
 }

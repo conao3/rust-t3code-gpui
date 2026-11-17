@@ -178,6 +178,24 @@ class Native:
         parts[-1] = keys.get(parts[-1], parts[-1])
         self.xdo("key", "--clearmodifiers", "+".join(parts))
 
+    def pointer(self, kind, x, y, button="left"):
+        if kind not in ["move", "down", "up"] or button not in [
+            "left",
+            "middle",
+            "right",
+        ]:
+            raise ValueError("Unsupported pointer action")
+        bounds = self.content_bounds()
+        if not 0 <= x < bounds["width"] or not 0 <= y < bounds["height"]:
+            raise ValueError("Pointer coordinates must be inside the content viewport")
+        self.focus()
+        self.xdo("mousemove", bounds["x"] + x, bounds["y"] + y)
+        if kind != "move":
+            self.xdo(
+                "mousedown" if kind == "down" else "mouseup",
+                {"left": 1, "middle": 2, "right": 3}[button],
+            )
+
     def type(self, text):
         if any(ord(character) < 32 or ord(character) == 127 for character in text):
             raise ValueError("Use explicit key or paste actions for control characters")
@@ -282,6 +300,11 @@ def main():
     p.add_argument("chord")
     p = sub.add_parser("type")
     p.add_argument("text")
+    p = sub.add_parser("pointer")
+    p.add_argument("kind", choices=["move", "down", "up"])
+    p.add_argument("x", type=int)
+    p.add_argument("y", type=int)
+    p.add_argument("--button", choices=["left", "middle", "right"], default="left")
     p = sub.add_parser("screenshot")
     p.add_argument("path", type=Path)
     args = parser.parse_args()
@@ -294,6 +317,8 @@ def main():
         app.press(args.chord)
     elif args.command == "type":
         app.type(args.text)
+    elif args.command == "pointer":
+        app.pointer(args.kind, args.x, args.y, args.button)
     elif args.command == "screenshot":
         app.screenshot(args.path)
 

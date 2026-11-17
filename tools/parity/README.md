@@ -69,6 +69,8 @@ The shared draft scenario exercises text retention, sidebar toggling, permission
 
 The native text driver keeps ASCII input at 20 ms and gives Unicode keymap substitutions 300 ms. Fast consecutive XTest Unicode substitutions can lose characters in both Electron and GPUI; input completeness must be checked in the application. This cadence belongs to functional input tests and must not be presented as application latency or used as the typing performance workload.
 
+Both drivers also accept `pointer move|down|up X Y --button left|middle|right`, with coordinates relative to the content viewport. A shared scenario can use `{"action":"pointer","kind":"down","x":300,"y":650}` and matching move/up steps for a drag. The original driver preserves pressed-button state within a connection; use a scenario or one Python connection for a complete gesture. Verify terminal mouse protocols using a raw PTY input recorder as well as the resulting screen.
+
 Inventory the reference commands separately:
 
 ```sh

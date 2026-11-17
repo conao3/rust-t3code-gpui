@@ -230,6 +230,30 @@ class Cdp:
                     modifiers=modifiers,
                 )
 
+    async def pointer(self, kind, x, y, button="left"):
+        kinds = {"move": "mouseMoved", "down": "mousePressed", "up": "mouseReleased"}
+        if kind not in kinds or button not in ["left", "middle", "right"]:
+            raise ValueError("Unsupported pointer action")
+        viewport = await self.evaluate("({width: innerWidth, height: innerHeight})")
+        if not 0 <= x < viewport["width"] or not 0 <= y < viewport["height"]:
+            raise ValueError("Pointer coordinates must be inside the content viewport")
+        held = getattr(self, "pointer_button", None)
+        if kind == "down":
+            held = button
+        elif kind == "up":
+            held = None
+        bits = {"left": 1, "middle": 4, "right": 2, None: 0}
+        await self.call(
+            "Input.dispatchMouseEvent",
+            type=kinds[kind],
+            x=x,
+            y=y,
+            button=button if kind != "move" else held or "none",
+            buttons=bits[held],
+            clickCount=1 if kind != "move" else 0,
+        )
+        self.pointer_button = held
+
     async def type(self, text):
         if any(ord(character) < 32 or ord(character) == 127 for character in text):
             raise ValueError("Use explicit key or paste actions for control characters")
@@ -257,6 +281,11 @@ async def main():
     p.add_argument("chord")
     p = sub.add_parser("type")
     p.add_argument("text")
+    p = sub.add_parser("pointer")
+    p.add_argument("kind", choices=["move", "down", "up"])
+    p.add_argument("x", type=int)
+    p.add_argument("y", type=int)
+    p.add_argument("--button", choices=["left", "middle", "right"], default="left")
     p = sub.add_parser("evaluate")
     p.add_argument("expression")
     p = sub.add_parser("screenshot")
@@ -271,6 +300,8 @@ async def main():
             await page.press(args.chord)
         elif args.command == "type":
             await page.type(args.text)
+        elif args.command == "pointer":
+            await page.pointer(args.kind, args.x, args.y, args.button)
         elif args.command == "evaluate":
             print(json.dumps(await page.evaluate(args.expression), ensure_ascii=False))
         elif args.command == "screenshot":

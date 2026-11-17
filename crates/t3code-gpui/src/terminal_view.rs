@@ -8,7 +8,7 @@ use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::*;
 use t3_client::session::Connection;
 use t3_terminal::session::{Event, Grid, Input, Session, State, Target};
-use t3_terminal::{Color, KeyboardEvent, Theme};
+use t3_terminal::{Color, KeyboardEvent, Mouse as TerminalMouse, MouseAction, Theme};
 use tokio::runtime::Handle;
 
 use crate::terminal_paint::{Cache, PADDING, PaintState, Typography};
@@ -30,6 +30,9 @@ pub struct TerminalView {
     preedit: String,
     ime_selection: Range<usize>,
     drag: Option<t3_terminal::Point>,
+    drag_pointer: Point<Pixels>,
+    reporting_button: Option<i32>,
+    selection_scroll: Option<Task<()>>,
     wheel_remainder: f32,
     light: bool,
     requested_grid: Grid,
@@ -42,6 +45,15 @@ pub enum ViewEvent {
 }
 
 impl EventEmitter<ViewEvent> for TerminalView {}
+
+fn mouse_button(button: MouseButton) -> Option<i32> {
+    match button {
+        MouseButton::Left => Some(1),
+        MouseButton::Middle => Some(3),
+        MouseButton::Right => Some(2),
+        MouseButton::Navigate(_) => None,
+    }
+}
 
 fn rgb_color(value: u32) -> Color {
     Color {
@@ -198,6 +210,9 @@ impl TerminalView {
             preedit: String::new(),
             ime_selection: 0..0,
             drag: None,
+            drag_pointer: Point::default(),
+            reporting_button: None,
+            selection_scroll: None,
             wheel_remainder: 0.,
             light,
             requested_grid: grid,
@@ -358,6 +373,123 @@ impl TerminalView {
         }
     }
 
+    fn reports_mouse(&self, modifiers: Modifiers) -> bool {
+        self.state.modes.mouse_tracking
+            && !modifiers.shift
+            && !modifiers.control
+            && !modifiers.platform
+    }
+
+    fn drag_rows(&self) -> i32 {
+        let y = f32::from(self.drag_pointer.y);
+        let top = f32::from(self.bounds.top()) + PADDING;
+        let bottom = f32::from(self.bounds.bottom()) - PADDING;
+        let distance = if y < top {
+            y - top
+        } else if y > bottom {
+            y - bottom
+        } else {
+            0.
+        };
+        if distance == 0. {
+            return 0;
+        }
+        let ramp = (distance / 50.).clamp(-1., 1.);
+        ramp.signum() as i32 + (ramp * 14.).round() as i32
+    }
+
+    fn extend_drag(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        if self.drag.is_none() {
+            return;
+        }
+        self.drag_pointer = position;
+        let end = self.cell(position);
+        if self.drag != Some(end) {
+            self.drag = Some(end);
+            self.input(Input::ExtendSelection(end), cx);
+        }
+        if self.drag_rows() == 0 {
+            self.selection_scroll = None;
+        } else if self.selection_scroll.is_none() {
+            self.selection_scroll = Some(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(80))
+                        .await;
+                    if this
+                        .update(cx, |view, cx| {
+                            if view.drag.is_some() {
+                                view.input(
+                                    Input::ScrollSelection(
+                                        view.drag_rows(),
+                                        view.cell(view.drag_pointer),
+                                    ),
+                                    cx,
+                                );
+                            }
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            }));
+        }
+    }
+
+    fn end_drag(&mut self, cx: &mut Context<Self>) {
+        if self.drag.take().is_some() {
+            self.input(Input::EndSelection, cx);
+        }
+        self.selection_scroll = None;
+    }
+
+    fn mouse(
+        &mut self,
+        action: MouseAction,
+        button: Option<i32>,
+        position: Point<Pixels>,
+        modifiers: Modifiers,
+        pressed: bool,
+        cx: &mut Context<Self>,
+    ) {
+        match action {
+            MouseAction::Press if matches!(button, Some(1..=3)) => self.reporting_button = button,
+            MouseAction::Release => {
+                if self.reporting_button != button {
+                    return;
+                }
+                self.reporting_button = None;
+            }
+            _ => {}
+        }
+        self.input(
+            Input::Mouse(TerminalMouse {
+                action,
+                button,
+                mods: i32::from(modifiers.shift)
+                    | (i32::from(modifiers.control) << 1)
+                    | (i32::from(modifiers.alt) << 2)
+                    | (i32::from(modifiers.platform) << 3),
+                x: f32::from(position.x - self.bounds.origin.x).max(0.),
+                y: f32::from(position.y - self.bounds.origin.y).max(0.),
+                screen_width: f32::from(self.bounds.size.width),
+                screen_height: f32::from(self.bounds.size.height),
+                cell_width: self.typography.width,
+                cell_height: self.typography.height,
+                padding_left: PADDING,
+                padding_right: PADDING,
+                padding_top: PADDING,
+                padding_bottom: (f32::from(self.bounds.size.height)
+                    - PADDING
+                    - f32::from(self.state.grid.rows) * self.typography.height)
+                    .max(0.),
+                any_button_pressed: pressed,
+            }),
+            cx,
+        );
+    }
+
     fn cursor_bounds(&self) -> Bounds<Pixels> {
         let (x, y) = self.state.snapshot.as_ref().map_or((0, 0), |snapshot| {
             (snapshot.cursor_x.max(0), snapshot.cursor_y.max(0))
@@ -438,46 +570,144 @@ impl Render for TerminalView {
                 MouseButton::Left,
                 cx.listener(|view, event: &MouseDownEvent, window, cx| {
                     window.focus(&view.focus, cx);
+                    if view.reports_mouse(event.modifiers) {
+                        view.mouse(
+                            MouseAction::Press,
+                            Some(1),
+                            event.position,
+                            event.modifiers,
+                            true,
+                            cx,
+                        );
+                        cx.stop_propagation();
+                        return;
+                    }
                     let point = view.cell(event.position);
                     view.drag = Some(point);
-                    match event.click_count % 3 {
-                        2 => view.input(Input::SelectWord(point), cx),
-                        0 => view.input(Input::SelectLine(point), cx),
-                        _ => view.input(Input::ClearSelection, cx),
-                    }
+                    view.drag_pointer = event.position;
+                    view.input(Input::BeginSelection(point, event.click_count), cx);
                     cx.stop_propagation();
                 }),
             )
             .on_mouse_move(cx.listener(|view, event: &MouseMoveEvent, _, cx| {
-                if let Some(start) = view.drag
-                    && event.dragging()
+                if view.reporting_button.is_some()
+                    || (event.pressed_button.is_none()
+                        && view.state.modes.mouse_any_event
+                        && view.reports_mouse(event.modifiers))
                 {
-                    let end = view.cell(event.position);
-                    if start != end {
-                        view.input(Input::SelectRange(start, end), cx);
-                    }
+                    view.mouse(
+                        MouseAction::Motion,
+                        event.pressed_button.and_then(mouse_button),
+                        event.position,
+                        event.modifiers,
+                        event.pressed_button.is_some(),
+                        cx,
+                    );
+                    return;
+                }
+                if event.dragging() {
+                    view.extend_drag(event.position, cx);
                 }
             }))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|view, _, _, _| {
-                    view.drag = None;
+                cx.listener(|view, event: &MouseUpEvent, _, cx| {
+                    if view.reporting_button.is_some() {
+                        view.mouse(
+                            MouseAction::Release,
+                            Some(1),
+                            event.position,
+                            event.modifiers,
+                            false,
+                            cx,
+                        );
+                    }
+                    view.end_drag(cx);
                 }),
             )
             .on_mouse_up_out(
                 MouseButton::Left,
-                cx.listener(|view, _, _, _| {
-                    view.drag = None;
+                cx.listener(|view, event: &MouseUpEvent, _, cx| {
+                    if view.reporting_button.is_some() {
+                        view.mouse(
+                            MouseAction::Release,
+                            Some(1),
+                            event.position,
+                            event.modifiers,
+                            false,
+                            cx,
+                        );
+                    }
+                    view.end_drag(cx);
                 }),
             )
             .on_mouse_down(
                 MouseButton::Middle,
-                cx.listener(|view, _, window, cx| {
+                cx.listener(|view, event: &MouseDownEvent, window, cx| {
                     window.focus(&view.focus, cx);
+                    if view.reports_mouse(event.modifiers) {
+                        view.mouse(
+                            MouseAction::Press,
+                            Some(3),
+                            event.position,
+                            event.modifiers,
+                            true,
+                            cx,
+                        );
+                        cx.stop_propagation();
+                        return;
+                    }
                     if let Some(text) = cx.read_from_primary().and_then(|item| item.text()) {
                         view.input(Input::Paste(text), cx);
                     }
                     cx.stop_propagation();
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|view, event: &MouseDownEvent, window, cx| {
+                    window.focus(&view.focus, cx);
+                    if view.reports_mouse(event.modifiers) {
+                        view.mouse(
+                            MouseAction::Press,
+                            Some(2),
+                            event.position,
+                            event.modifiers,
+                            true,
+                            cx,
+                        );
+                        cx.stop_propagation();
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Middle,
+                cx.listener(|view, event: &MouseUpEvent, _, cx| {
+                    if view.reporting_button.is_some() {
+                        view.mouse(
+                            MouseAction::Release,
+                            Some(3),
+                            event.position,
+                            event.modifiers,
+                            false,
+                            cx,
+                        );
+                    }
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Right,
+                cx.listener(|view, event: &MouseUpEvent, _, cx| {
+                    if view.reporting_button.is_some() {
+                        view.mouse(
+                            MouseAction::Release,
+                            Some(2),
+                            event.position,
+                            event.modifiers,
+                            false,
+                            cx,
+                        );
+                    }
                 }),
             )
             .on_scroll(cx.listener(|view, event: &ScrollEvent, _, cx| {
@@ -489,7 +719,19 @@ impl Render for TerminalView {
                 let rows = view.wheel_remainder.trunc() as i32;
                 view.wheel_remainder -= rows as f32;
                 if rows != 0 {
-                    if view.state.modes.alternate_screen {
+                    if view.reports_mouse(event.modifiers) {
+                        let button = if rows < 0 { 4 } else { 5 };
+                        for _ in 0..rows.unsigned_abs() {
+                            view.mouse(
+                                MouseAction::Press,
+                                Some(button),
+                                event.position,
+                                event.modifiers,
+                                false,
+                                cx,
+                            );
+                        }
+                    } else if view.state.modes.alternate_screen {
                         let sequence = if rows < 0 {
                             if view.state.modes.application_cursor_keys {
                                 "\u{1b}OA"
@@ -502,7 +744,7 @@ impl Render for TerminalView {
                             "\u{1b}[B"
                         };
                         view.input(
-                            Input::Text(sequence.repeat(rows.unsigned_abs().min(1000) as usize)),
+                            Input::Text(sequence.repeat(rows.unsigned_abs() as usize)),
                             cx,
                         );
                     } else {
@@ -517,6 +759,46 @@ impl Render for TerminalView {
                         let _ = weak.update(cx, |view, cx| view.resize(bounds, cx));
                     },
                     move |bounds, _, window, cx| {
+                        let drag_view = view.clone();
+                        window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
+                            if phase == DispatchPhase::Bubble
+                                && event.dragging()
+                                && !bounds.contains(&event.position)
+                            {
+                                drag_view.update(cx, |view, cx| {
+                                    if let Some(button) = view.reporting_button {
+                                        view.mouse(
+                                            MouseAction::Motion,
+                                            Some(button),
+                                            event.position,
+                                            event.modifiers,
+                                            true,
+                                            cx,
+                                        );
+                                    } else {
+                                        view.extend_drag(event.position, cx);
+                                    }
+                                });
+                            }
+                        });
+                        let release_view = view.clone();
+                        window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+                            if phase == DispatchPhase::Bubble && !bounds.contains(&event.position) {
+                                release_view.update(cx, |view, cx| {
+                                    if let Some(button) = view.reporting_button {
+                                        view.mouse(
+                                            MouseAction::Release,
+                                            Some(button),
+                                            event.position,
+                                            event.modifiers,
+                                            false,
+                                            cx,
+                                        );
+                                    }
+                                    view.end_drag(cx);
+                                });
+                            }
+                        });
                         window.handle_input(
                             &focus,
                             ElementInputHandler::new(bounds, view.clone()),

@@ -94,6 +94,15 @@ async def execute(app, target, scenario, directory):
                 )
             elif action in ["press", "type"]:
                 await invoke(app, action, step["value"])
+            elif action == "pointer":
+                await invoke(
+                    app,
+                    "pointer",
+                    step["kind"],
+                    step["x"],
+                    step["y"],
+                    step.get("button", "left"),
+                )
             elif action == "checkpoint":
                 selector = step.get(target, step["selector"])
                 nodes = await wait_for(

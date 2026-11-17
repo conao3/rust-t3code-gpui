@@ -22,6 +22,53 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    async def test_reference_pointer_preserves_a_drag_and_rejects_outside_coordinates(
+        self,
+    ):
+        app = Cdp("http://127.0.0.1:39991")
+        app.call = AsyncMock()
+        app.evaluate = AsyncMock(return_value={"width": 1400, "height": 900})
+        await app.pointer("down", 300, 700)
+        await app.pointer("move", 350, 720)
+        await app.pointer("up", 350, 720)
+        events = [call.kwargs for call in app.call.await_args_list]
+        self.assertEqual(
+            [event["type"] for event in events],
+            ["mousePressed", "mouseMoved", "mouseReleased"],
+        )
+        self.assertEqual([event["buttons"] for event in events], [1, 1, 0])
+        self.assertEqual([event["button"] for event in events], ["left"] * 3)
+        with self.assertRaises(ValueError):
+            await app.pointer("down", 1400, 700)
+        self.assertEqual(app.call.await_count, 3)
+
+    def test_native_pointer_translates_content_coordinates_without_releasing_a_drag(
+        self,
+    ):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.xdo = Mock()
+        app.content_bounds = Mock(
+            return_value={"x": 62, "y": 62, "width": 1400, "height": 900}
+        )
+        app.pointer("down", 300, 700)
+        app.pointer("move", 350, 720)
+        app.pointer("up", 350, 720)
+        self.assertEqual(
+            [call.args for call in app.xdo.call_args_list],
+            [
+                ("mousemove", 362, 762),
+                ("mousedown", 1),
+                ("mousemove", 412, 782),
+                ("mousemove", 412, 782),
+                ("mouseup", 1),
+            ],
+        )
+        with self.assertRaises(ValueError):
+            app.pointer("down", 300, 900)
+
     def test_native_text_keeps_ascii_speed_and_all_unicode_in_order(self):
         from native import Native
 
