@@ -42,6 +42,7 @@ use crate::workspace;
 mod choice_select;
 mod composer;
 mod composer_controls;
+mod composer_prompts;
 mod diff;
 mod files;
 mod find;
@@ -80,6 +81,7 @@ actions!(
     t3code_gpui,
     [
         Send,
+        StashPrompt,
         PreviousWorktree,
         OpenComposerWorkspace,
         DecreaseEffort,
@@ -130,6 +132,7 @@ actions!(
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
+        "composer.stash" => Box::new(StashPrompt),
         "composer.previousWorktree" => Box::new(PreviousWorktree),
         "composer.workspace" => Box::new(OpenComposerWorkspace),
         "composer.decreaseEffort" => Box::new(DecreaseEffort),
@@ -430,6 +433,7 @@ pub struct Root {
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
     composer_sends: HashSet<String>,
+    prompts: composer_prompts::Prompts,
     composer_choices: composer_controls::Controls,
     queued: Vec<timeline::Queued>,
     thread_loading: bool,
@@ -488,7 +492,11 @@ impl Root {
     fn new(
         (config, config_path): (Config, std::path::PathBuf),
         (settings, settings_path): (ClientSettings, std::path::PathBuf),
-        (drafts, drafts_path): (Drafts, std::path::PathBuf),
+        (drafts, drafts_path, prompt_store): (
+            Drafts,
+            std::path::PathBuf,
+            crate::prompt_store::Store,
+        ),
         runtime: Handle,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -687,6 +695,10 @@ impl Root {
             model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
             composer_sends: HashSet::new(),
+            prompts: composer_prompts::Prompts {
+                store: prompt_store,
+                ..Default::default()
+            },
             composer_choices: composer_controls::Controls::new(cx),
             queued: Vec::new(),
             thread_loading: false,
@@ -756,6 +768,9 @@ impl Root {
         }
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
+        if self.prompt_key(keystroke, window, cx) {
+            return true;
+        }
         if self.completion_key(keystroke, window, cx) {
             return true;
         }
@@ -1292,6 +1307,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &DecreaseEffort, window, cx| root.step_effort(false, window, cx)))
             .on_action(cx.listener(|root, _: &OpenComposerWorkspace, window, cx| root.open_composer_select(false, window, cx)))
             .on_action(cx.listener(|root, _: &PreviousWorktree, window, cx| root.use_previous_worktree(window, cx)))
+            .on_action(cx.listener(|root, _: &StashPrompt, window, cx| root.stash_prompt(window, cx)))
             .on_action(cx.listener(|root, _: &SendAlternate, window, cx| root.send_intent(composer::SubmissionIntent::Alternate, window, cx)))
             .on_action(cx.listener(|root, _: &SendBackground, window, cx| {
                 if root.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
@@ -1444,6 +1460,8 @@ pub fn run(
 ) -> anyhow::Result<()> {
     let drafts_path = drafts::default_path()?;
     let drafts = Drafts::load(&drafts_path)?;
+    let prompt_store =
+        crate::prompt_store::Store::load(&crate::prompt_store::Store::path(&drafts_path))?;
     let runtime = Runtime::new()?;
     let handle = runtime.handle().clone();
     gpui_kit::application()
@@ -1492,7 +1510,7 @@ pub fn run(
                     Root::new(
                         (config, config_path),
                         (settings.clone(), settings_path),
-                        (drafts, drafts_path),
+                        (drafts, drafts_path, prompt_store),
                         handle,
                         window,
                         cx,

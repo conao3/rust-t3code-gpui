@@ -269,7 +269,7 @@ impl Root {
         true
     }
 
-    fn composer_key(&self) -> Option<String> {
+    pub(super) fn composer_key(&self) -> Option<String> {
         if self.draft.is_some() {
             return Some(drafts::NEW_THREAD.to_string());
         }
@@ -291,6 +291,8 @@ impl Root {
 
     /// Puts the draft of what the composer is for now into it, at the next render.
     pub(super) fn load_composer(&mut self) {
+        self.prompts.history = None;
+        self.prompts.open = false;
         self.hovered_message = None;
         let text = self
             .composer_key()
@@ -1651,6 +1653,7 @@ impl Root {
             )
         });
         let content = v_flex()
+            .children(self.render_prompt_stash(cx))
             .relative()
             .w_full()
             .max_w(px(736.))

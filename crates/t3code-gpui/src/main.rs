@@ -13,6 +13,7 @@ mod models;
 mod navigation;
 mod permissions;
 mod projects;
+mod prompt_store;
 mod provider_display;
 mod row_view;
 mod shell_presentation;
