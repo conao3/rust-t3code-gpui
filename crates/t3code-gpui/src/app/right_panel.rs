@@ -307,7 +307,7 @@ impl Root {
     pub(super) fn prepare_right_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.follow_right_panel(cx);
         if self.right_panel.file_search.is_none() {
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder("Search files…"));
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder("Search files"));
             self.right_panel.file_search_subscription =
                 Some(cx.subscribe(&input, |root, input, event, cx| {
                     if matches!(event, InputEvent::Change) {

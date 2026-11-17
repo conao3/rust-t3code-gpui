@@ -280,16 +280,11 @@ impl Root {
                 .border_color(theme.border)
                 .child(
                     h_flex()
-                        .px_3()
-                        .py_2()
-                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .gap_1()
                         .border_b_1()
                         .border_color(theme.border)
-                        .children(self.right_panel.file_search.as_ref().map(|input| {
-                            Input::new(input)
-                                .role(accesskit::Role::SearchInput)
-                                .aria_label(format!("Search {project_title} files"))
-                        }))
                         .child(
                             Button::new("refresh-workspace-files")
                                 .icon(IconName::RefreshCw)
@@ -301,7 +296,13 @@ impl Root {
                                         root.start_explorer(environment, cwd, cx);
                                     }
                                 })),
-                        ),
+                        )
+                        .children(self.right_panel.file_search.as_ref().map(|input| {
+                            Input::new(input)
+                                .small()
+                                .role(accesskit::Role::SearchInput)
+                                .aria_label(format!("Search {project_title} files"))
+                        })),
                 )
                 .children(open.error.clone().map(|error| {
                     div()
