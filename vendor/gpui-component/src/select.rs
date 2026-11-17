@@ -601,6 +601,8 @@ where
                                 .child(
                                     div()
                                         .id("title")
+                                        .role(gpui::Role::Label)
+                                        .aria_value(self.accessibility_value())
                                         .flex_1()
                                         .min_w_0()
                                         .overflow_hidden()

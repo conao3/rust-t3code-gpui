@@ -1,0 +1,543 @@
+{
+  "name": "settings-all-page-text",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 900,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Settings"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "General"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "General"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "general",
+      "selector": {
+        "role": "treeitem",
+        "name": "General",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "General",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Appearance"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Appearance"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "appearance",
+      "selector": {
+        "role": "treeitem",
+        "name": "Appearance",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Appearance",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Chat"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Chat"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "chat",
+      "selector": {
+        "role": "treeitem",
+        "name": "Chat",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Chat",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Diffs & pull requests"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Diffs & pull requests"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "diffs",
+      "selector": {
+        "role": "treeitem",
+        "name": "Diffs & pull requests",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Diffs & pull requests",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Keybindings"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Keybindings"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "keybindings",
+      "selector": {
+        "role": "treeitem",
+        "name": "Keybindings",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Keybindings",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Voice"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Voice"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "voice",
+      "selector": {
+        "role": "treeitem",
+        "name": "Voice",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Voice",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "SnapShots"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "SnapShots"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "snap-shot",
+      "selector": {
+        "role": "treeitem",
+        "name": "SnapShots",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "SnapShots",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Providers"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Providers"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "providers",
+      "selector": {
+        "role": "treeitem",
+        "name": "Providers",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Providers",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Threads"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Threads"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "threads",
+      "selector": {
+        "role": "treeitem",
+        "name": "Threads",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Threads",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Browser"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Browser"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "browser",
+      "selector": {
+        "role": "treeitem",
+        "name": "Browser",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Browser",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Devices"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Devices"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "devices",
+      "selector": {
+        "role": "treeitem",
+        "name": "Devices",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Devices",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Scheduled tasks"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Scheduled tasks"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "scheduled-tasks",
+      "selector": {
+        "role": "treeitem",
+        "name": "Scheduled tasks",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Scheduled tasks",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Projects"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Projects"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "projects",
+      "selector": {
+        "role": "treeitem",
+        "name": "Projects",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Projects",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Source control"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Source control"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "source-control",
+      "selector": {
+        "role": "treeitem",
+        "name": "Source control",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Source control",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Worktrees"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Worktrees"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "worktrees",
+      "selector": {
+        "role": "treeitem",
+        "name": "Worktrees",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Worktrees",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Environments"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Environments"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "connections",
+      "selector": {
+        "role": "treeitem",
+        "name": "Environments",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Environments",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Sharing & access"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Sharing & access"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "access",
+      "selector": {
+        "role": "treeitem",
+        "name": "Sharing & access",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Sharing & access",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Maintenance"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Maintenance"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "maintenance",
+      "selector": {
+        "role": "treeitem",
+        "name": "Maintenance",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Maintenance",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Labs"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Labs"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "labs",
+      "selector": {
+        "role": "treeitem",
+        "name": "Labs",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Labs",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "About"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "About"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "about",
+      "selector": {
+        "role": "treeitem",
+        "name": "About",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "About",
+        "selected": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Archive"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Archive"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "page": "archived",
+      "selector": {
+        "role": "treeitem",
+        "name": "Archive",
+        "selected": true
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Archive",
+        "selected": true
+      }
+    }
+  ]
+}
