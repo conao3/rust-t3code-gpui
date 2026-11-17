@@ -641,34 +641,32 @@ impl UsagePage {
             chart = chart.child(tooltip);
         }
         v_flex()
+            .id("usage-chart-layout")
             .gap_2()
             .child(
                 h_flex()
                     .gap_2()
-                    .child(
-                        div()
-                            .relative()
-                            .w(px(56.))
-                            .h(px(224.))
-                            .children(ticks.iter().map(|tick| {
-                                settings_controls::text(if *tick == 0. {
-                                    "0".to_string()
+                    .child(div().relative().w(px(56.)).h(px(224.)).children(
+                        ticks.iter().enumerate().map(|(index, tick)| {
+                            settings_controls::text(if *tick == 0. {
+                                "0".to_string()
+                            } else {
+                                format(*tick)
+                            })
+                            .id(("usage-value-axis", index))
+                            .absolute()
+                            .right_0()
+                            .top(px(224.
+                                - if maximum > 0. {
+                                    (*tick / maximum) as f32 * 224. * (252. / 260.)
                                 } else {
-                                    format(*tick)
-                                })
-                                .absolute()
-                                .right_0()
-                                .top(px(224.
-                                    - if maximum > 0. {
-                                        (*tick / maximum) as f32 * 224. * (252. / 260.)
-                                    } else {
-                                        0.
-                                    }
-                                    - 8.))
-                                .text_xs()
-                                .text_color(theme.muted_foreground)
-                            })),
-                    )
+                                    0.
+                                }
+                                - 8.))
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                        }),
+                    ))
                     .child(chart),
             )
             .child(
@@ -912,56 +910,61 @@ impl Render for UsagePage {
                     0.
                 })
             );
-            let mut summary = v_flex().w(px(288.)).flex_none().gap_5().child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_size(rems(2.25))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(if self.metric == "tokens" {
-                                data::tokens(total.total_tokens())
-                            } else {
-                                data::usd(total.cost)
-                            }),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(settings_controls::text(format!(
-                                "{} sessions{}",
-                                data::count(total.sessions),
-                                if self.metric == "cost" {
-                                    " · API estimate"
+            let mut summary = v_flex()
+                .id("usage-summary")
+                .w(px(288.))
+                .flex_none()
+                .gap_5()
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_size(rems(2.25))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(if self.metric == "tokens" {
+                                    data::tokens(total.total_tokens())
                                 } else {
-                                    ""
-                                }
-                            )))
-                            .when(self.metric == "cost" && total.unpriced > 0., |row| {
-                                let content = quality.clone();
-                                row.child(
-                                    Popover::new("usage-unpriced")
-                                        .anchor(Anchor::BottomCenter)
-                                        .trigger(
-                                            Button::new("usage-unpriced-trigger")
-                                                .icon(IconName::Info)
-                                                .accessibility_label("Unpriced usage details")
-                                                .tooltip(quality.clone())
-                                                .ghost()
-                                                .small()
-                                                .compact(),
-                                        )
-                                        .content(move |_, _, _| {
-                                            settings_controls::text(content.clone())
-                                                .text_xs()
-                                                .max_w(px(300.))
-                                        }),
-                                )
-                            }),
-                    ),
-            );
+                                    data::usd(total.cost)
+                                }),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child(settings_controls::text(format!(
+                                    "{} sessions{}",
+                                    data::count(total.sessions),
+                                    if self.metric == "cost" {
+                                        " · API estimate"
+                                    } else {
+                                        ""
+                                    }
+                                )))
+                                .when(self.metric == "cost" && total.unpriced > 0., |row| {
+                                    let content = quality.clone();
+                                    row.child(
+                                        Popover::new("usage-unpriced")
+                                            .anchor(Anchor::BottomCenter)
+                                            .trigger(
+                                                Button::new("usage-unpriced-trigger")
+                                                    .icon(IconName::Info)
+                                                    .accessibility_label("Unpriced usage details")
+                                                    .tooltip(quality.clone())
+                                                    .ghost()
+                                                    .small()
+                                                    .compact(),
+                                            )
+                                            .content(move |_, _, _| {
+                                                settings_controls::text(content.clone())
+                                                    .text_xs()
+                                                    .max_w(px(300.))
+                                            }),
+                                    )
+                                }),
+                        ),
+                );
             let mut providers = self.merged.providers.iter().collect::<Vec<_>>();
             providers.sort_by(|(_, a), (_, b)| {
                 let metric = |value: &Totals| {
@@ -992,6 +995,7 @@ impl Render for UsagePage {
                 };
                 summary = summary.child(
                     v_flex()
+                        .id(SharedString::from(format!("usage-provider:{provider}")))
                         .gap_1()
                         .child(
                             h_flex()
@@ -1063,6 +1067,7 @@ impl Render for UsagePage {
                 )
                 .child(
                     v_flex()
+                        .id("usage-totals")
                         .gap_2()
                         .child(
                             settings_controls::text("Totals")
@@ -1081,6 +1086,7 @@ impl Render for UsagePage {
                                 .into_iter()
                                 .map(|(label, value)| {
                                     v_flex()
+                                        .id(SharedString::from(label))
                                         .flex_1()
                                         .gap_1()
                                         .child(
