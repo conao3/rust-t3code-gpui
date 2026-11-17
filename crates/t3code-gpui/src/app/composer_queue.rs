@@ -58,6 +58,12 @@ fn resume_target(state: &t3_client::projection::ThreadState) -> Option<(Option<S
                 run["ordinal"].as_u64().unwrap_or(0),
             )
         });
+    let session_error = state
+        .list("providerSessions")
+        .iter()
+        .rev()
+        .find(|session| session["providerInstanceId"] == state.thread()["providerInstanceId"])
+        .and_then(|session| session["lastError"].as_str());
     let run = latest
         .filter(|run| {
             run["status"] == "interrupted"
@@ -78,7 +84,11 @@ fn resume_target(state: &t3_client::projection::ThreadState) -> Option<(Option<S
                                 item["id"].as_str().unwrap_or_default(),
                             )
                         })
-                        .is_some_and(|item| item["failure"]["class"] == "usage_limit"))
+                        .is_some_and(|item| {
+                            item["failure"]["class"] == "usage_limit"
+                                && session_error
+                                    .is_none_or(|error| item["failure"]["message"] == error)
+                        }))
         })
         .and_then(|run| run["id"].as_str())
         .map(str::to_owned);
@@ -434,7 +444,7 @@ impl Root {
 #[cfg(test)]
 mod resume_tests {
     use super::resume_target;
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     #[test]
     fn resume_follows_execution_order_and_held_queue() {
@@ -455,6 +465,23 @@ mod resume_tests {
             {"id":"error", "ordinal":1, "type":"error", "status":"failed", "runId":"stopped", "nodeId":"root", "failure":{"class":"usage_limit"}}
         ]));
         assert_eq!(resume_target(&state), Some((Some("stopped".into()), false)));
+        state
+            .projection
+            .insert("thread".into(), json!({"providerInstanceId":"codex"}));
+        state.projection.get_mut("turnItems").unwrap()[0]["failure"]["message"] =
+            json!("Usage limit reached");
+        state.projection.insert(
+            "providerSessions".into(),
+            json!([
+                {"providerInstanceId":"codex", "lastError":"Usage limit reached"},
+                {"providerInstanceId":"other", "lastError":"Disconnected"}
+            ]),
+        );
+        assert_eq!(resume_target(&state), Some((Some("stopped".into()), false)));
+        state.projection.get_mut("providerSessions").unwrap()[0]["lastError"] =
+            json!("Disconnected");
+        assert_eq!(resume_target(&state), None);
+        state.projection.get_mut("providerSessions").unwrap()[0]["lastError"] = Value::Null;
         state.projection.get_mut("turnItems").unwrap()[0]["nodeId"] = json!("child");
         assert_eq!(resume_target(&state), None);
     }
