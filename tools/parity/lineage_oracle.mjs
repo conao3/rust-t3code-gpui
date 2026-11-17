@@ -12,8 +12,13 @@ const body = source.slice(bodyStart);
 const contractsSource = fs.readFileSync(path.resolve(path.dirname(sourcePath), "../../../contracts/src/orchestrationV2.ts"), "utf8");
 const predicate = contractsSource.match(/export function isOrchestrationV2WorkActive\([\s\S]*?\n\}/)?.[0];
 if (!predicate) throw new Error("Missing original active-work predicate");
+const displaySource = fs.readFileSync(path.resolve(path.dirname(sourcePath), "subagentDisplay.ts"), "utf8");
+const titleFunction = displaySource.match(/export function formatSubagentDisplayTitle\([\s\S]*?\n\}/)?.[0];
+const runtimeSource = fs.readFileSync(path.resolve(path.dirname(sourcePath), "subagentRuntime.ts"), "utf8");
+const promptFunction = runtimeSource.match(/function promptTitle\([\s\S]*?\n\}/)?.[0];
+if (!titleFunction || !promptFunction) throw new Error("Missing original agent title functions");
 const adapter = `const DateTime = {isDateTime: value => value instanceof Date && Number.isFinite(+value), toEpochMillis: value => +value};\n`;
-const original = await import("data:text/javascript;base64," + Buffer.from(adapter + stripTypeScriptTypes(predicate + "\n" + body)).toString("base64"));
+const original = await import("data:text/javascript;base64," + Buffer.from(adapter + stripTypeScriptTypes(predicate + "\n" + titleFunction + "\nexport " + promptFunction + "\n" + body)).toString("base64"));
 const thread = (id, parent = null, kind = null, extra = {}) => ({
   id, title: "Conversation " + id, status: "idle", activityRunStatus: null,
   latestRunId: null, forkedFrom: null, lineage: {parentThreadId: parent, relationshipToParent: kind, sideChat: false},
@@ -60,5 +65,7 @@ for (const agentStatus of ["pending", "running", "waiting", "completed", "failed
   }
 }
 add("omitted subagents and duplicate transfers", [root], projection(root, {subagents: [{childThreadId: null, status: "running"}, {childThreadId: "missing", status: "rolled_back"}], contextTransfers: [{sourceThreadId: "current", targetThreadId: "transfer", status: "pending"}, {sourceThreadId: "current", targetThreadId: "transfer", status: "consumed"}]}));
-fs.writeFileSync(outputPath, JSON.stringify({sourceRevision: "24e77473ecf41bc1f7142529c7911c1c1aae1d76", sourceSha256: createHash("sha256").update(source).digest("hex"), contractsSourceSha256: createHash("sha256").update(contractsSource).digest("hex"), dateAdapter: "Schema DateTimeUtc shells decoded to Date for isDateTime/toEpochMillis only", cases}, null, 2) + "\n");
+const titleCases = ["Subagent: /root/foo_bar", "Subagent: Subagent: /root/foo", "/root/a//b", "/root/a/", "/root//", "/root/", "/root/a//", "SUBAGENT:\uFEFF/root/foo\u3000bar", "Subagent:日本語", "/", "/root/ßeta_test", "/root/İstanbul", "/ROOT/x", "/root/a_b/c_d", "/root/___", "Subagent: ", "subagent:", "subagent::x", "Subagent:\u0085/root/a", "/root/a\u0085b", "普通の見出し"].map(input => ({input, expected: original.formatSubagentDisplayTitle(input)}));
+const promptCases = ["short", "a".repeat(80), "a".repeat(81), "a".repeat(76)+"🙂".repeat(5), "日本語".repeat(30), "🙂".repeat(41)].map(input => ({input, expected: original.promptTitle(input)}));
+fs.writeFileSync(outputPath, JSON.stringify({sourceRevision: "24e77473ecf41bc1f7142529c7911c1c1aae1d76", sourceSha256: createHash("sha256").update(source).digest("hex"), contractsSourceSha256: createHash("sha256").update(contractsSource).digest("hex"), displaySourceSha256: createHash("sha256").update(displaySource).digest("hex"), runtimeSourceSha256: createHash("sha256").update(runtimeSource).digest("hex"), dateAdapter: "Schema DateTimeUtc shells decoded to Date for isDateTime/toEpochMillis only", cases, titleCases, promptCases}, null, 2) + "\n");
 console.log(`${cases.length} cases`);

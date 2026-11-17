@@ -25,6 +25,7 @@ impl Root {
             self.lineage_counts = [6; 4];
             self.lineage_previous = false;
             self.lineage_busy = None;
+            self.lineage_stopping = None;
             self.lineage_revision += 1;
         }
         if next != self.lineage_data {
@@ -308,6 +309,9 @@ impl Root {
             .unwrap_or_default();
         let merge = self.lineage_data.merge_target.as_deref() == Some(target.as_str());
         let status = model::status_label(row.status.as_deref());
+        let agent = (!row.parent)
+            .then(|| self.lineage_data.agents.get(&target))
+            .flatten();
         let icon = if row.parent {
             gpui_kit::assets::IconName::CornerLeftUp
         } else if row.kind == Kind::Subagent {
@@ -352,7 +356,13 @@ impl Root {
                             .size(px(16.))
                             .flex_shrink_0()
                             .child(
-                                Icon::new(icon)
+                                agent
+                                    .map(|agent| match agent.driver.as_str() {
+                                        "codex" => Icon::empty().path("icons/t3-openai.svg"),
+                                        "claudeAgent" => Icon::empty().path("icons/t3-claude.svg"),
+                                        _ => Icon::new(icon),
+                                    })
+                                    .unwrap_or_else(|| Icon::new(icon))
                                     .size(px(16.))
                                     .text_color(theme.muted_foreground),
                             )
@@ -382,7 +392,13 @@ impl Root {
             .on_click(cx.listener(move |root, _, _, cx| {
                 root.open_thread(environment.clone(), target.clone(), cx)
             }));
-        let mut content = h_flex().w_full().h(px(32.)).flex_shrink_0().child(button);
+        let mut content = h_flex()
+            .group("lineage-row")
+            .relative()
+            .w_full()
+            .h(px(32.))
+            .flex_shrink_0()
+            .child(button);
         if merge {
             let title = row.title.clone();
             content = content
@@ -418,7 +434,71 @@ impl Root {
                         .child(status),
                 );
         }
+        if let Some(agent) = agent.filter(|agent| agent.can_stop) {
+            let agent = agent.clone();
+            let label = format!("Stop subagent {}", row.title);
+            content = content.child(
+                Button::new(SharedString::from(format!("lineage-stop-{}", agent.id)))
+                    .absolute()
+                    .right(px(4.))
+                    .top(px(4.))
+                    .size(px(24.))
+                    .px_0()
+                    .ghost()
+                    .rounded(px(6.))
+                    .bg(theme.popover)
+                    .opacity(0.)
+                    .group_hover("lineage-row", |style| style.opacity(1.))
+                    .focus(|style| style.opacity(1.))
+                    .disabled(self.lineage_stopping.is_some())
+                    .accessibility_label(label)
+                    .tooltip("Stop subagent")
+                    .child(Icon::new(gpui_kit::assets::IconName::Square).size(px(12.)))
+                    .on_click(cx.listener(move |root, _, window, cx| {
+                        root.stop_lineage_agent(agent.clone(), window, cx)
+                    })),
+            );
+        }
         content.into_any_element()
+    }
+
+    fn stop_lineage_agent(
+        &mut self,
+        agent: model::Agent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.lineage_stopping.is_some() {
+            return;
+        }
+        let Some((environment, _)) = self.current() else {
+            return;
+        };
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let stopping = (environment, agent.id.clone());
+        self.lineage_stopping = Some(stopping.clone());
+        self.lineage_revision += 1;
+        cx.notify();
+        let runtime = self.runtime.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                connection.stop_subagent(&agent.thread_id, &agent.id).await
+            })
+            .await;
+            let _ = this.update_in(cx, |root, _, cx| {
+                if root.lineage_stopping.as_ref() == Some(&stopping) {
+                    root.lineage_stopping = None;
+                    root.lineage_revision += 1;
+                }
+                if let Err(error) = result {
+                    root.message = Some(format!("Could not stop subagent: {error:#}"));
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub(super) fn lineage_action(

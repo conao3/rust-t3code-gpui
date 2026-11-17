@@ -34,6 +34,8 @@ SOFTWARE.
 
 Provider icon SVGs and the stop glyph derive from T3 Code `apps/web/src/components/Icons.tsx` and `ComposerPrimaryActions.tsx` at commit 322f6544df. The relationship graph in `crates/t3code-gpui/src/lineage.rs` and its generated oracle fixture derive from `packages/client-runtime/src/state/threadRelationships.ts` at commit 24e77473ecf41bc1f7142529c7911c1c1aae1d76. The native Lineage controls follow `apps/web/src/components/chat/ThreadRelationshipsControl.tsx` at the same revision.
 
+The subagent name and prompt helpers derive from `packages/client-runtime/src/state/{subagentDisplay,subagentRuntime}.ts`, and `Connection::stop_subagent` follows `packages/client-runtime/src/operations/commands.ts`, at that same T3 Code revision.
+
 ```text
 MIT License
 

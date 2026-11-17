@@ -2,6 +2,8 @@
   "sourceRevision": "24e77473ecf41bc1f7142529c7911c1c1aae1d76",
   "sourceSha256": "72c42ffb7968301e6008fb46c0c664bc097a2c55e4f4e304ae285e37af580874",
   "contractsSourceSha256": "d1bf8bd08680c1f23f83168441b02b4d8395e660ba552d93c08961fe54fc1970",
+  "displaySourceSha256": "df137588ca47cdfd00542fb1e6a4e28d2c6c00596f17f818663e9d3cb2dee227",
+  "runtimeSourceSha256": "bfb1be74fe44f50951f28a046600a20a16ea895cc11fbfd3317b49d47cecdd74",
   "dateAdapter": "Schema DateTimeUtc shells decoded to Date for isDateTime/toEpochMillis only",
   "cases": [
     {
@@ -9918,6 +9920,118 @@
           "createdAt": null
         }
       ]
+    }
+  ],
+  "titleCases": [
+    {
+      "input": "Subagent: /root/foo_bar",
+      "expected": "Foo Bar"
+    },
+    {
+      "input": "Subagent: Subagent: /root/foo",
+      "expected": "Subagent: /root/foo"
+    },
+    {
+      "input": "/root/a//b",
+      "expected": "/root/a//b"
+    },
+    {
+      "input": "/root/a/",
+      "expected": "A"
+    },
+    {
+      "input": "/root//",
+      "expected": "/root//"
+    },
+    {
+      "input": "/root/",
+      "expected": "/root/"
+    },
+    {
+      "input": "/root/a//",
+      "expected": "/root/a//"
+    },
+    {
+      "input": "SUBAGENT:﻿/root/foo　bar",
+      "expected": "Foo Bar"
+    },
+    {
+      "input": "Subagent:日本語",
+      "expected": "日本語"
+    },
+    {
+      "input": "/",
+      "expected": "/"
+    },
+    {
+      "input": "/root/ßeta_test",
+      "expected": "SSeta Test"
+    },
+    {
+      "input": "/root/İstanbul",
+      "expected": "İstanbul"
+    },
+    {
+      "input": "/ROOT/x",
+      "expected": "/ROOT/x"
+    },
+    {
+      "input": "/root/a_b/c_d",
+      "expected": "C D"
+    },
+    {
+      "input": "/root/___",
+      "expected": "/root/___"
+    },
+    {
+      "input": "Subagent: ",
+      "expected": ""
+    },
+    {
+      "input": "subagent:",
+      "expected": ""
+    },
+    {
+      "input": "subagent::x",
+      "expected": ":x"
+    },
+    {
+      "input": "Subagent:/root/a",
+      "expected": "/root/a"
+    },
+    {
+      "input": "/root/ab",
+      "expected": "Ab"
+    },
+    {
+      "input": "普通の見出し",
+      "expected": "普通の見出し"
+    }
+  ],
+  "promptCases": [
+    {
+      "input": "short",
+      "expected": "short"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa..."
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🙂🙂🙂🙂🙂",
+      "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa..."
+    },
+    {
+      "input": "日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語",
+      "expected": "日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本..."
+    },
+    {
+      "input": "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂",
+      "expected": "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂..."
     }
   ]
 }

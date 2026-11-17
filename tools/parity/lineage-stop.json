@@ -1,0 +1,15 @@
+{
+  "name": "lineage-stop-running-subagent",
+  "viewport": [1400, 900],
+  "theme": "dark",
+  "settle_ms": 1200,
+  "steps": [
+    {"action": "click", "selector": {"role": "button", "name": "Lineage stop fixture, Working, UI parity"}},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Stop subagent Parity Stop", "disabled": false}, "count": 1},
+    {"action": "focus", "selector": {"role": "button", "name": "Stop subagent Parity Stop"}},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Stop subagent Parity Stop", "focused": true}, "count": 1},
+    {"action": "press", "value": "enter"},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Stop subagent Parity Stop"}, "count": 0},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Lineage stop fixture"}, "count": 1}
+  ]
+}

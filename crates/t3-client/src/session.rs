@@ -314,6 +314,36 @@ impl Connection {
             .await
     }
 
+    pub async fn stop_subagent(&self, thread_id: &str, subagent_id: &str) -> Result<u64> {
+        let projection = self
+            .request(
+                "orchestration.getThreadProjection",
+                json!({"threadId":thread_id}),
+            )
+            .await?;
+        let Some(agent) = projection["subagents"].as_array().and_then(|agents| {
+            agents
+                .iter()
+                .find(|agent| agent["id"].as_str() == Some(subagent_id))
+        }) else {
+            return Ok(0);
+        };
+        let run_id = agent["runId"].as_str();
+        let stop = || json!({"type":"subagent.stop","threadId":thread_id,"runId":run_id,"subagentId":subagent_id});
+        if agent["origin"].as_str() == Some("app_owned")
+            && let Some(child) = agent["childThreadId"].as_str()
+        {
+            if run_id.is_some() {
+                let _ = self.dispatch(stop()).await;
+            }
+            self.stop_thread(child).await
+        } else if run_id.is_some() {
+            self.dispatch(stop()).await
+        } else {
+            Ok(0)
+        }
+    }
+
     pub async fn visit_thread(&self, thread_id: &str, visited_at: &str) -> Result<u64> {
         self.dispatch(json!({
             "type": "thread.visit",
