@@ -57,6 +57,7 @@ impl Root {
     ) -> AnyElement {
         let layout = workspace::layout(self.canvas_width, self.details_open);
         let card_height = self.lineage_height()
+            + self.thread_extra_height()
             + 52.
             + if self.workspace_editor().is_some() {
                 32.
@@ -64,7 +65,7 @@ impl Root {
                 0.
             }
             + if self.workspace_status.is_repo() {
-                83.
+                180.
             } else {
                 0.
             }
@@ -358,7 +359,8 @@ impl Root {
                                 .rounded(px(8.))
                                 .accessibility_label("Open changes")
                                 .on_click(cx.listener(|root, _, _, cx| root.toggle_diff(cx))),
-                        ),
+                        )
+                        .child(self.render_git_controls(cx)),
                 )
             })
             .when_some(self.workspace_status.error.clone(), |card, error| {
@@ -373,7 +375,9 @@ impl Root {
                         .child(error),
                 )
             })
+            .child(self.render_thread_pull_requests(cx))
             .child(self.render_lineage(cx))
+            .child(self.render_thread_usage(cx))
             .into_any_element()
     }
 

@@ -232,6 +232,7 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
+        self.pr_state.page = false;
         self.history.visit((environment.clone(), thread_id.clone()));
         self.stash_composer(cx);
         let watch = connection.watch_thread(&self.runtime, &thread_id);
@@ -914,6 +915,17 @@ impl Root {
                             .ghost()
                             .on_click(
                                 cx.listener(|root, _, window, cx| root.toggle_usage(window, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("pull-requests")
+                            .icon(gpui_kit::assets::IconName::GitPullRequest)
+                            .tooltip("Pull requests")
+                            .accessibility_label("Pull requests")
+                            .compact()
+                            .ghost()
+                            .on_click(
+                                cx.listener(|root, _, _, cx| root.open_pull_requests(true, cx)),
                             ),
                     )
                     .child(

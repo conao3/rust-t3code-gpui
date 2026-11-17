@@ -1,0 +1,118 @@
+{
+  "name": "diff-controls",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1200,
+  "steps": [
+    {
+      "action": "press",
+      "value": "ctrl+d"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Diff scope: Changes"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Stacked diff view"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Stacked diff view"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Stacked diff view"
+      },
+      "count": 1,
+      "native": {
+        "role": "toggle button",
+        "name": "Stacked diff view"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Split diff view"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Split diff view"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Show whitespace changes"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Show whitespace changes"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Hide whitespace changes"
+      },
+      "count": 1,
+      "native": {
+        "role": "toggle button",
+        "name": "Hide whitespace changes"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Disable diff line wrapping"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Disable diff line wrapping"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Enable diff line wrapping"
+      },
+      "count": 1,
+      "native": {
+        "role": "toggle button",
+        "name": "Enable diff line wrapping"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Expand all files"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Collapse all files"
+      },
+      "count": 1
+    }
+  ]
+}

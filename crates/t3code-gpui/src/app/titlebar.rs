@@ -270,12 +270,14 @@ impl Root {
                 Button::new("files")
                     .icon(gpui_kit::assets::IconName::FolderOpen)
                     .size(px(24.))
-                    .tooltip("Files")
-                    .accessibility_label("Files")
+                    .tooltip("Toggle right panel")
+                    .accessibility_label("Toggle right panel")
                     .ghost()
                     .compact()
-                    .selected(self.explorer.is_some())
-                    .on_click(cx.listener(|root, _, _, cx| root.toggle_explorer(cx))),
+                    .selected(self.right_panel.open)
+                    .on_click(
+                        cx.listener(|root, _, window, cx| root.toggle_right_panel(window, cx)),
+                    ),
             )
             .child(
                 Button::new("diff")
