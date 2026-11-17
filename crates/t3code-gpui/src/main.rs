@@ -5,6 +5,7 @@ mod client_settings;
 mod completion;
 mod drafts;
 mod explorer;
+mod inbox;
 mod keymap;
 mod lineage;
 mod markdown_directives;

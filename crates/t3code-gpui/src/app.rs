@@ -541,6 +541,8 @@ pub struct Root {
     settings_open: bool,
     sidebar_hidden: bool,
     wake_task: Option<Task<()>>,
+    inbox: crate::inbox::Tracker,
+    promoting: HashSet<(String, String)>,
     parking: HashSet<(String, String, bool)>,
     park_plans: Vec<ParkPlan>,
     focus_after_park: bool,
@@ -794,6 +796,8 @@ impl Root {
             settings_open: false,
             sidebar_hidden: false,
             wake_task: None,
+            inbox: crate::inbox::Tracker::default(),
+            promoting: HashSet::new(),
             parking: HashSet::new(),
             park_plans: vec![],
             focus_after_park: false,
@@ -1558,6 +1562,9 @@ impl Root {
         });
         let interval = if working { 1000 } else { 60000 };
         let mut delay = interval - now.rem_euclid(interval);
+        if let Some(deadline) = self.inbox.deadline() {
+            delay = delay.min((deadline - now).max(0));
+        }
         for entry in &self.entries {
             if let Some(wake) = entry
                 .snoozed_until
@@ -1586,6 +1593,9 @@ impl Root {
                 .await;
             let _ = this.update_in(cx, |root, window, cx| {
                 root.wake_task = None;
+                if root.inbox.expire(chrono::Utc::now().timestamp_millis()) {
+                    root.rebuild_entries();
+                }
                 window.mark_view_dirty(root.sidebar_pane.entity_id());
                 root.schedule_wake(window, cx);
                 cx.notify();
@@ -1601,16 +1611,64 @@ impl Root {
     }
 
     fn shelves_of(&self, entries: &[ThreadEntry]) -> Vec<sidebar::Shelf> {
-        sidebar::shelves(entries, &now_iso(), |id| self.label_of(id))
+        sidebar::shelves(entries, &now_iso(), self.settings.working_shelf, |id| {
+            self.label_of(id)
+        })
     }
 
     fn rebuild_entries(&mut self) {
         self.entries_revision += 1;
         let mut entries = Vec::new();
+        let mut hidden = Vec::new();
         for connection in &self.connections {
             let shell = connection.shell();
             let shell = shell.lock().expect("shell lock");
-            entries.extend(sidebar::entries(connection.label(), &shell));
+            let environment_id = connection.environment_id();
+            hidden.extend(
+                shell
+                    .threads
+                    .iter()
+                    .filter(|thread| !sidebar::is_listed(thread))
+                    .map(|thread| {
+                        (
+                            (
+                                connection.label().to_string(),
+                                thread["id"].as_str().expect("shell thread ID").to_string(),
+                            ),
+                            crate::shell_presentation::present(thread, None),
+                        )
+                    }),
+            );
+            entries.extend(
+                sidebar::entries(connection.label(), &shell)
+                    .into_iter()
+                    .map(|mut entry| {
+                        if self.promoting.contains(&entry.key()) {
+                            crate::inbox::as_launching(Arc::make_mut(&mut entry.presentation));
+                        }
+                        Arc::make_mut(&mut entry.presentation)["environmentId"] =
+                            json!(environment_id);
+                        entry
+                    }),
+            );
+        }
+        if self.settings.working_shelf {
+            self.inbox.observe(
+                entries
+                    .iter()
+                    .map(|entry| (entry.key(), entry.presentation.as_ref()))
+                    .chain(hidden.iter().map(|(key, thread)| (key.clone(), thread))),
+                chrono::Utc::now().timestamp_millis(),
+            );
+        } else {
+            self.inbox.clear();
+        }
+        for entry in &mut entries {
+            entry.inbox_working = Some(
+                self.settings.working_shelf
+                    && self.inbox.is_working(&entry.key(), &entry.presentation),
+            );
+            entry.returned_at = self.inbox.returned_at(&entry.key());
         }
         self.entries = self
             .shelves_of(&entries)
@@ -2096,6 +2154,9 @@ impl Root {
             Ok(settings) => {
                 let (interface, code) = (settings.font_size_interface, settings.font_size_code);
                 self.settings = settings;
+                if key == "sidebarWorkingShelfEnabled" {
+                    self.rebuild_entries();
+                }
                 if key == "timestampFormat"
                     && let Err(error) =
                         crate::timestamp::change_format(self.settings.timestamp_format, cx)
@@ -2288,6 +2349,7 @@ impl Root {
                         s.font_size_prompt,
                     ))
                     .child(size("Code text size", "fontSizeCode", s.font_size_code))
+                    .child(h_flex().gap_2().child(v_flex().flex_1().child("Working section").child(div().text_xs().text_color(theme.muted_foreground).child("Fold working and monitoring threads into a Working section. They return to the top of the inbox when they need you. The boring sidebar in Labs has no Working section."))).child(gpui_kit::component::switch::Switch::new("working-shelf").accessibility_label("Working section").checked(s.working_shelf).on_change(cx.listener(|root,checked,_,cx|root.change_setting("sidebarWorkingShelfEnabled",json!(*checked),cx)))))
                     .child(snooze_options)
                     .child(
                         div()
@@ -3884,6 +3946,10 @@ impl Root {
             .as_ref()
             .map(|draft| draft.id.clone())
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let promoting = (environment.clone(), thread_id.clone());
+        self.promoting.insert(promoting.clone());
+        self.rebuild_entries();
+        self.schedule_wake(window, cx);
         let title = projects::title_seed(&text);
         self.composer
             .update(cx, |state, cx| state.set_value("", window, cx));
@@ -3912,15 +3978,20 @@ impl Root {
                 }
             })
             .await;
-            let _ = this.update_in(cx, |root, window, cx| match launched {
-                Ok(thread_id) => root.open_thread(environment, thread_id, cx),
-                Err(error) => {
-                    root.message = Some(format!("New thread failed: {error:#}"));
-                    root.composer
-                        .update(cx, |state, cx| state.set_value(text, window, cx));
-                    root.stash_composer(cx);
-                    root.attachments = pending;
-                    cx.notify();
+            let _ = this.update_in(cx, |root, window, cx| {
+                root.promoting.remove(&promoting);
+                root.rebuild_entries();
+                root.schedule_wake(window, cx);
+                match launched {
+                    Ok(thread_id) => root.open_thread(environment, thread_id, cx),
+                    Err(error) => {
+                        root.message = Some(format!("New thread failed: {error:#}"));
+                        root.composer
+                            .update(cx, |state, cx| state.set_value(text, window, cx));
+                        root.stash_composer(cx);
+                        root.attachments = pending;
+                        cx.notify();
+                    }
                 }
             });
         })
@@ -4800,7 +4871,7 @@ impl Root {
             Button::new("stop")
                 .icon(Icon::empty().path("icons/t3-stop.svg"))
                 .tooltip("Interrupt")
-                .accessibility_label("Stop")
+                .accessibility_label("Stop generation")
                 .size(px(32.))
                 .rounded(px(16.))
                 .danger()

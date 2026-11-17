@@ -21,6 +21,7 @@ pub struct ClientSettings {
     pub font_size_prompt: f32,
     pub font_size_code: f32,
     pub sidebar_width: f32,
+    pub working_shelf: bool,
     pub shelf_expanded: [bool; 3],
     pub light_theme: bool,
     pub preferred_editor: Option<String>,
@@ -61,6 +62,9 @@ impl ClientSettings {
             font_size_prompt: number("fontSizePrompt", 14.),
             font_size_code: number("fontSizeCode", 13.),
             sidebar_width: number("gpuiSidebarWidth", 256.).max(208.),
+            working_shelf: value["sidebarWorkingShelfEnabled"]
+                .as_bool()
+                .unwrap_or(true),
             shelf_expanded: ["working", "snoozed", "settled"].map(|shelf| {
                 value
                     .get("gpuiSidebarShelves")

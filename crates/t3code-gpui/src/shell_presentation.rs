@@ -70,7 +70,11 @@ pub fn present(thread: &Value, pending_subagent: Option<&str>) -> Value {
     let request = &thread["pendingRuntimeRequest"];
     let request_kind = text(request, "kind");
     let mut state = json!({
-        "runtime":runtime,"latestRun":latest_run,
+        "id":thread["id"],"providerInstanceId":thread["providerInstanceId"],"runtime":runtime,"latestRun":latest_run,
+        "createdAt":iso(&thread["createdAt"]),"archivedAt":iso(&thread["archivedAt"]),
+        "unsettledAt":iso(&thread["unsettledAt"]),
+        "pinnedAt":iso(&thread["pinnedAt"]),"pinOrderKey":thread["pinOrderKey"],"activeOrderKey":thread["activeOrderKey"],
+        "interactionMode":thread["interactionMode"],"hasActionableProposedPlan":thread["hasActionableProposedPlan"],
         "hasPendingApprovals":!request.is_null() && !matches!(request_kind,"user_input"|"auth_refresh"),
         "hasPendingUserInput":request_kind == "user_input",
         "pendingUserInputAt":if request_kind == "user_input" { iso(&request["createdAt"]) } else { Value::Null },
@@ -87,6 +91,9 @@ pub fn present(thread: &Value, pending_subagent: Option<&str>) -> Value {
     });
     if let Some(settled) = thread.get("settledOverride") {
         state["settledOverride"] = settled.clone();
+    }
+    if let Some(authored) = thread.get("latestUserAuthoredMessageAt") {
+        state["latestUserAuthoredMessageAt"] = iso(authored);
     }
     if let Some(visited) = thread.get("lastVisitedAt") {
         state["lastVisitedAt"] = iso(visited);

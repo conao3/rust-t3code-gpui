@@ -26,6 +26,7 @@ t3-terminal = { path = "../t3-terminal" }
 notify-rust = "4.19"
 tokio.workspace = true
 uuid.workspace = true
+icu_collator = "=2.4.0"
 
 [features]
 gpui-fast = ["gpui-kit/gpui-fast"]

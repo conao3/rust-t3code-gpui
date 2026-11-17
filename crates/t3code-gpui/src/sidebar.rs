@@ -38,7 +38,6 @@ pub struct ThreadEntry {
     pub title: String,
     pub project_title: String,
     pub status: ThreadStatus,
-    pub updated_at: String,
     pub latest_user_message_at: Option<String>,
     pub pin_order: Option<String>,
     pub snoozed_until: Option<String>,
@@ -46,6 +45,8 @@ pub struct ThreadEntry {
     pub provider_stack: Vec<String>,
     pub activity_timestamp: Option<String>,
     pub presentation: Arc<Value>,
+    pub inbox_working: Option<bool>,
+    pub returned_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
@@ -293,7 +294,6 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
                 title: text(thread, "title").to_string(),
                 project_title,
                 status: status_of(thread),
-                updated_at: text(thread, "updatedAt").to_string(),
                 latest_user_message_at: thread
                     .get("latestUserMessageAt")
                     .and_then(Value::as_str)
@@ -316,6 +316,8 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
                 provider_stack: crate::provider_display::stack(&presentation),
                 activity_timestamp: activity_timestamp(&presentation),
                 presentation: Arc::new(presentation),
+                inbox_working: None,
+                returned_at: None,
             }
         })
         .collect()
@@ -354,7 +356,10 @@ pub fn section_of(entry: &ThreadEntry, now: &str) -> Section {
     if entry.pin_order.is_some() {
         return Section::Pinned;
     }
-    if entry.status == ThreadStatus::Working {
+    if entry
+        .inbox_working
+        .unwrap_or_else(|| crate::inbox::is_working(&entry.presentation))
+    {
         return Section::Working;
     }
     Section::Active
@@ -372,6 +377,7 @@ pub struct Shelf {
 pub fn shelves(
     entries: &[ThreadEntry],
     now: &str,
+    working_shelf: bool,
     label_of: impl Fn(&str) -> Option<String>,
 ) -> Vec<Shelf> {
     let mut shelves: Vec<Shelf> = Vec::new();
@@ -386,11 +392,24 @@ pub fn shelves(
             .iter()
             .filter(|e| section_of(e, now) == section)
             .collect();
-        if section == Section::Pinned {
-            members.sort_by(|a, b| a.pin_order.cmp(&b.pin_order));
-        } else {
-            members.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-        }
+        let order = match section {
+            Section::Pinned => crate::inbox::Order::Pinned,
+            Section::Active if working_shelf => crate::inbox::Order::Inbox,
+            Section::Active => crate::inbox::Order::Active,
+            Section::Working => crate::inbox::Order::Working,
+            Section::Snoozed => crate::inbox::Order::Snoozed,
+            Section::Settled => crate::inbox::Order::Settled,
+        };
+        members.sort_by(|a, b| {
+            crate::inbox::compare(
+                &a.presentation,
+                &b.presentation,
+                a.returned_at,
+                b.returned_at,
+                order,
+                crate::inbox::collator(),
+            )
+        });
         let parent_of = |e: &ThreadEntry| -> Option<(String, String)> {
             let (environment_id, thread_id) = e.launched_from.as_ref()?;
             let parent = (label_of(environment_id)?, thread_id.clone());
@@ -707,16 +726,20 @@ mod tests {
             sequence: 1,
             projects: vec![json!({"id": "p1", "title": "idea"})],
             threads: vec![
-                thread(json!({"id": "old", "updatedAt": "2026-11-11T00:00:00.000Z"})),
+                thread(
+                    json!({"id": "old", "createdAt": "2026-11-11T00:00:00.000Z", "updatedAt": "2026-11-13T00:00:00.000Z"}),
+                ),
                 thread(
                     json!({"id": "settled", "settledOverride": "settled", "settledAt": "2026-11-12T03:00:00.000Z", "updatedAt": "2026-11-12T03:00:00.000Z"}),
                 ),
-                thread(json!({"id": "new", "updatedAt": "2026-11-12T02:00:00.000Z"})),
+                thread(
+                    json!({"id": "new", "createdAt": "2026-11-12T02:00:00.000Z", "updatedAt": "2026-11-12T02:00:00.000Z"}),
+                ),
             ],
             synchronized: true,
         };
         let list = entries("eos", &shell);
-        let shelves = shelves(&list, "2026-11-12T05:00:00.000Z", |_| None);
+        let shelves = shelves(&list, "2026-11-12T05:00:00.000Z", true, |_| None);
         let layout: Vec<(Section, Vec<&str>)> = shelves
             .iter()
             .map(|s| {
@@ -745,7 +768,6 @@ mod tests {
             title: id.into(),
             project_title: String::new(),
             status,
-            updated_at: String::new(),
             latest_user_message_at: None,
             pin_order: None,
             snoozed_until: None,
@@ -753,8 +775,10 @@ mod tests {
             provider_stack: Vec::new(),
             activity_timestamp: None,
             presentation: Arc::new(
-                serde_json::json!({"settledOverride":if status==ThreadStatus::Settled {"settled"} else {"active"}}),
+                serde_json::json!({"id":id,"settledOverride":if status==ThreadStatus::Settled {"settled"} else {"active"},"runtime":if status==ThreadStatus::Working {serde_json::json!({"status":"running"})} else {Value::Null}}),
             ),
+            inbox_working: None,
+            returned_at: None,
         }
     }
 
@@ -813,19 +837,22 @@ mod tests {
         let now = "2026-11-12T05:00:00.000Z";
         let at = |id: &str, status: ThreadStatus, updated: &str| {
             let mut e = entry(id, status);
-            e.updated_at = updated.into();
+            Arc::make_mut(&mut e.presentation)["createdAt"] =
+                json!(format!("2026-11-12T{:0>2}:00:00.000Z", updated));
             e
         };
         let mut pinned_b = at("pin-b", ThreadStatus::Idle, "1");
         pinned_b.pin_order = Some("b".into());
+        Arc::make_mut(&mut pinned_b.presentation)["pinOrderKey"] = json!("b");
         let mut pinned_a = at("pin-a", ThreadStatus::Working, "0");
         pinned_a.pin_order = Some("a".into());
+        Arc::make_mut(&mut pinned_a.presentation)["pinOrderKey"] = json!("a");
         let mut snoozed = at("snoozed", ThreadStatus::Settled, "9");
         snoozed.snoozed_until = Some("2026-11-12T06:00:00.000Z".into());
-        snoozed.presentation = Arc::new(json!({"snoozedUntil":snoozed.snoozed_until}));
+        Arc::make_mut(&mut snoozed.presentation)["snoozedUntil"] = json!(snoozed.snoozed_until);
         let mut woke = at("woke", ThreadStatus::Idle, "2");
         woke.snoozed_until = Some("2026-11-12T04:00:00.000Z".into());
-        woke.presentation = Arc::new(json!({"snoozedUntil":woke.snoozed_until}));
+        Arc::make_mut(&mut woke.presentation)["snoozedUntil"] = json!(woke.snoozed_until);
         let parent = at("parent", ThreadStatus::Idle, "3");
         let mut child = at("child", ThreadStatus::Done, "8");
         child.launched_from = Some(("env-eos".into(), "parent".into()));
@@ -836,7 +863,7 @@ mod tests {
             pinned_b, pinned_a, snoozed, woke, parent, child, orphan, working,
         ];
         let label = |id: &str| (id == "env-eos").then(|| "eos".to_string());
-        let layout: Vec<(Section, Vec<(String, usize)>)> = shelves(&list, now, label)
+        let layout: Vec<(Section, Vec<(String, usize)>)> = shelves(&list, now, true, label)
             .into_iter()
             .map(|s| {
                 (
