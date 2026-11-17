@@ -403,6 +403,16 @@ impl Root {
         if page == "connections" {
             content = content.child(self.render_host_content(cx));
         }
+        if page == "archived" {
+            let root = cx.entity().downgrade();
+            let environment = environment.clone();
+            let panel = window.use_keyed_state(
+                SharedString::from(format!("settings-archive:{environment}")),
+                cx,
+                |_, cx| settings_archive::Archive::new(root, environment, cx),
+            );
+            content = content.child(panel);
+        }
         if page == "about" {
             content = content.child(div().child(APP_NAME)).child(
                 div()

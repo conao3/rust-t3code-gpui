@@ -48,6 +48,7 @@ mod hosts;
 mod lineage;
 mod palette;
 mod settings;
+mod settings_archive;
 mod settings_catalog;
 mod settings_controls;
 mod settings_keybindings;

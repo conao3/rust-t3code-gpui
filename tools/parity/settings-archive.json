@@ -1,0 +1,20 @@
+{
+  "name":"settings-archive-restore-and-delete",
+  "viewport":[1400,900],
+  "theme":"dark",
+  "settle_ms":1000,
+  "steps":[
+    {"action":"click","selector":{"role":"button","name":"Settings"}},
+    {"action":"click","selector":{"role":"treeitem","name":"General"},"native":{"role":"tree item","name":"General"}},
+    {"action":"click","selector":{"role":"switch","name":"Confirm thread deletion"},"native":{"role":"toggle button","name":"Confirm thread deletion"}},
+    {"action":"click","selector":{"role":"treeitem","name":"Archive"},"native":{"role":"tree item","name":"Archive"}},
+    {"action":"checkpoint","selector":{"role":"button","name":"Unarchive Restore fixture"}},
+    {"action":"click","selector":{"role":"button","name":"Unarchive Restore fixture"}},
+    {"action":"checkpoint","selector":{"role":"button","name":"Unarchive Restore fixture"},"count":0},
+    {"action":"click","selector":{"role":"button","name":"Delete Delete fixture"}},
+    {"action":"checkpoint","selector":{"role":"button","name":"Delete Delete fixture"},"count":0},
+    {"action":"click","selector":{"role":"treeitem","name":"General"},"native":{"role":"tree item","name":"General"}},
+    {"action":"click","selector":{"role":"switch","name":"Confirm thread deletion"},"native":{"role":"toggle button","name":"Confirm thread deletion"}},
+    {"action":"press","value":"escape"}
+  ]
+}
