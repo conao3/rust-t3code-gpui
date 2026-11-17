@@ -99,3 +99,7 @@ SOFTWARE.
 The assistant message metadata and copy behavior in `crates/t3code-gpui/src/{timeline,row_view,markdown_directives,timestamp}.rs` derive from T3 Code `apps/web/src/components/chat/{TimelineAssistantRows,MessageCopyButton}.tsx`, `apps/web/src/timestampFormat.ts`, and `packages/shared/src/{codexMarkdownDirectives,codexFileCitations,codexArtifactTemplates}.ts` at source revision `24e77473ecf41bc1f7142529c7911c1c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.
 
 ICU4X date/time formatting and its Unicode/CLDR data are distributed under the Unicode License V3, reproduced in `crates/t3code-gpui/assets/licenses/Unicode-3.0.txt` and installed with the application notices.
+
+## Terminal engine
+
+`crates/t3-terminal/assets/ghostty-vt.wasm` is the MIT-licensed Ghostty VT module at revision `9f62873bf195e4d8a762d768a1405a5f2f7b1697`, obtained from T3 Code source `24e77473ecf41bc1f7142529c7911c1c1aae1d76`. Its unchanged license is `crates/t3-terminal/assets/Ghostty-LICENSE`. The artifact SHA-256 is `51b016a6aa3c29ead71c7c8acf8c01d43b064bae19957a9c9f9e2bf469267629`. The Rust ABI adapter in `crates/t3-terminal/` derives from T3 Code's `apps/web/src/terminal/ghostty/{core,runtime}.ts`, under the T3 Tools Inc. MIT License reproduced above. Wasmtime is distributed under Apache-2.0 WITH LLVM-exception.

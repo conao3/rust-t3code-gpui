@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/t3-client", "crates/t3code-gpui"]
+members = ["crates/t3-client", "crates/t3-terminal", "crates/t3code-gpui"]
 
 [workspace.package]
 version = "0.1.0"
