@@ -52,6 +52,28 @@ impl Root {
         let current_sort = self.pr_state.sort.clone();
         let current_state = self.pr_state.list_state.clone();
         let current_filters = self.pr_state.filters.clone();
+        let projects = self
+            .connections
+            .iter()
+            .flat_map(|connection| {
+                let environment = connection.label().to_string();
+                connection
+                    .shell()
+                    .lock()
+                    .expect("shell lock")
+                    .projects
+                    .iter()
+                    .filter(|p| p["deletedAt"].is_null())
+                    .map(|p| {
+                        (
+                            environment.clone(),
+                            p["id"].as_str().unwrap_or_default().to_string(),
+                            p["title"].as_str().unwrap_or_default().to_string(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
         h_flex()
             .gap_2()
             .child(
@@ -76,6 +98,7 @@ impl Root {
                             let weak = sort_root.clone();
                             menu = menu.item(
                                 PopupMenuItem::new(*label)
+                                    .icon(sort_icon(value))
                                     .checked(
                                         current_sort == *value
                                             || current_sort.is_empty() && *value == "ready",
@@ -99,6 +122,48 @@ impl Root {
                     .icon(gpui_kit::assets::IconName::ListFilter)
                     .dropdown_menu(move |mut menu, window, cx| {
                         for (key, label, options) in FILTERS {
+                            if *key == "draft" {
+                                menu = menu.separator();
+                                for (kind, label, default) in
+                                    [("authors", "Author", "Anyone"), ("labels", "Labels", "Any")]
+                                {
+                                    let root = filters_root.clone();
+                                    let dismiss = cx.weak_entity();
+                                    let current = if kind == "authors" {
+                                        current_filters
+                                            .get("author")
+                                            .cloned()
+                                            .unwrap_or_else(|| default.into())
+                                    } else {
+                                        current_filters
+                                            .get("labels")
+                                            .and_then(|value| {
+                                                serde_json::from_str::<Vec<Vec<String>>>(value).ok()
+                                            })
+                                            .map(|labels| format!("{} selected", labels.len()))
+                                            .unwrap_or_else(|| default.into())
+                                    };
+                                    menu = menu.submenu(
+                                        format!("{label} {current}"),
+                                        window,
+                                        cx,
+                                        move |menu, window, cx| {
+                                            let facet = cx.new(|cx| {
+                                                FacetMenu::new(
+                                                    root.clone(),
+                                                    dismiss.clone(),
+                                                    kind,
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                            menu.item(PopupMenuItem::element(move |_, _| {
+                                                facet.clone()
+                                            }))
+                                        },
+                                    );
+                                }
+                            }
                             let selected = if *key == "state" {
                                 current_state.clone()
                             } else {
@@ -110,7 +175,12 @@ impl Root {
                                 .find(|(value, _)| *value == selected)
                                 .map(|(_, label)| *label)
                                 .unwrap_or(options[0].1);
-                            menu = menu.submenu(
+                            menu = menu.submenu_with_icon(
+                                Some(Icon::new(if *key == "state" && selected.is_empty() {
+                                    gpui_kit::assets::IconName::GitPullRequest
+                                } else {
+                                    gpui_kit::assets::IconName::Layers
+                                })),
                                 format!("{label} {current_label}"),
                                 window,
                                 cx,
@@ -142,7 +212,63 @@ impl Root {
                                 },
                             );
                         }
-                        menu
+                        let selected = current_filters.get("projectId").cloned();
+                        let selected_environment = current_filters.get("environment").cloned();
+                        let title = projects
+                            .iter()
+                            .find(|(environment, id, _)| {
+                                Some(id) == selected.as_ref()
+                                    && Some(environment) == selected_environment.as_ref()
+                            })
+                            .map(|(_, _, title)| title.as_str())
+                            .unwrap_or("All projects");
+                        let root = filters_root.clone();
+                        let projects = projects.clone();
+                        menu.separator().submenu(
+                            format!("Project {title}"),
+                            window,
+                            cx,
+                            move |mut menu, _, _| {
+                                let clear = root.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new("All projects")
+                                        .checked(selected.is_none())
+                                        .on_click(move |_, _, cx| {
+                                            let _ = clear.update(cx, |root, cx| {
+                                                root.pr_state.filters.remove("projectId");
+                                                root.pr_state.filters.remove("environment");
+                                                root.load_pull_requests(false, cx);
+                                            });
+                                        }),
+                                );
+                                for (environment, id, title) in &projects {
+                                    let root = root.clone();
+                                    let environment = environment.clone();
+                                    let id = id.clone();
+                                    menu = menu.item(
+                                        PopupMenuItem::new(title.clone())
+                                            .checked(
+                                                Some(&id) == selected.as_ref()
+                                                    && Some(&environment)
+                                                        == selected_environment.as_ref(),
+                                            )
+                                            .on_click(move |_, _, cx| {
+                                                let _ = root.update(cx, |root, cx| {
+                                                    root.pr_state
+                                                        .filters
+                                                        .insert("projectId".into(), id.clone());
+                                                    root.pr_state.filters.insert(
+                                                        "environment".into(),
+                                                        environment.clone(),
+                                                    );
+                                                    root.load_pull_requests(false, cx);
+                                                });
+                                            }),
+                                    );
+                                }
+                                menu.radio_group()
+                            },
+                        )
                     }),
             )
             .child(
@@ -225,7 +351,7 @@ impl Root {
                     )
                     .child(
                         div()
-                            .max_w(px(384.))
+                            .max_w(px(256.))
                             .text_center()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
@@ -350,10 +476,21 @@ impl Root {
             let result = on_runtime(&runtime, async move {
                 let mut results = Vec::new();
                 for connection in connections {
+                    if filters
+                        .get("environment")
+                        .is_some_and(|environment| environment != connection.label())
+                    {
+                        continue;
+                    }
                     let mut input = json!({"state":state,"limit":99});
                     let mut qualifiers = serde_json::Map::new();
                     for (key, value) in &filters {
-                        if matches!(key.as_str(), "involvement" | "host" | "projectId") {
+                        if key == "environment" {
+                            continue;
+                        }
+                        if key == "labels" {
+                            qualifiers.insert(key.clone(), serde_json::from_str(value)?);
+                        } else if matches!(key.as_str(), "involvement" | "host" | "projectId") {
                             input[key] = json!(value);
                         } else {
                             qualifiers.insert(key.clone(), json!(value));
@@ -1174,4 +1311,311 @@ fn compare_entries(a: &Value, b: &Value, sort: &str) -> std::cmp::Ordering {
         _ => std::cmp::Ordering::Equal,
     };
     order.then_with(|| b["updatedAt"].as_str().cmp(&a["updatedAt"].as_str()))
+}
+
+struct FacetMenu {
+    root: WeakEntity<Root>,
+    dismiss: WeakEntity<gpui_kit::component::menu::PopupMenu>,
+    kind: &'static str,
+    input: Entity<InputState>,
+    options: Vec<String>,
+    selected: Vec<String>,
+    loading: bool,
+    error: bool,
+    started: bool,
+    cursor: usize,
+    request: u64,
+    _subscription: Subscription,
+}
+
+impl FacetMenu {
+    fn new(
+        root: WeakEntity<Root>,
+        dismiss: WeakEntity<gpui_kit::component::menu::PopupMenu>,
+        kind: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(if kind == "authors" {
+                "Search authors"
+            } else {
+                "Search labels"
+            })
+        });
+        let subscription = cx.subscribe(&input, |view, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                view.load(cx);
+            }
+        });
+        let selected = root
+            .upgrade()
+            .map(|root| {
+                let filters = &root.read(cx).pr_state.filters;
+                if kind == "authors" {
+                    filters.get("author").cloned().into_iter().collect()
+                } else {
+                    filters
+                        .get("labels")
+                        .and_then(|value| serde_json::from_str::<Vec<Vec<String>>>(value).ok())
+                        .unwrap_or_default()
+                        .into_iter()
+                        .flatten()
+                        .collect()
+                }
+            })
+            .unwrap_or_default();
+        Self {
+            root,
+            dismiss,
+            kind,
+            input,
+            options: Vec::new(),
+            selected,
+            loading: false,
+            error: false,
+            started: false,
+            cursor: 0,
+            request: 0,
+            _subscription: subscription,
+        }
+    }
+
+    fn load(&mut self, cx: &mut Context<Self>) {
+        let Some(root) = self.root.upgrade() else {
+            return;
+        };
+        let root = root.read(cx);
+        let connections = root.connections.clone();
+        let runtime = root.runtime.clone();
+        let filters = root.pr_state.filters.clone();
+        let kind = self.kind;
+        let query = self
+            .input
+            .read(cx)
+            .value()
+            .trim()
+            .chars()
+            .take(100)
+            .collect::<String>();
+        self.request += 1;
+        let request = self.request;
+        self.loading = true;
+        self.error = false;
+        self.cursor = 0;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(250))
+                .await;
+            if this
+                .update(cx, |view, _| view.request != request)
+                .unwrap_or(true)
+            {
+                return;
+            }
+            let result = on_runtime(&runtime, async move {
+                let mut options = Vec::new();
+                for connection in connections {
+                    if filters
+                        .get("environment")
+                        .is_some_and(|environment| environment != connection.label())
+                    {
+                        continue;
+                    }
+                    let mut input = json!({"kind":kind});
+                    for key in ["host", "projectId"] {
+                        if let Some(value) = filters.get(key) {
+                            input[key] = json!(value);
+                        }
+                    }
+                    if !query.is_empty() {
+                        input["query"] = json!(query);
+                    }
+                    let response = connection
+                        .request("pullRequests.filterOptions", input)
+                        .await?;
+                    for option in response[kind].as_array().into_iter().flatten() {
+                        if let Some(name) =
+                            option[if kind == "authors" { "login" } else { "name" }].as_str()
+                        {
+                            options.push(name.to_string());
+                        }
+                    }
+                }
+                options.sort_by_key(|name| name.to_lowercase());
+                options.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+                Ok(options)
+            })
+            .await;
+            let _ = this.update(cx, |view, cx| {
+                if view.request != request {
+                    return;
+                }
+                view.loading = false;
+                match result {
+                    Ok(options) => view.options = options,
+                    Err(_) => {
+                        view.options.clear();
+                        view.error = true;
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn choose(&mut self, value: String, cx: &mut Context<Self>) {
+        if self.kind == "authors" {
+            self.selected = (!value.is_empty()).then_some(value).into_iter().collect();
+        } else if let Some(index) = self
+            .selected
+            .iter()
+            .position(|name| name.eq_ignore_ascii_case(&value))
+        {
+            self.selected.remove(index);
+        } else if self.selected.len() < 10 {
+            self.selected.push(value);
+        }
+        let _ = self.root.update(cx, |root, cx| {
+            let key = if self.kind == "authors" {
+                "author"
+            } else {
+                "labels"
+            };
+            if self.selected.is_empty() {
+                root.pr_state.filters.remove(key);
+            } else {
+                let value = if self.kind == "authors" {
+                    self.selected[0].clone()
+                } else {
+                    serde_json::to_string(
+                        &self
+                            .selected
+                            .iter()
+                            .map(|name| vec![name])
+                            .collect::<Vec<_>>(),
+                    )
+                    .expect("label groups")
+                };
+                root.pr_state.filters.insert(key.into(), value);
+            }
+            root.load_pull_requests(false, cx);
+        });
+        if self.kind == "authors" {
+            let _ = self.dismiss.update(cx, |_, cx| cx.emit(gpui::DismissEvent));
+        }
+        cx.notify();
+    }
+}
+
+impl Render for FacetMenu {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.started {
+            self.started = true;
+            self.load(cx);
+            let input = self.input.clone();
+            window.defer(cx, move |window, cx| {
+                input.update(cx, |input, cx| input.focus(window, cx))
+            });
+        }
+        let mut options = self.options.clone();
+        if self.kind == "authors" {
+            options.insert(0, String::new());
+        }
+        let keyboard_options = options.clone();
+        v_flex()
+            .w(px(256.))
+            .gap_1()
+            .child(
+                Input::new(&self.input).aria_label(if self.kind == "authors" {
+                    "Search authors"
+                } else {
+                    "Search labels"
+                }),
+            )
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, _, cx| {
+                match event.keystroke.key.as_str() {
+                    "down" => {
+                        view.cursor =
+                            (view.cursor + 1).min(keyboard_options.len().saturating_sub(1))
+                    }
+                    "up" => view.cursor = view.cursor.saturating_sub(1),
+                    "enter" => {
+                        if let Some(value) = keyboard_options.get(view.cursor) {
+                            view.choose(value.clone(), cx);
+                        }
+                    }
+                    _ => return,
+                }
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .children(options.into_iter().enumerate().map(|(index, value)| {
+                let checked = if value.is_empty() {
+                    self.selected.is_empty()
+                } else {
+                    self.selected
+                        .iter()
+                        .any(|name| name.eq_ignore_ascii_case(&value))
+                };
+                let label = if value.is_empty() {
+                    "Anyone".to_string()
+                } else {
+                    value.clone()
+                };
+                h_flex()
+                    .id(("pr-facet-option", index))
+                    .role(if self.kind == "authors" {
+                        accesskit::Role::MenuItemRadio
+                    } else {
+                        accesskit::Role::MenuItemCheckBox
+                    })
+                    .aria_label(label.clone())
+                    .aria_toggled(if checked {
+                        accesskit::Toggled::True
+                    } else {
+                        accesskit::Toggled::False
+                    })
+                    .p_2()
+                    .gap_2()
+                    .rounded_md()
+                    .when(index == self.cursor, |row| row.bg(cx.theme().accent))
+                    .child(
+                        Icon::new(IconName::Check)
+                            .size(px(14.))
+                            .when(!checked, |icon| icon.invisible()),
+                    )
+                    .child(label)
+                    .on_click(cx.listener(move |view, _, _, cx| view.choose(value.clone(), cx)))
+            }))
+            .when(!self.loading && self.options.is_empty(), |list| {
+                list.child(
+                    Button::new("facet-empty")
+                        .role(accesskit::Role::MenuItem)
+                        .disabled(true)
+                        .ghost()
+                        .label(match (self.kind, self.error) {
+                            ("authors", false) => "No authors found",
+                            ("authors", true) => "Couldn't search authors on the host",
+                            (_, false) => "No labels found",
+                            (_, true) => "Couldn't search labels on the host",
+                        }),
+                )
+            })
+    }
+}
+
+fn sort_icon(sort: &str) -> gpui_kit::assets::IconName {
+    use gpui_kit::assets::IconName;
+    match sort {
+        "ready" => IconName::ListChecks,
+        "blocked" => IconName::UserLock,
+        "updated" => IconName::Clock,
+        "newest" => IconName::CalendarArrowDown,
+        "oldest" => IconName::CalendarArrowUp,
+        "largest" => IconName::Maximize2,
+        _ => IconName::Minimize2,
+    }
 }

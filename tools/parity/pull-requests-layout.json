@@ -1,22 +1,121 @@
 {
   "name": "pull-requests-layout",
-  "viewport": [1400, 900],
+  "viewport": [
+    1400,
+    900
+  ],
   "theme": "dark",
   "settle_ms": 1500,
   "steps": [
-    {"action": "click", "selector": {"role": "button", "name": "Pull requests"}},
-    {"action": "checkpoint", "selector": {"role": "button", "name": "Check again"}, "count": 1},
-    {"action": "click", "selector": {"role": "button", "name": "Sort pull requests: Merge readiness"}},
-    {"action": "checkpoint", "selector": {"role": "menuitemradio", "name": "Recently updated"}, "native": {"role": "radio menu item", "name": "Recently updated"}, "count": 1},
-    {"action": "press", "value": "escape"},
-    {"action": "click", "selector": {"role": "button", "name": "Filters"}},
-    {"action": "checkpoint", "selector": {"role": "menuitem", "name": "State Open"}, "native": {"role": "menu item", "name": "State Open"}, "count": 1},
-    {"action": "press", "value": "escape"},
-    {"action": "focus", "selector": {"role": "searchbox", "name": "Search pull requests"}, "native": {"role": "textbox", "name": "Search pull requests"}},
-    {"action": "type", "value": "absent-fixture"},
-    {"action": "press", "value": "enter"},
-    {"action": "checkpoint", "selector": {"role": "button", "name": "Clear search"}, "count": 1},
-    {"action": "click", "selector": {"role": "button", "name": "Clear search"}},
-    {"action": "checkpoint", "selector": {"role": "button", "name": "Check again"}, "count": 1}
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Pull requests"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Check again"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Sort pull requests: Merge readiness"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Recently updated"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Filters"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitem",
+        "name": "State Open"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "State Open"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "searchbox",
+        "name": "Search pull requests"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Search pull requests"
+      }
+    },
+    {
+      "action": "type",
+      "value": "absent-fixture"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Clear search"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Clear search"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Check again"
+      },
+      "count": 1
+    }
   ]
 }

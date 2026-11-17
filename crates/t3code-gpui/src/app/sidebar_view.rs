@@ -896,9 +896,14 @@ impl Root {
                 sidebar.child(
                     h_flex().px_2().py_2().gap_1().child(
                         Button::new("pr-back")
-                            .icon(IconName::ArrowLeft)
-                            .label("Back")
-                            .justify_start()
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .gap_2()
+                                    .child(Icon::new(IconName::ArrowLeft).size(px(16.)))
+                                    .child(text!("Back")),
+                            )
+                            .accessibility_label("Back")
                             .ghost()
                             .flex_1()
                             .on_click(cx.listener(|root, _, _, cx| {
@@ -945,9 +950,11 @@ impl Root {
                                 .accessibility_label("Pull requests")
                                 .compact()
                                 .ghost()
-                                .on_click(
-                                    cx.listener(|root, _, _, cx| root.open_pull_requests(true, cx)),
-                                ),
+                                .on_click(cx.listener(|root, _, window, cx| {
+                                    root.open_pull_requests(true, cx);
+                                    root.pr_search
+                                        .update(cx, |input, cx| input.focus(window, cx));
+                                })),
                         )
                         .child(
                             Button::new("settings")
