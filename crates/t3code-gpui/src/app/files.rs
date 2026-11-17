@@ -359,7 +359,12 @@ impl Root {
                     .into_any_element(),
                 PanelBody::Diff(state) => div()
                     .flex_1()
-                    .child(Diff::new(state).soft_wrap(self.diff_view.wrap))
+                    .child(
+                        Diff::new(state)
+                            .soft_wrap(self.diff_view.wrap)
+                            .hunk_separator(gpui_kit::component::diff::DiffHunkSeparator::LineInfo)
+                            .change_indicator(gpui_kit::component::diff::DiffChangeIndicator::Bars),
+                    )
                     .into_any_element(),
             }
         };

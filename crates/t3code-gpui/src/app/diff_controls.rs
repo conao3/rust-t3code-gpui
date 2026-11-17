@@ -308,6 +308,18 @@ impl Root {
         let focus = self.focus.clone();
         let commits = self.diff_view.commits.clone();
         let turns = self.diff_turns();
+        let stats = self
+            .file_panel
+            .as_ref()
+            .and_then(|panel| match &panel.body {
+                PanelBody::Diff(state) => Some(state.read(cx).files().iter().fold(
+                    (0, 0),
+                    |(additions, deletions), file| {
+                        (additions + file.additions(), deletions + file.deletions())
+                    },
+                )),
+                _ => None,
+            });
         let scope = self.diff_view.scope.clone();
         let label = if let Some(commit) = &self.diff_view.commit {
             commit.chars().take(7).collect::<String>()
@@ -402,6 +414,23 @@ impl Root {
                         |row| row.child(self.render_diff_base(cx)),
                     )
                     .child(div().flex_1())
+                    .when_some(stats, |row, (additions, deletions)| {
+                        row.child(
+                            h_flex()
+                                .gap_1()
+                                .text_xs()
+                                .child(
+                                    div()
+                                        .text_color(cx.theme().success)
+                                        .child(text!(format!("+{additions}"))),
+                                )
+                                .child(
+                                    div()
+                                        .text_color(cx.theme().danger)
+                                        .child(text!(format!("-{deletions}"))),
+                                ),
+                        )
+                    })
                     .child(
                         Button::new("refresh-diff")
                             .icon(IconName::RefreshCw)
