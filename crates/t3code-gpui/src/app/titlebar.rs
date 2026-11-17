@@ -38,7 +38,18 @@ impl Root {
         cx: &Context<Self>,
     ) -> AnyElement {
         let theme = cx.theme();
-        let content = if self.draft.is_some() || self.open.is_none() {
+        let content = if self.pr_state.page {
+            self.window_drag_area("pr-page-window-drag", cx)
+                .flex_1()
+                .h_full()
+                .px_5()
+                .flex()
+                .items_center()
+                .text_sm()
+                .font_weight(FontWeight::MEDIUM)
+                .child(text!("Pull requests"))
+                .into_any_element()
+        } else if self.draft.is_some() || self.open.is_none() {
             self.window_drag_area("empty-window-drag", cx)
                 .flex_1()
                 .min_w_0()
@@ -103,18 +114,50 @@ impl Root {
                         })),
                 )
             })
-            .child(content)
-            .when(self.workspace_watch.is_some(), |bar| {
+            .when(
+                !self.right_panel.open || !self.right_panel.maximized || self.pr_state.page,
+                |bar| bar.child(content),
+            )
+            .when(
+                !self.pr_state.page && self.workspace_watch.is_some(),
+                |bar| {
+                    bar.child(
+                        Button::new("thread-details-toggle")
+                            .icon(gpui_kit::assets::IconName::PanelRight)
+                            .ghost()
+                            .size(px(28.))
+                            .accessibility_label("Toggle thread details panel")
+                            .tooltip("Toggle thread details")
+                            .on_click(cx.listener(|_, _, window, cx| {
+                                window.dispatch_action(Box::new(ToggleThreadDetails), cx)
+                            })),
+                    )
+                },
+            )
+            .when(self.pr_state.page, |bar| {
                 bar.child(
-                    Button::new("thread-details-toggle")
+                    Button::new("pr-panel-toggle")
                         .icon(gpui_kit::assets::IconName::PanelRight)
                         .ghost()
                         .size(px(28.))
-                        .accessibility_label("Toggle thread details panel")
-                        .tooltip("Toggle thread details")
-                        .on_click(cx.listener(|_, _, window, cx| {
-                            window.dispatch_action(Box::new(ToggleThreadDetails), cx)
+                        .accessibility_label("Toggle right panel")
+                        .disabled(self.pr_state.selected.is_none())
+                        .on_click(cx.listener(|root, _, _, cx| {
+                            root.pr_state.page_panel_open = !root.pr_state.page_panel_open;
+                            root.panel_revision += 1;
+                            cx.notify();
                         })),
+                )
+            })
+            .when(self.right_panel.open && !self.pr_state.page, |bar| {
+                bar.child(
+                    div()
+                        .flex_none()
+                        .w(px((self
+                            .panel_width(f32::from(window.viewport_size().width))
+                            - if custom_controls { 104. } else { 0. })
+                        .max(256.)))
+                        .child(self.render_panel_tabs(cx)),
                 )
             })
             .when(custom_controls, |bar| {

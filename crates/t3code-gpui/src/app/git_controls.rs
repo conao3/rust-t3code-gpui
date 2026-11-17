@@ -24,7 +24,7 @@ impl Root {
     ) {
         match action.kind.as_str() {
             "commit-dialog" => self.open_commit_dialog(window, cx),
-            "commit" => self.run_git_stack("commit", None, false, cx),
+            "commit" => self.run_git_stack("commit", None, false, None, cx),
             "publish" => self.open_publish_dialog(window, cx),
             "script" => self.run_project_script(action.value.clone(), window, cx),
             "refresh" | "pull" => self.run_git_request(&action.kind, cx),
@@ -40,16 +40,18 @@ impl Root {
                         dialog
                             .title("Continue on default branch?")
                             .footer(dialog_footer("Continue"))
-                            .child("This action publishes changes from the default branch.")
+                            .child(text!(
+                                "This action publishes changes from the default branch."
+                            ))
                             .on_ok(move |_, _, cx| {
                                 let _ = weak.update(cx, |root, cx| {
-                                    root.run_git_stack(&action, None, false, cx)
+                                    root.run_git_stack(&action, None, false, None, cx)
                                 });
                                 true
                             })
                     });
                 } else {
-                    self.run_git_stack(&action, None, false, cx);
+                    self.run_git_stack(&action, None, false, None, cx);
                 }
             }
             _ => {}
@@ -59,34 +61,38 @@ impl Root {
     fn open_commit_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let input =
             cx.new(|cx| TextareaState::new(window, cx).placeholder("Leave empty to auto-generate"));
-        let weak = cx.entity().downgrade();
-        let changes = self.workspace_status.local["workingTree"].clone();
-        window.open_dialog(cx, move |dialog, _, _| {
-            let submit = input.clone();
-            let weak = weak.clone();
-            dialog
-                .title("Commit changes")
-                .footer(dialog_footer("Commit"))
-                .accessibility_label("Commit changes")
-                .width(px(560.))
-                .child(div().child(format!(
-                    "+{}  -{}",
-                    changes["insertions"], changes["deletions"]
-                )))
-                .child("Commit message (optional)")
-                .child(Textarea::new(&input))
-                .on_ok(move |_, _, cx| {
-                    let message = submit.read(cx).value().trim().to_string();
-                    let _ = weak.update(cx, |root, cx| {
-                        root.run_git_stack(
-                            "commit",
-                            (!message.is_empty()).then_some(message),
-                            false,
-                            cx,
-                        )
-                    });
-                    true
-                })
+        let root = cx.entity().downgrade();
+        let editor = cx.new(|_| CommitEditor {
+            root,
+            input,
+            files: self.workspace_status.local["workingTree"]["files"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default(),
+            branch: self
+                .workspace_status
+                .branch()
+                .unwrap_or("(detached HEAD)")
+                .to_string(),
+            default_branch: self.workspace_status.local["isDefaultRef"].as_bool() == Some(true),
+            editing: false,
+            excluded: HashSet::new(),
+        });
+        window.open_dialog(cx, move |dialog, _, cx| {
+            use gpui_kit::component::dialog::{DialogAction, DialogFooter};
+            let submit = editor.clone();
+            let branch_submit = editor.clone();
+            let empty = editor.read(cx).selected().is_empty();
+            dialog.title("Commit changes").accessibility_label("Commit changes").width(px(512.)).centered()
+                .child(div().text_sm().text_color(cx.theme().muted_foreground)
+                    .child(text!("Review and confirm your commit. Leave the message blank to auto-generate one.")))
+                .child(editor.clone())
+                .footer(DialogFooter::new()
+                    .child(Button::new("cancel-commit").label("Cancel").outline().small().on_click(|_, window, cx| window.close_dialog(cx)))
+                    .child(Button::new("commit-new-branch").label("Commit on new branch").outline().small().disabled(empty)
+                        .on_click(move |_, window, cx| { if branch_submit.update(cx, |view, cx| view.submit(true, cx)) { window.close_dialog(cx); } }))
+                    .child(div().w(px(72.)).child(DialogAction::new().child(Button::new("commit-selected").label("Commit").primary().small().disabled(empty)))))
+                .on_ok(move |_, _, cx| submit.update(cx, |view, cx| view.submit(false, cx)))
         });
     }
 
@@ -178,6 +184,7 @@ impl Root {
         action: &str,
         message: Option<String>,
         feature_branch: bool,
+        files: Option<Vec<String>>,
         cx: &mut Context<Self>,
     ) {
         if self.git_state.busy {
@@ -191,6 +198,9 @@ impl Root {
         };
         let mut input =
             json!({"actionId":uuid::Uuid::new_v4().to_string(), "cwd":cwd, "action":action});
+        if let Some(files) = files {
+            input["filePaths"] = json!(files);
+        }
         if let Some(message) = message {
             input["commitMessage"] = json!(message);
         }
@@ -579,6 +589,103 @@ pub(super) fn dialog_footer(label: impl Into<SharedString>) -> AnyElement {
             ),
         )
         .into_any_element()
+}
+
+struct CommitEditor {
+    root: WeakEntity<Root>,
+    input: Entity<TextareaState>,
+    files: Vec<Value>,
+    branch: String,
+    default_branch: bool,
+    editing: bool,
+    excluded: HashSet<String>,
+}
+
+impl CommitEditor {
+    fn selected(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .filter_map(|file| file["path"].as_str())
+            .filter(|path| !self.excluded.contains(*path))
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn submit(&self, branch: bool, cx: &mut App) -> bool {
+        let files = self.selected();
+        if files.is_empty() {
+            return false;
+        }
+        let message = self.input.read(cx).value().trim().to_string();
+        let _ = self.root.update(cx, |root, cx| {
+            root.run_git_stack(
+                "commit",
+                (!message.is_empty()).then_some(message),
+                branch,
+                (!self.excluded.is_empty()).then_some(files),
+                cx,
+            )
+        });
+        true
+    }
+}
+
+impl Render for CommitEditor {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::component::checkbox::Checkbox;
+        let selected = self.selected();
+        let additions: u64 = self
+            .files
+            .iter()
+            .filter(|file| {
+                file["path"]
+                    .as_str()
+                    .is_some_and(|path| !self.excluded.contains(path))
+            })
+            .map(|file| file["insertions"].as_u64().unwrap_or(0))
+            .sum();
+        let deletions: u64 = self
+            .files
+            .iter()
+            .filter(|file| {
+                file["path"]
+                    .as_str()
+                    .is_some_and(|path| !self.excluded.contains(path))
+            })
+            .map(|file| file["deletions"].as_u64().unwrap_or(0))
+            .sum();
+        v_flex().gap_3().child(v_flex().p_3().gap_2().rounded_xl().bg(cx.theme().foreground.opacity(0.035))
+            .child(h_flex().gap_2().child(div().text_color(cx.theme().muted_foreground).child(text!("Branch")))
+                .child(div().flex_1().child(self.branch.clone()))
+                .when(self.default_branch, |row| row.child(div().text_color(cx.theme().warning).child(text!("Default branch")))))
+            .child(h_flex().gap_2()
+                .when(self.editing, |row| row.child(Checkbox::new("commit-all-files").checked(self.excluded.is_empty()).on_click(cx.listener(|view, _, window, cx| {
+                    if view.excluded.is_empty() { view.excluded = view.files.iter().filter_map(|file| file["path"].as_str().map(str::to_string)).collect(); }
+                    else { view.excluded.clear(); }
+                    window.refresh(); cx.notify();
+                }))))
+                .child(div().flex_1().child(text!("Files")))
+                .when(!self.excluded.is_empty() && !self.editing, |row| row.child(format!("({} of {})",selected.len(),self.files.len())))
+                .child(Button::new("commit-edit-files").label(if self.editing { "Done" } else { "Edit" }).ghost().small().on_click(cx.listener(|view, _, window, cx| { view.editing = !view.editing; window.refresh(); cx.notify(); }))))
+            .child(v_flex().id("commit-files").h(px(176.)).overflow_y_scroll().gap_1().rounded_lg().bg(cx.theme().foreground.opacity(0.025)).children(self.files.iter().map(|file| {
+                let path = file["path"].as_str().unwrap_or_default().to_string();
+                let check_path = path.clone();
+                let open_path = path.clone();
+                let excluded = self.excluded.contains(&path);
+                h_flex().gap_2().px_2().py_1()
+                    .when(self.editing, |row| row.child(Checkbox::new(SharedString::from(format!("commit-file-{path}"))).checked(!excluded).on_click(cx.listener(move |view, _, window, cx| {
+                        if !view.excluded.remove(&check_path) { view.excluded.insert(check_path.clone()); }
+                        window.refresh(); cx.notify();
+                    }))))
+                    .child(Button::new(SharedString::from(format!("commit-open-{path}"))).child(div().w_full().child(path.clone())).accessibility_label(format!("Open {path} in editor")).ghost().compact().flex_1()
+                        .on_click(cx.listener(move |view, _, window, cx| { let _ = view.root.update(cx, |root, cx| {
+                            if let Some((_, cwd)) = root.composer_cwd() { root.workspace_action(&WorkspaceAction { kind: "editor".into(), value: json!({"path":format!("{cwd}/{open_path}"),"editor":root.workspace_editor()}) },window,cx); }
+                        }); })))
+                    .child(div().text_xs().child(if excluded { "Excluded".into() } else { format!("+{} / -{}",file["insertions"].as_u64().unwrap_or(0),file["deletions"].as_u64().unwrap_or(0)) }))
+            })))
+            .child(div().text_right().child(format!("+{additions} / -{deletions}"))))
+            .child(text!("Commit message (optional)")).child(Textarea::new(&self.input).h(px(68.)))
+    }
 }
 
 #[cfg(test)]

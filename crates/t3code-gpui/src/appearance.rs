@@ -387,6 +387,9 @@ impl AssetSource for Assets {
             "icons/t3-submit.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
                 "../assets/submit.svg"
             )))),
+            "icons/pr-empty.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/pr-empty.svg"
+            )))),
             "icons/t3-stop.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
                 "../assets/stop.svg"
             )))),

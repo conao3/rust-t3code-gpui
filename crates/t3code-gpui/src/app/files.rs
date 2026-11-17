@@ -359,7 +359,41 @@ impl Root {
                     .into_any_element(),
                 PanelBody::Diff(state) => div()
                     .flex_1()
-                    .child(Diff::new(state).soft_wrap(self.diff_view.wrap))
+                    .w_full()
+                    .min_w_0()
+                    .child(
+                        Diff::new(state)
+                            .render_header(|file, _, cx| {
+                                use gpui_kit::component::diff::DiffFileStatus;
+                                let icon = match file.status() {
+                                    DiffFileStatus::Added => gpui_kit::assets::IconName::SquarePlus,
+                                    DiffFileStatus::Deleted => {
+                                        gpui_kit::assets::IconName::SquareMinus
+                                    }
+                                    _ => gpui_kit::assets::IconName::FileDiff,
+                                };
+                                h_flex()
+                                    .w_full()
+                                    .gap_2()
+                                    .child(Icon::new(icon).size(px(16.)))
+                                    .child(div().flex_1().child(text!(file.path().to_string())))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().success)
+                                            .child(text!(format!("+{}", file.additions()))),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().danger)
+                                            .child(text!(format!("-{}", file.deletions()))),
+                                    )
+                            })
+                            .soft_wrap(self.diff_view.wrap)
+                            .hunk_separator(gpui_kit::component::diff::DiffHunkSeparator::LineInfo)
+                            .change_indicator(gpui_kit::component::diff::DiffChangeIndicator::Bars),
+                    )
                     .into_any_element(),
             }
         };

@@ -3,8 +3,11 @@ use super::*;
 #[derive(Default)]
 pub(super) struct State {
     pub page: bool,
+    pub page_panel_open: bool,
     pub selected: Option<String>,
     pub list_state: String,
+    pub filters: HashMap<String, String>,
+    pub sort: String,
     pub entries: Vec<Value>,
     pub cursors: HashMap<String, Value>,
     pub loading: bool,
@@ -41,6 +44,351 @@ impl Render for Pane {
 }
 
 impl Root {
+    fn render_pr_filters(&self, cx: &Context<Self>) -> AnyElement {
+        use gpui_kit::component::menu::PopupMenuItem;
+        let weak = cx.entity().downgrade();
+        let sort_root = weak.clone();
+        let filters_root = weak.clone();
+        let current_sort = self.pr_state.sort.clone();
+        let current_state = self.pr_state.list_state.clone();
+        let current_filters = self.pr_state.filters.clone();
+        let projects = self
+            .connections
+            .iter()
+            .flat_map(|connection| {
+                let environment = connection.label().to_string();
+                connection
+                    .shell()
+                    .lock()
+                    .expect("shell lock")
+                    .projects
+                    .iter()
+                    .filter(|p| p["deletedAt"].is_null())
+                    .map(|p| {
+                        (
+                            environment.clone(),
+                            p["id"].as_str().unwrap_or_default().to_string(),
+                            p["title"].as_str().unwrap_or_default().to_string(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        h_flex()
+            .gap_2()
+            .child(
+                div().flex_1().min_w_0().child(
+                    Input::new(&self.pr_search)
+                        .role(accesskit::Role::SearchInput)
+                        .aria_label("Search pull requests")
+                        .prefix(Icon::new(IconName::Search).size(px(16.))),
+                ),
+            )
+            .child(
+                Button::new("pr-sort")
+                    .outline()
+                    .label("Sort")
+                    .icon(gpui_kit::assets::IconName::ArrowDownUp)
+                    .accessibility_label(format!(
+                        "Sort pull requests: {}",
+                        sort_label(&current_sort)
+                    ))
+                    .dropdown_menu(move |mut menu, _, _| {
+                        for (value, label) in SORTS {
+                            let weak = sort_root.clone();
+                            menu = menu.item(
+                                PopupMenuItem::new(*label)
+                                    .icon(sort_icon(value))
+                                    .checked(
+                                        current_sort == *value
+                                            || current_sort.is_empty() && *value == "ready",
+                                    )
+                                    .on_click(move |_, _, cx| {
+                                        let _ = weak.update(cx, |root, cx| {
+                                            root.pr_state.sort = (*value).into();
+                                            root.panel_revision += 1;
+                                            cx.notify();
+                                        });
+                                    }),
+                            );
+                        }
+                        menu.radio_group()
+                    }),
+            )
+            .child(
+                Button::new("pr-filters")
+                    .outline()
+                    .label("Filters")
+                    .icon(gpui_kit::assets::IconName::ListFilter)
+                    .dropdown_menu(move |mut menu, window, cx| {
+                        for (key, label, options) in FILTERS {
+                            if *key == "draft" {
+                                menu = menu.separator();
+                                for (kind, label, default) in
+                                    [("authors", "Author", "Anyone"), ("labels", "Labels", "Any")]
+                                {
+                                    let root = filters_root.clone();
+                                    let dismiss = cx.weak_entity();
+                                    let current = if kind == "authors" {
+                                        current_filters
+                                            .get("author")
+                                            .cloned()
+                                            .unwrap_or_else(|| default.into())
+                                    } else {
+                                        current_filters
+                                            .get("labels")
+                                            .and_then(|value| {
+                                                serde_json::from_str::<Vec<Vec<String>>>(value).ok()
+                                            })
+                                            .map(|labels| format!("{} selected", labels.len()))
+                                            .unwrap_or_else(|| default.into())
+                                    };
+                                    menu = menu.submenu(
+                                        format!("{label} {current}"),
+                                        window,
+                                        cx,
+                                        move |menu, window, cx| {
+                                            let facet = cx.new(|cx| {
+                                                FacetMenu::new(
+                                                    root.clone(),
+                                                    dismiss.clone(),
+                                                    kind,
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                            menu.item(PopupMenuItem::element(move |_, _| {
+                                                facet.clone()
+                                            }))
+                                        },
+                                    );
+                                }
+                            }
+                            let selected = if *key == "state" {
+                                current_state.clone()
+                            } else {
+                                current_filters.get(*key).cloned().unwrap_or_default()
+                            };
+                            let weak = filters_root.clone();
+                            let current_label = options
+                                .iter()
+                                .find(|(value, _)| *value == selected)
+                                .map(|(_, label)| *label)
+                                .unwrap_or(options[0].1);
+                            menu = menu.submenu_with_icon(
+                                Some(Icon::new(if *key == "state" && selected.is_empty() {
+                                    gpui_kit::assets::IconName::GitPullRequest
+                                } else {
+                                    gpui_kit::assets::IconName::Layers
+                                })),
+                                format!("{label} {current_label}"),
+                                window,
+                                cx,
+                                move |mut menu, _, _| {
+                                    for (value, label) in *options {
+                                        let weak = weak.clone();
+                                        menu = menu.item(
+                                            PopupMenuItem::new(*label)
+                                                .checked(selected == *value)
+                                                .on_click(move |_, _, cx| {
+                                                    let _ = weak.update(cx, |root, cx| {
+                                                        if *key == "state" {
+                                                            root.pr_state.list_state =
+                                                                (*value).into();
+                                                        } else if value.is_empty() {
+                                                            root.pr_state.filters.remove(*key);
+                                                        } else {
+                                                            root.pr_state.filters.insert(
+                                                                (*key).into(),
+                                                                (*value).into(),
+                                                            );
+                                                        }
+                                                        root.load_pull_requests(false, cx);
+                                                    });
+                                                }),
+                                        );
+                                    }
+                                    menu.radio_group()
+                                },
+                            );
+                        }
+                        let selected = current_filters.get("projectId").cloned();
+                        let selected_environment = current_filters.get("environment").cloned();
+                        let title = projects
+                            .iter()
+                            .find(|(environment, id, _)| {
+                                Some(id) == selected.as_ref()
+                                    && Some(environment) == selected_environment.as_ref()
+                            })
+                            .map(|(_, _, title)| title.as_str())
+                            .unwrap_or("All projects");
+                        let root = filters_root.clone();
+                        let projects = projects.clone();
+                        menu.separator().submenu(
+                            format!("Project {title}"),
+                            window,
+                            cx,
+                            move |mut menu, _, _| {
+                                let clear = root.clone();
+                                menu = menu.item(
+                                    PopupMenuItem::new("All projects")
+                                        .checked(selected.is_none())
+                                        .on_click(move |_, _, cx| {
+                                            let _ = clear.update(cx, |root, cx| {
+                                                root.pr_state.filters.remove("projectId");
+                                                root.pr_state.filters.remove("environment");
+                                                root.load_pull_requests(false, cx);
+                                            });
+                                        }),
+                                );
+                                for (environment, id, title) in &projects {
+                                    let root = root.clone();
+                                    let environment = environment.clone();
+                                    let id = id.clone();
+                                    menu = menu.item(
+                                        PopupMenuItem::new(title.clone())
+                                            .checked(
+                                                Some(&id) == selected.as_ref()
+                                                    && Some(&environment)
+                                                        == selected_environment.as_ref(),
+                                            )
+                                            .on_click(move |_, _, cx| {
+                                                let _ = root.update(cx, |root, cx| {
+                                                    root.pr_state
+                                                        .filters
+                                                        .insert("projectId".into(), id.clone());
+                                                    root.pr_state.filters.insert(
+                                                        "environment".into(),
+                                                        environment.clone(),
+                                                    );
+                                                    root.load_pull_requests(false, cx);
+                                                });
+                                            }),
+                                    );
+                                }
+                                menu.radio_group()
+                            },
+                        )
+                    }),
+            )
+            .child(
+                Button::new("pr-provider")
+                    .outline()
+                    .label("All")
+                    .icon(gpui_kit::assets::IconName::Plug2)
+                    .accessibility_label("Filter by provider: All")
+                    .dropdown_menu(move |menu, _, _| {
+                        let weak = weak.clone();
+                        menu.item(PopupMenuItem::new("All").checked(true).on_click(
+                            move |_, _, cx| {
+                                let _ = weak.update(cx, |root, cx| {
+                                    root.pr_state.filters.remove("host");
+                                    root.load_pull_requests(false, cx);
+                                });
+                            },
+                        ))
+                    }),
+            )
+            .child(
+                Button::new("pr-refresh")
+                    .outline()
+                    .icon(IconName::RefreshCw)
+                    .accessibility_label("Refresh pull requests")
+                    .disabled(self.pr_state.loading)
+                    .on_click(cx.listener(|root, _, _, cx| root.load_pull_requests(false, cx))),
+            )
+            .into_any_element()
+    }
+
+    fn render_pr_empty(&self, cx: &Context<Self>) -> AnyElement {
+        let query = self.pr_search.read(cx).value().trim().to_string();
+        let filtered = !self.pr_state.filters.is_empty()
+            || !matches!(self.pr_state.list_state.as_str(), "" | "open");
+        let title = if !query.is_empty() {
+            format!(
+                "Nothing matches “{}{}”",
+                query.chars().take(48).collect::<String>(),
+                if query.chars().count() > 48 {
+                    "…"
+                } else {
+                    ""
+                }
+            )
+        } else if filtered {
+            "Nothing under these filters".into()
+        } else {
+            "No pull requests".into()
+        };
+        let description = if !query.is_empty() {
+            "The hosts were searched for it. Try fewer words, or search by number, author or branch."
+        } else if filtered {
+            "Widen the state, involvement or project filter to see more."
+        } else {
+            "Pull requests from every project in this workspace appear here."
+        };
+        v_flex()
+            .flex_1()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .gap_6()
+            .child(
+                svg()
+                    .path("icons/pr-empty.svg")
+                    .w(px(128.))
+                    .h(px(80.))
+                    .text_color(cx.theme().muted_foreground.opacity(0.6)),
+            )
+            .child(
+                v_flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(px(20.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(text!(title)),
+                    )
+                    .child(
+                        div()
+                            .max_w(px(256.))
+                            .text_center()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(text!(description)),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .when(!query.is_empty(), |row| {
+                        row.child(
+                            Button::new("pr-clear-search")
+                                .outline()
+                                .icon(IconName::Search)
+                                .label("Clear search")
+                                .small()
+                                .on_click(cx.listener(|root, _, window, cx| {
+                                    root.pr_search
+                                        .update(cx, |input, cx| input.set_value("", window, cx));
+                                    root.load_pull_requests(false, cx);
+                                })),
+                        )
+                    })
+                    .child(
+                        Button::new("pr-check-again")
+                            .outline()
+                            .icon(IconName::RefreshCw)
+                            .label("Check again")
+                            .small()
+                            .on_click(
+                                cx.listener(|root, _, _, cx| root.load_pull_requests(false, cx)),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+
     pub(super) fn open_pull_requests(&mut self, page: bool, cx: &mut Context<Self>) {
         self.pr_state.page = page;
         self.pr_state.selected = None;
@@ -120,6 +468,7 @@ impl Root {
         }
         .to_string();
         let query = self.pr_search.read(cx).value().trim().to_string();
+        let filters = self.pr_state.filters.clone();
         let cursors = self.pr_state.cursors.clone();
         let connections = self.connections.clone();
         let runtime = self.runtime.clone();
@@ -127,7 +476,29 @@ impl Root {
             let result = on_runtime(&runtime, async move {
                 let mut results = Vec::new();
                 for connection in connections {
-                    let mut input = json!({"state":state,"limit":100});
+                    if filters
+                        .get("environment")
+                        .is_some_and(|environment| environment != connection.label())
+                    {
+                        continue;
+                    }
+                    let mut input = json!({"state":state,"limit":99});
+                    let mut qualifiers = serde_json::Map::new();
+                    for (key, value) in &filters {
+                        if key == "environment" {
+                            continue;
+                        }
+                        if key == "labels" {
+                            qualifiers.insert(key.clone(), serde_json::from_str(value)?);
+                        } else if matches!(key.as_str(), "involvement" | "host" | "projectId") {
+                            input[key] = json!(value);
+                        } else {
+                            qualifiers.insert(key.clone(), json!(value));
+                        }
+                    }
+                    if !qualifiers.is_empty() {
+                        input["filters"] = Value::Object(qualifiers);
+                    }
                     if !query.is_empty() {
                         input["query"] = json!(query);
                     }
@@ -218,6 +589,7 @@ impl Root {
             self.activate_panel(id.clone(), cx);
         }
         self.pr_state.selected = Some(id.clone());
+        self.pr_state.page_panel_open = true;
         self.pr_state.views.entry(id.clone()).or_insert(Detail {
             environment,
             reference,
@@ -467,7 +839,7 @@ impl Root {
             dialog
                 .title(format!("{} pull request", action_label(action)))
                 .footer(git_controls::dialog_footer(action_label(action)))
-                .child("Confirm this action on the pull request host.")
+                .child(text!("Confirm this action on the pull request host."))
                 .on_ok(move |_, _, cx| {
                     let _ = weak.update(cx, |root, cx| {
                         if root.pull_request_id().as_ref() != Some(&id) {
@@ -485,66 +857,23 @@ impl Root {
     }
 
     pub(super) fn render_pull_requests(&self, cx: &Context<Self>) -> AnyElement {
-        if let Some(id) = self.pull_request_id()
+        if !self.pr_state.page
+            && let Some(id) = self.pull_request_id()
             && let Some(view) = self.pr_state.views.get(&id)
         {
             return self.render_pr_detail(view, cx);
         }
         let mut body = v_flex()
             .id("pull-request-list")
+            .role(accesskit::Role::Region)
+            .aria_label("Pull requests")
             .size_full()
             .min_h_0()
-            .gap_2()
-            .p_4()
-            .child(
-                h_flex()
-                    .child(div().flex_1().text_lg().child("Pull requests"))
-                    .child(
-                        Button::new("close-pr-page")
-                            .label("Close")
-                            .ghost()
-                            .on_click(cx.listener(|root, _, _, cx| {
-                                root.pr_state.page = false;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&self.pr_search).role(accesskit::Role::SearchInput)),
-                    )
-                    .child(Button::new("pr-search").label("Search").on_click(
-                        cx.listener(|root, _, _, cx| root.load_pull_requests(false, cx)),
-                    )),
-            )
-            .child(
-                h_flex().gap_1().children(
-                    [
-                        ("open", "Open"),
-                        ("closed", "Closed"),
-                        ("merged", "Merged"),
-                        ("all", "All"),
-                    ]
-                    .into_iter()
-                    .map(|(state, label)| {
-                        Button::new(label)
-                            .label(label)
-                            .ghost()
-                            .selected(
-                                self.pr_state.list_state == state
-                                    || state == "open" && self.pr_state.list_state.is_empty(),
-                            )
-                            .on_click(cx.listener(move |root, _, _, cx| {
-                                root.pr_state.list_state = state.into();
-                                root.load_pull_requests(false, cx);
-                            }))
-                    }),
-                ),
-            )
+            .gap_4()
+            .px_6()
+            .pt_6()
+            .pb_12()
+            .child(self.render_pr_filters(cx))
             .children(
                 self.pr_state
                     .error
@@ -556,7 +885,9 @@ impl Root {
             .flex_1()
             .min_h_0()
             .overflow_y_scroll();
-        for entry in &self.pr_state.entries {
+        let mut entries = self.pr_state.entries.iter().collect::<Vec<_>>();
+        entries.sort_by(|a, b| compare_entries(a, b, &self.pr_state.sort));
+        for entry in entries {
             let label = format!(
                 "#{} {}",
                 entry["number"],
@@ -596,17 +927,38 @@ impl Root {
             );
         }
         if self.pr_state.loading {
-            list = list.child("Loading pull requests…");
+            list = list.child(div().h(px(160.)));
         } else if self.pr_state.entries.is_empty() && self.pr_state.error.is_none() {
-            list = list.child("No pull requests");
+            list = list.child(self.render_pr_empty(cx));
         }
         body = body.child(list);
         if !self.pr_state.cursors.is_empty() {
             body = body.child(
                 Button::new("more-prs")
-                    .label("Load more")
+                    .label("Load more pull requests")
                     .on_click(cx.listener(|root, _, _, cx| root.load_pull_requests(true, cx))),
             );
+        }
+        if self.pr_state.page
+            && self.pr_state.page_panel_open
+            && let Some(view) = self
+                .pr_state
+                .selected
+                .as_ref()
+                .and_then(|id| self.pr_state.views.get(id))
+        {
+            return h_flex()
+                .size_full()
+                .child(body.flex_1().w_0())
+                .child(
+                    div()
+                        .w(px(self.right_panel_width))
+                        .h_full()
+                        .border_l_1()
+                        .border_color(cx.theme().border)
+                        .child(self.render_pr_detail(view, cx)),
+                )
+                .into_any_element();
         }
         body.into_any_element()
     }
@@ -621,7 +973,7 @@ impl Root {
             .gap_3()
             .p_4();
         if view.loading {
-            content = content.child("Loading pull request…");
+            content = content.child(text!("Loading pull request…"));
         }
         if let Some(error) = &view.error {
             content = content.child(div().text_color(cx.theme().danger).child(error.clone()));
@@ -855,5 +1207,415 @@ fn action_label(action: &str) -> &'static str {
         "enable-auto-merge" => "Enable auto-merge",
         "disable-auto-merge" => "Disable auto-merge",
         _ => "Confirm",
+    }
+}
+
+const SORTS: &[(&str, &str)] = &[
+    ("ready", "Merge readiness"),
+    ("blocked", "Blocked on me"),
+    ("updated", "Recently updated"),
+    ("newest", "Newest shown"),
+    ("oldest", "Oldest shown"),
+    ("largest", "Largest shown"),
+    ("smallest", "Smallest shown"),
+];
+
+type FilterOptions = (
+    &'static str,
+    &'static str,
+    &'static [(&'static str, &'static str)],
+);
+const FILTERS: &[FilterOptions] = &[
+    (
+        "state",
+        "State",
+        &[
+            ("all", "All"),
+            ("", "Open"),
+            ("closed", "Closed"),
+            ("merged", "Merged"),
+        ],
+    ),
+    (
+        "involvement",
+        "Involvement",
+        &[
+            ("", "All"),
+            ("reviewing", "Reviewing"),
+            ("authored", "Authored"),
+        ],
+    ),
+    (
+        "draft",
+        "Draft",
+        &[
+            ("", "All"),
+            ("only", "Drafts only"),
+            ("hide", "Hide drafts"),
+        ],
+    ),
+    (
+        "review",
+        "Review",
+        &[
+            ("", "All"),
+            ("approved", "Approved"),
+            ("changes-requested", "Changes requested"),
+            ("review-required", "Review required"),
+            ("none", "No reviews"),
+        ],
+    ),
+    (
+        "checks",
+        "Checks",
+        &[("", "All"), ("passing", "Passing"), ("failing", "Failing")],
+    ),
+];
+
+fn sort_label(sort: &str) -> &'static str {
+    SORTS
+        .iter()
+        .find(|(value, _)| *value == sort)
+        .unwrap_or(&SORTS[0])
+        .1
+}
+
+fn compare_entries(a: &Value, b: &Value, sort: &str) -> std::cmp::Ordering {
+    let size = |entry: &Value| {
+        entry["additions"].as_i64().unwrap_or(0) + entry["deletions"].as_i64().unwrap_or(0)
+    };
+    let ready = |entry: &Value| {
+        if entry["mergeability"] == "conflicting" {
+            4
+        } else if entry["state"] != "open" {
+            3
+        } else if entry["isDraft"] == true {
+            2
+        } else if entry["checksState"] == "passing" && entry["reviewDecision"] == "approved" {
+            0
+        } else if entry["checksState"] == "passing" {
+            1
+        } else {
+            2
+        }
+    };
+    let order = match sort {
+        "newest" => b["createdAt"].as_str().cmp(&a["createdAt"].as_str()),
+        "oldest" => a["createdAt"].as_str().cmp(&b["createdAt"].as_str()),
+        "largest" => size(b).cmp(&size(a)),
+        "smallest" => size(a).cmp(&size(b)),
+        "ready" | "" => ready(a)
+            .cmp(&ready(b))
+            .then_with(|| (size(b) > 0).cmp(&(size(a) > 0)))
+            .then_with(|| size(a).cmp(&size(b))),
+        _ => std::cmp::Ordering::Equal,
+    };
+    order.then_with(|| b["updatedAt"].as_str().cmp(&a["updatedAt"].as_str()))
+}
+
+struct FacetMenu {
+    root: WeakEntity<Root>,
+    dismiss: WeakEntity<gpui_kit::component::menu::PopupMenu>,
+    kind: &'static str,
+    input: Entity<InputState>,
+    options: Vec<String>,
+    selected: Vec<String>,
+    loading: bool,
+    error: bool,
+    started: bool,
+    cursor: usize,
+    request: u64,
+    _subscription: Subscription,
+}
+
+impl FacetMenu {
+    fn new(
+        root: WeakEntity<Root>,
+        dismiss: WeakEntity<gpui_kit::component::menu::PopupMenu>,
+        kind: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(if kind == "authors" {
+                "Search authors"
+            } else {
+                "Search labels"
+            })
+        });
+        let subscription = cx.subscribe(&input, |view, _, event: &InputEvent, cx| {
+            if matches!(event, InputEvent::Change) {
+                view.load(cx);
+            }
+        });
+        let selected = root
+            .upgrade()
+            .map(|root| {
+                let filters = &root.read(cx).pr_state.filters;
+                if kind == "authors" {
+                    filters.get("author").cloned().into_iter().collect()
+                } else {
+                    filters
+                        .get("labels")
+                        .and_then(|value| serde_json::from_str::<Vec<Vec<String>>>(value).ok())
+                        .unwrap_or_default()
+                        .into_iter()
+                        .flatten()
+                        .collect()
+                }
+            })
+            .unwrap_or_default();
+        Self {
+            root,
+            dismiss,
+            kind,
+            input,
+            options: Vec::new(),
+            selected,
+            loading: false,
+            error: false,
+            started: false,
+            cursor: 0,
+            request: 0,
+            _subscription: subscription,
+        }
+    }
+
+    fn load(&mut self, cx: &mut Context<Self>) {
+        let Some(root) = self.root.upgrade() else {
+            return;
+        };
+        let root = root.read(cx);
+        let connections = root.connections.clone();
+        let runtime = root.runtime.clone();
+        let filters = root.pr_state.filters.clone();
+        let kind = self.kind;
+        let query = self
+            .input
+            .read(cx)
+            .value()
+            .trim()
+            .chars()
+            .take(100)
+            .collect::<String>();
+        self.request += 1;
+        let request = self.request;
+        self.loading = true;
+        self.error = false;
+        self.cursor = 0;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(250))
+                .await;
+            if this
+                .update(cx, |view, _| view.request != request)
+                .unwrap_or(true)
+            {
+                return;
+            }
+            let result = on_runtime(&runtime, async move {
+                let mut options = Vec::new();
+                for connection in connections {
+                    if filters
+                        .get("environment")
+                        .is_some_and(|environment| environment != connection.label())
+                    {
+                        continue;
+                    }
+                    let mut input = json!({"kind":kind});
+                    for key in ["host", "projectId"] {
+                        if let Some(value) = filters.get(key) {
+                            input[key] = json!(value);
+                        }
+                    }
+                    if !query.is_empty() {
+                        input["query"] = json!(query);
+                    }
+                    let response = connection
+                        .request("pullRequests.filterOptions", input)
+                        .await?;
+                    for option in response[kind].as_array().into_iter().flatten() {
+                        if let Some(name) =
+                            option[if kind == "authors" { "login" } else { "name" }].as_str()
+                        {
+                            options.push(name.to_string());
+                        }
+                    }
+                }
+                options.sort_by_key(|name| name.to_lowercase());
+                options.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+                Ok(options)
+            })
+            .await;
+            let _ = this.update(cx, |view, cx| {
+                if view.request != request {
+                    return;
+                }
+                view.loading = false;
+                match result {
+                    Ok(options) => view.options = options,
+                    Err(_) => {
+                        view.options.clear();
+                        view.error = true;
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn choose(&mut self, value: String, cx: &mut Context<Self>) {
+        if self.kind == "authors" {
+            self.selected = (!value.is_empty()).then_some(value).into_iter().collect();
+        } else if let Some(index) = self
+            .selected
+            .iter()
+            .position(|name| name.eq_ignore_ascii_case(&value))
+        {
+            self.selected.remove(index);
+        } else if self.selected.len() < 10 {
+            self.selected.push(value);
+        }
+        let _ = self.root.update(cx, |root, cx| {
+            let key = if self.kind == "authors" {
+                "author"
+            } else {
+                "labels"
+            };
+            if self.selected.is_empty() {
+                root.pr_state.filters.remove(key);
+            } else {
+                let value = if self.kind == "authors" {
+                    self.selected[0].clone()
+                } else {
+                    serde_json::to_string(
+                        &self
+                            .selected
+                            .iter()
+                            .map(|name| vec![name])
+                            .collect::<Vec<_>>(),
+                    )
+                    .expect("label groups")
+                };
+                root.pr_state.filters.insert(key.into(), value);
+            }
+            root.load_pull_requests(false, cx);
+        });
+        if self.kind == "authors" {
+            let _ = self.dismiss.update(cx, |_, cx| cx.emit(gpui::DismissEvent));
+        }
+        cx.notify();
+    }
+}
+
+impl Render for FacetMenu {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.started {
+            self.started = true;
+            self.load(cx);
+            let input = self.input.clone();
+            window.defer(cx, move |window, cx| {
+                input.update(cx, |input, cx| input.focus(window, cx))
+            });
+        }
+        let mut options = self.options.clone();
+        if self.kind == "authors" {
+            options.insert(0, String::new());
+        }
+        let keyboard_options = options.clone();
+        v_flex()
+            .w(px(256.))
+            .gap_1()
+            .child(
+                Input::new(&self.input).aria_label(if self.kind == "authors" {
+                    "Search authors"
+                } else {
+                    "Search labels"
+                }),
+            )
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, _, cx| {
+                match event.keystroke.key.as_str() {
+                    "down" => {
+                        view.cursor =
+                            (view.cursor + 1).min(keyboard_options.len().saturating_sub(1))
+                    }
+                    "up" => view.cursor = view.cursor.saturating_sub(1),
+                    "enter" => {
+                        if let Some(value) = keyboard_options.get(view.cursor) {
+                            view.choose(value.clone(), cx);
+                        }
+                    }
+                    _ => return,
+                }
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .children(options.into_iter().enumerate().map(|(index, value)| {
+                let checked = if value.is_empty() {
+                    self.selected.is_empty()
+                } else {
+                    self.selected
+                        .iter()
+                        .any(|name| name.eq_ignore_ascii_case(&value))
+                };
+                let label = if value.is_empty() {
+                    "Anyone".to_string()
+                } else {
+                    value.clone()
+                };
+                h_flex()
+                    .id(("pr-facet-option", index))
+                    .role(if self.kind == "authors" {
+                        accesskit::Role::MenuItemRadio
+                    } else {
+                        accesskit::Role::MenuItemCheckBox
+                    })
+                    .aria_label(label.clone())
+                    .aria_toggled(if checked {
+                        accesskit::Toggled::True
+                    } else {
+                        accesskit::Toggled::False
+                    })
+                    .p_2()
+                    .gap_2()
+                    .rounded_md()
+                    .when(index == self.cursor, |row| row.bg(cx.theme().accent))
+                    .child(
+                        Icon::new(IconName::Check)
+                            .size(px(14.))
+                            .when(!checked, |icon| icon.invisible()),
+                    )
+                    .child(label)
+                    .on_click(cx.listener(move |view, _, _, cx| view.choose(value.clone(), cx)))
+            }))
+            .when(!self.loading && self.options.is_empty(), |list| {
+                list.child(
+                    Button::new("facet-empty")
+                        .role(accesskit::Role::MenuItem)
+                        .disabled(true)
+                        .ghost()
+                        .label(match (self.kind, self.error) {
+                            ("authors", false) => "No authors found",
+                            ("authors", true) => "Couldn't search authors on the host",
+                            (_, false) => "No labels found",
+                            (_, true) => "Couldn't search labels on the host",
+                        }),
+                )
+            })
+    }
+}
+
+fn sort_icon(sort: &str) -> gpui_kit::assets::IconName {
+    use gpui_kit::assets::IconName;
+    match sort {
+        "ready" => IconName::ListChecks,
+        "blocked" => IconName::UserLock,
+        "updated" => IconName::Clock,
+        "newest" => IconName::CalendarArrowDown,
+        "oldest" => IconName::CalendarArrowUp,
+        "largest" => IconName::Maximize2,
+        _ => IconName::Minimize2,
     }
 }

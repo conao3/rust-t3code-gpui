@@ -1,0 +1,22 @@
+{
+  "name": "git-commit-selection",
+  "viewport": [1400, 900],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {"action": "click", "selector": {"role": "button", "name": "Panel fixture, UI parity"}},
+    {"action": "press", "value": "ctrl+alt+b"},
+    {"action": "click", "selector": {"role": "button", "name": "Git action options"}},
+    {"action": "click", "selector": {"role": "menuitem", "name": "Commit"}, "native": {"role": "menu item", "name": "Commit"}},
+    {"action": "checkpoint", "selector": {"role": "dialog", "name": "Commit changes"}, "count": 1},
+    {"action": "click", "selector": {"role": "button", "name": "Edit", "ancestor": {"role": "dialog", "name": "Commit changes"}}},
+    {"action": "checkpoint", "selector": {"role": "checkbox", "name": ""}, "native": {"role": "check box", "name": ""}, "count": 3},
+    {"action": "click", "selector": {"role": "checkbox", "name": "", "index": 1}, "native": {"role": "check box", "name": "", "index": 1}},
+    {"action": "click", "selector": {"role": "button", "name": "Done"}},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Edit", "ancestor": {"role": "dialog", "name": "Commit changes"}}, "count": 1},
+    {"action": "click", "selector": {"role": "textbox", "name": "Leave empty to auto-generate"}},
+    {"action": "type", "value": "Commit selected parity file"},
+    {"action": "click", "selector": {"role": "button", "name": "Commit", "ancestor": {"role": "dialog", "name": "Commit changes"}}},
+    {"action": "checkpoint", "selector": {"role": "dialog", "name": "Commit changes"}, "count": 0}
+  ]
+}
