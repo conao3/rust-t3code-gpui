@@ -10,6 +10,8 @@ pub(super) struct State {
     pub pull_requests: HashMap<String, (String, Value)>,
     pub width: Option<f32>,
     #[serde(skip)]
+    pub(super) task_to_edit: std::cell::RefCell<Option<Value>>,
+    #[serde(skip)]
     files: HashMap<String, FilePanel>,
     #[serde(skip)]
     tab_scroll: ScrollHandle,

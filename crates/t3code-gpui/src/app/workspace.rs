@@ -1271,30 +1271,12 @@ impl Render for ThreadServices {
                                 .accessibility_label(format!("Edit {title}"))
                                 .ghost()
                                 .small()
-                                .on_click(cx.listener(move |view, _, window, cx| {
-                                    view.manage_tasks(cx);
-                                    let environment = view.environment.clone();
+                                .on_click(cx.listener(move |view, _, _, cx| {
                                     let task = edit_task.clone();
-                                    let _ = view.root.update(cx, |root, cx| {
-                                        let weak = cx.entity().downgrade();
-                                        let panel = window.use_keyed_state(
-                                            SharedString::from(format!(
-                                                "settings-tasks:{environment}"
-                                            )),
-                                            cx,
-                                            |window, cx| {
-                                                settings_tasks::Tasks::new(
-                                                    weak,
-                                                    environment,
-                                                    root,
-                                                    window,
-                                                    cx,
-                                                )
-                                            },
-                                        );
-                                        panel
-                                            .update(cx, |editor, cx| editor.edit(task, window, cx));
+                                    let _ = view.root.update(cx, |root, _| {
+                                        *root.right_panel.task_to_edit.borrow_mut() = Some(task);
                                     });
+                                    view.manage_tasks(cx);
                                 })),
                         )
                         .when(task["schedule"]["type"] != "webhook", |row| {
