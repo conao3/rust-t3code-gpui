@@ -718,6 +718,8 @@ impl Root {
         match action.kind.as_str() {
             "diff-base" => {
                 self.diff_view.base_ref = action.value.as_str().map(str::to_string);
+                self.diff_view.collapsed = true;
+                self.file_panel = None;
                 self.branch_anchor = None;
                 self.refresh_diff(cx);
                 self.panel_focus.focus(window, cx);
