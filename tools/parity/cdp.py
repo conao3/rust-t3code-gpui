@@ -4,6 +4,9 @@ import argparse
 import asyncio
 import base64
 import json
+import os
+import re
+import subprocess
 import time
 from pathlib import Path
 from urllib.error import URLError
@@ -117,6 +120,43 @@ class Cdp:
         if "exceptionDetails" in reply:
             raise RuntimeError(str(reply["exceptionDetails"]))
         return reply.get("result", {}).get("value")
+
+    async def viewport(self, width, height, display):
+        await self.call("Emulation.clearDeviceMetricsOverride")
+        title = await self.evaluate("document.title")
+        environment = os.environ | {"DISPLAY": display}
+
+        def xdo(*args):
+            return subprocess.check_output(
+                ["xdotool", *map(str, args)], env=environment, text=True, timeout=10
+            ).strip()
+
+        windows = await asyncio.to_thread(
+            xdo, "search", "--onlyvisible", "--name", "^" + re.escape(title) + "$"
+        )
+        if len(windows.splitlines()) != 1:
+            raise RuntimeError("Expected one isolated Electron window")
+        window = windows.strip()
+        await asyncio.to_thread(xdo, "windowmove", window, 40, 40)
+        for _ in range(40):
+            actual = await self.evaluate("({width: innerWidth, height: innerHeight})")
+            if actual == {"width": width, "height": height}:
+                return
+            geometry = dict(
+                line.split("=", 1)
+                for line in (
+                    await asyncio.to_thread(xdo, "getwindowgeometry", "--shell", window)
+                ).splitlines()
+            )
+            await asyncio.to_thread(
+                xdo,
+                "windowsize",
+                window,
+                int(geometry["WIDTH"]) + width - actual["width"],
+                int(geometry["HEIGHT"]) + height - actual["height"],
+            )
+            await asyncio.sleep(0.2)
+        raise RuntimeError(f"Cannot set Electron content viewport: {actual}")
 
     async def server_origin(self):
         if self.page_url.startswith(("http://", "https://")):

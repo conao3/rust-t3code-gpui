@@ -278,13 +278,7 @@ async def main():
                 f"Reference appearance is {reference_appearance!r}, expected {scenario['theme']!r}; "
                 "set its appearance through Settings before comparing"
             )
-        await reference.call(
-            "Emulation.setDeviceMetricsOverride",
-            width=width,
-            height=height,
-            deviceScaleFactor=1,
-            mobile=False,
-        )
+        await reference.viewport(width, height, native.session["display"])
         await native.viewport(width, height)
         reports = {
             "reference": await execute(
