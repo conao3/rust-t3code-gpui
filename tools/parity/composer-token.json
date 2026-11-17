@@ -1,0 +1,79 @@
+{
+  "name": "composer-token",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "type",
+      "value": "@README"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "@README"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "type",
+      "value": "token fixture"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "text_contains": "token fixture"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Stop generation"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    }
+  ]
+}

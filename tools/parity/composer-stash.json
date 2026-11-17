@@ -1,0 +1,96 @@
+{
+  "name": "composer-stash-and-restore",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1000,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Composer stash alpha"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "Composer stash alpha"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "type",
+      "value": "Composer stash beta"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Restore stashed prompt: Composer stash beta"
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "Composer stash beta"
+    }
+  ]
+}

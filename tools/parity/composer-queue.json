@@ -1,0 +1,102 @@
+{
+  "name": "composer-queue",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Composer queue fixture, Done, UI parity"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "press",
+      "value": "alt+up"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture"
+      },
+      "value": "Queued beta"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "type",
+      "value": "Queued beta edited"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Update queued message"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Edit queued message"
+      },
+      "count": 2
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Remove queued message"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Edit queued message"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+enter"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Stop generation"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Composer queue fixture"
+      },
+      "count": 1
+    }
+  ]
+}

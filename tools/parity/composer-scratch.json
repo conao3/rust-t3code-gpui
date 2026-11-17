@@ -1,0 +1,66 @@
+{
+  "name": "composer-scratch",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+n"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Scratch fixture"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Stop generation"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    }
+  ]
+}
