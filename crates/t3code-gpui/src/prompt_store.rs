@@ -21,8 +21,8 @@ pub struct Store {
     pub entries: Vec<Entry>,
 }
 impl Store {
-    pub fn path(drafts: &Path) -> PathBuf {
-        drafts.with_file_name("prompt-stash.json")
+    pub fn path(drafts: &Path, pane_id: u64) -> PathBuf {
+        drafts.with_file_name(format!("prompt-stash-{pane_id}.json"))
     }
     pub fn load(path: &Path) -> Result<Self> {
         match std::fs::read(path) {
@@ -279,6 +279,37 @@ pub fn step(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pane_stashes_survive_independent_updates() {
+        let directory = tempfile::tempdir().unwrap();
+        let drafts = directory.path().join("drafts.json");
+        let first = Store::path(&drafts, 7);
+        let second = Store::path(&drafts, 8);
+        for (path, prompt) in [(&first, "first pane"), (&second, "second pane")] {
+            Store::default()
+                .push(
+                    path,
+                    Entry {
+                        id: "same-entry-id".into(),
+                        prompt: prompt.into(),
+                        attachments: vec![],
+                        dropped: vec![],
+                    },
+                )
+                .unwrap();
+        }
+        let mut store = Store::load(&first).unwrap();
+        assert_eq!(
+            store.take(&first, "same-entry-id").unwrap().unwrap().prompt,
+            "first pane"
+        );
+        assert!(Store::load(&first).unwrap().entries.is_empty());
+        assert_eq!(
+            Store::load(&second).unwrap().entries[0].prompt,
+            "second pane"
+        );
+    }
+
     #[test]
     fn stash_is_durable_and_bounded() {
         let dir = tempfile::tempdir().unwrap();

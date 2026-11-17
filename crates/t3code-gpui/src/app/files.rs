@@ -10,7 +10,8 @@ impl Root {
                 state.focus(window, cx);
             });
         } else {
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
         }
         cx.notify();
@@ -50,7 +51,7 @@ impl Root {
 
     pub(super) fn open_file(&mut self, path: String, cx: &mut Context<Self>) {
         let Some((environment, cwd)) = self.composer_cwd() else {
-            self.message = Some("Open a thread or a new thread first.".into());
+            self.conversation.message = Some("Open a thread or a new thread first.".into());
             cx.notify();
             return;
         };
@@ -88,7 +89,7 @@ impl Root {
                         );
                         root.file_find_again(cx);
                     }
-                    Err(error) => root.message = Some(format!("{error:#}")),
+                    Err(error) => root.conversation.message = Some(format!("{error:#}")),
                 }
                 cx.notify();
             });
@@ -103,7 +104,8 @@ impl Root {
         let closer = move |window: &mut Window, cx: &mut App| {
             let _ = weak.update(cx, |root, cx| {
                 root.file_picker_open = false;
-                root.composer
+                root.conversation
+                    .composer
                     .update(cx, |state, cx| state.focus(window, cx));
                 cx.notify();
             });
@@ -151,7 +153,7 @@ impl Root {
             return;
         }
         let Some((environment, cwd)) = self.composer_cwd() else {
-            self.message = Some("Open a thread or a new thread first.".into());
+            self.conversation.message = Some("Open a thread or a new thread first.".into());
             cx.notify();
             return;
         };
@@ -637,7 +639,8 @@ impl Root {
             self.close_panel_tab(&id, cx);
         }
         self.file_find_open = false;
-        self.composer
+        self.conversation
+            .composer
             .update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
     }

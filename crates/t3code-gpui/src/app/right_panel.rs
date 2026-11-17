@@ -76,7 +76,7 @@ impl Root {
 
     pub(super) fn follow_right_panel(&mut self, cx: &mut Context<Self>) {
         let target = self.current().or_else(|| {
-            self.draft.as_ref().map(|draft| {
+            self.conversation.draft.as_ref().map(|draft| {
                 (
                     draft.environment.clone().unwrap_or_default(),
                     draft.id.clone(),
@@ -135,7 +135,7 @@ impl Root {
             Ok(())
         })();
         if let Err(error) = result {
-            self.message = Some(format!("Could not save right panels: {error:#}"));
+            self.conversation.message = Some(format!("Could not save right panels: {error:#}"));
         }
     }
 
@@ -203,7 +203,8 @@ impl Root {
             self.load_active_surface(cx);
             self.panel_focus.focus(window, cx);
         } else {
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
         }
         self.panel_revision += 1;
@@ -427,7 +428,8 @@ impl Root {
                         "escape" => {
                             root.right_panel.launcher = false;
                             root.panel_revision += 1;
-                            root.composer
+                            root.conversation
+                                .composer
                                 .update(cx, |state, cx| state.focus(window, cx));
                             cx.notify();
                         }

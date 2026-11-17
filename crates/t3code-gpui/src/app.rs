@@ -49,6 +49,7 @@ mod composer_prompts;
 mod composer_queue;
 mod composer_scratch;
 mod composer_tokens;
+mod conversation;
 mod diff;
 mod diff_controls;
 mod files;
@@ -56,7 +57,10 @@ mod find;
 mod git_controls;
 mod hosts;
 mod lineage;
+mod minimap;
 mod palette;
+mod pane_layout;
+mod project_search;
 mod pull_requests;
 mod right_panel;
 mod settings;
@@ -72,6 +76,7 @@ mod sidebar_view;
 mod snooze_controls;
 mod snooze_options;
 mod terminal;
+mod thread_commands;
 mod thread_details;
 #[path = "app/timeline.rs"]
 mod timeline_view;
@@ -82,6 +87,7 @@ mod usage_data;
 mod workspace_view;
 
 use composer::ComposerControlsPane;
+use conversation::ConversationState;
 use sidebar_view::SidebarPane;
 use timeline_view::TimelinePane;
 use workspace_view::DetailsPane;
@@ -121,6 +127,7 @@ actions!(
         TogglePin,
         Find,
         TogglePalette,
+        ToggleProjectSearch,
         ToggleFilePicker,
         ToggleDiff,
         ToggleExplorer,
@@ -161,6 +168,16 @@ actions!(
         SplitTerminalVertical,
         NewTerminal,
         CloseTerminal,
+        OpenSideChat,
+        SplitConversation,
+        SplitConversationVertical,
+        CloseConversation,
+        FocusNextWorkspace,
+        FocusPreviousWorkspace,
+        ReopenClosed,
+        CopyThreadReference,
+        RegenerateTitle,
+        UndoThreadAction,
     ]
 );
 
@@ -179,6 +196,12 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "composer.effort" => Box::new(OpenEffort),
         "composer.cycleHost" => Box::new(CycleComposerHost),
         "composer.host" => Box::new(OpenComposerHost),
+        "workspace.focusNext" => Box::new(FocusNextWorkspace),
+        "workspace.focusPrevious" => Box::new(FocusPreviousWorkspace),
+        "thread.copyReference" => Box::new(CopyThreadReference),
+        "thread.regenerateTitle" => Box::new(RegenerateTitle),
+        "thread.undo" => Box::new(UndoThreadAction),
+        "view.reopenClosed" => Box::new(ReopenClosed),
         "terminal.toggle" => Box::new(ToggleTerminal),
         "terminal.split" => Box::new(SplitTerminal),
         "terminal.splitVertical" => Box::new(SplitTerminalVertical),
@@ -203,6 +226,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "sidebar.toggle" => Box::new(ToggleSidebar),
         "thread.pin" => Box::new(TogglePin),
         "chat.find" => Box::new(Find),
+        "projectSearch.toggle" => Box::new(ToggleProjectSearch),
         "commandPalette.toggle" => Box::new(TogglePalette),
         "filePicker.toggle" => Box::new(ToggleFilePicker),
         "diff.toggle" => Box::new(ToggleDiff),
@@ -346,6 +370,7 @@ struct Completion {
     selected: usize,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct NewThreadDraft {
     id: String,
     environment: Option<String>,
@@ -359,6 +384,7 @@ struct NewThreadDraft {
 
 #[derive(PartialEq)]
 struct SidebarStamp {
+    undo: Vec<(String, String, &'static str)>,
     catalog_revision: u64,
     jump_labels: Vec<Option<String>>,
     history_available: (bool, bool),
@@ -383,6 +409,9 @@ struct ParkPlan {
 
 #[derive(PartialEq)]
 struct ComposerControlsStamp {
+    width: u32,
+    workspace_revision: u64,
+    context_menu: (bool, usize),
     target: Option<(String, Option<Value>, String, String)>,
     current: Option<(String, String)>,
     draft: bool,
@@ -437,6 +466,17 @@ pub struct Root {
     panel_revision: u64,
     panel_stamp: String,
     panel_pane: Entity<right_panel::Pane>,
+    conversation: ConversationState,
+    thread_undos: Vec<thread_commands::UndoEntry>,
+    thread_undo_epoch: u64,
+    thread_undo_claimed: bool,
+    panes: HashMap<u64, ConversationState>,
+    pane_layout: pane_layout::Layout,
+    pane_closed: Vec<pane_layout::SavedPane>,
+    pane_restored: bool,
+    pane_save_pending: bool,
+    pane_next_id: u64,
+    pane_resize: Option<(Vec<bool>, bool, Bounds<Pixels>)>,
     lineage_data: crate::lineage::Details,
     lineage_target: Option<(String, String)>,
     lineage_revision: u64,
@@ -454,16 +494,6 @@ pub struct Root {
     editor_picker_focus: FocusHandle,
     details_pane: Entity<DetailsPane>,
     details_stamp: Option<DetailsStamp>,
-    workspace_revision: u64,
-    branch_picker: Entity<CommandState>,
-    branch_anchor: Option<&'static str>,
-    branch_refs: Vec<Value>,
-    branch_cursor: Option<u64>,
-    branch_query: String,
-    branch_request: u64,
-    branch_loading: bool,
-    workspace_watch: Option<workspace::Watch>,
-    workspace_status: workspace::Status,
     workspace_sender: async_channel::Sender<workspace::Update>,
     _workspace_updates: Task<()>,
     canvas_width: f32,
@@ -480,42 +510,13 @@ pub struct Root {
     model_catalogs: HashMap<String, (Value, Vec<models::Instance>)>,
     sidebar_catalogs: HashMap<String, crate::provider_display::Catalog>,
     model_catalog_revision: u64,
-    composer_controls: Entity<ComposerControlsPane>,
-    composer_controls_stamp: Option<ComposerControlsStamp>,
     entries: Vec<ThreadEntry>,
     entries_revision: u64,
     statuses: HashMap<(String, String), ThreadStatus>,
     host_filter: Option<String>,
-    open: Option<OpenThread>,
-    draft: Option<NewThreadDraft>,
-    rows: Vec<Row>,
-    row_views: Vec<Entity<RowView>>,
-    timeline_pane: Entity<TimelinePane>,
-    row_subscriptions: HashMap<String, Subscription>,
-    list_state: ListState,
-    user_cursor: Option<usize>,
-    hovered_message: Option<String>,
-    composer: Entity<TextareaState>,
-    message: Option<String>,
-    picker_open: bool,
-    picker_instance: Option<String>,
-    permissions_menu: Option<Entity<permissions::Menu>>,
-    permissions_subscription: Option<Subscription>,
-    model_picker: Entity<CommandState>,
-    attachments: Vec<attachments::Pending>,
-    composer_sends: HashSet<String>,
-    dictation: composer_dictation::Dictation,
-    composer_attachments: HashMap<String, Vec<attachments::Pending>>,
-    queue_edit: Option<composer_queue::Edit>,
-    prompts: composer_prompts::Prompts,
-    composer_choices: composer_controls::Controls,
-    queued: Vec<timeline::Queued>,
-    thread_loading: bool,
-    completion: Option<Completion>,
-    completion_seq: u64,
-    find_input: Entity<InputState>,
     palette: Entity<CommandState>,
     palette_open: bool,
+    project_search: project_search::ProjectSearch,
     file_picker: Entity<CommandState>,
     file_picker_open: bool,
     file_hits: Vec<String>,
@@ -524,13 +525,9 @@ pub struct Root {
     file_find_input: Entity<InputState>,
     file_find_open: bool,
     panel_focus: FocusHandle,
-    find_open: bool,
-    find_hits: Vec<usize>,
-    find_at: usize,
     drafts: Drafts,
     drafts_path: std::path::PathBuf,
     drafts_save_scheduled: bool,
-    pending_composer: Option<String>,
     key_rules: Vec<keymap::Rule>,
     jump_modifiers: Modifiers,
     jump_hints: bool,
@@ -554,7 +551,6 @@ pub struct Root {
     collapsed_families: HashSet<(String, String)>,
     window_active: bool,
     shell_dirty: bool,
-    thread_dirty: bool,
     redraw_scheduled: bool,
     focus: FocusHandle,
     host_tasks: HashMap<String, Vec<tokio::task::JoinHandle<()>>>,
@@ -571,11 +567,7 @@ impl Root {
     fn new(
         (config, config_path): (Config, std::path::PathBuf),
         (settings, settings_path): (ClientSettings, std::path::PathBuf),
-        (drafts, drafts_path, prompt_store): (
-            Drafts,
-            std::path::PathBuf,
-            crate::prompt_store::Store,
-        ),
+        (drafts, drafts_path): (Drafts, std::path::PathBuf),
         runtime: Handle,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -613,14 +605,18 @@ impl Root {
             while let Ok(update) = workspace_receiver.recv().await {
                 if this
                     .update(cx, |root, cx| {
-                        if root
-                            .workspace_watch
-                            .as_ref()
-                            .is_some_and(|watch| watch.target == update.target)
-                            && root.workspace_status.apply(update.event)
+                        for pane in
+                            std::iter::once(&mut root.conversation).chain(root.panes.values_mut())
                         {
-                            root.workspace_revision += 1;
-                            cx.notify();
+                            if pane
+                                .workspace_watch
+                                .as_ref()
+                                .is_some_and(|watch| watch.target == update.target)
+                                && pane.workspace_status.apply(update.event.clone())
+                            {
+                                pane.workspace_revision += 1;
+                                cx.notify();
+                            }
                         }
                     })
                     .is_err()
@@ -629,13 +625,6 @@ impl Root {
                 }
             }
         });
-        let composer = cx.new(|cx| {
-            let mut state = TextareaState::new(window, cx)
-                .placeholder("Ask anything. @ files, $ skills, / commands");
-            state.set_auto_grow(1, 12, cx);
-            state
-        });
-        let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
         let file_find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in file"));
         let host_inputs = [
             cx.new(|cx| InputState::new(window, cx).placeholder("Name (eos, helios)")),
@@ -657,17 +646,15 @@ impl Root {
             cx.observe_window_activation(window, |root, window, cx| {
                 root.window_active = window.is_window_active();
                 if !root.window_active {
+                    if root.pane_resize.take().is_some() {
+                        root.save_conversations();
+                    }
                     root.window_drag_pending = false;
                     root.jump_hint_epoch += 1;
                     root.jump_modifiers = Modifiers::default();
                     root.jump_hints = false;
                     cx.notify();
                 }
-            }),
-            cx.subscribe(&find_input, |root, _, event: &InputEvent, cx| match event {
-                InputEvent::Change => root.find_again(true, cx),
-                InputEvent::PressEnter { shift, .. } => root.step_find(!*shift, cx),
-                _ => {}
             }),
             cx.subscribe(
                 &file_find_input,
@@ -677,15 +664,7 @@ impl Root {
                     _ => {}
                 },
             ),
-            cx.subscribe(&composer, |root, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) && root.pending_composer.is_none() {
-                    root.stash_composer(cx);
-                    root.update_completion(cx);
-                }
-            }),
         ];
-        let list_state = ListState::new(0, ListAlignment::Top, px(800.));
-        list_state.set_follow_mode(FollowMode::Tail);
         let sidebar_root = cx.entity().downgrade();
         let mut terminal_store =
             crate::terminal::Store::load(drafts_path.with_file_name("terminals.json"));
@@ -730,6 +709,23 @@ impl Root {
             panel_pane: cx.new(|_| right_panel::Pane {
                 root: sidebar_root.clone(),
             }),
+            conversation: ConversationState::new(
+                0,
+                terminal_error.or(panel_error),
+                &drafts_path,
+                window,
+                cx,
+            ),
+            thread_undos: Vec::new(),
+            thread_undo_epoch: 0,
+            thread_undo_claimed: false,
+            panes: HashMap::new(),
+            pane_layout: pane_layout::Layout::Pane(0),
+            pane_closed: Vec::new(),
+            pane_restored: false,
+            pane_save_pending: false,
+            pane_next_id: 1,
+            pane_resize: None,
             lineage_data: crate::lineage::Details::default(),
             lineage_target: None,
             lineage_revision: 0,
@@ -749,16 +745,6 @@ impl Root {
                 root: sidebar_root.clone(),
             }),
             details_stamp: None,
-            workspace_revision: 0,
-            branch_picker: cx.new(|cx| CommandState::new(window, cx)),
-            branch_anchor: None,
-            branch_refs: Vec::new(),
-            branch_cursor: None,
-            branch_query: String::new(),
-            branch_request: 0,
-            branch_loading: false,
-            workspace_watch: None,
-            workspace_status: workspace::Status::default(),
             workspace_sender,
             _workspace_updates: workspace_updates,
             canvas_width: 0.,
@@ -777,48 +763,13 @@ impl Root {
             model_catalogs: HashMap::new(),
             sidebar_catalogs: HashMap::new(),
             model_catalog_revision: 0,
-            composer_controls: cx.new(|_| ComposerControlsPane { root: sidebar_root }),
-            composer_controls_stamp: None,
             entries: Vec::new(),
             entries_revision: 0,
             statuses: HashMap::new(),
             host_filter: None,
-            open: None,
-            draft: None,
-            rows: Vec::new(),
-            row_views: Vec::new(),
-            timeline_pane: cx.new(|_| TimelinePane {
-                views: Vec::new(),
-                list: list_state.clone(),
-            }),
-            row_subscriptions: HashMap::new(),
-            list_state,
-            user_cursor: None,
-            hovered_message: None,
-            composer,
-            message: terminal_error.or(panel_error),
-            picker_open: false,
-            picker_instance: None,
-            permissions_menu: None,
-            permissions_subscription: None,
-            model_picker: cx.new(|cx| CommandState::new(window, cx)),
-            attachments: Vec::new(),
-            composer_sends: HashSet::new(),
-            dictation: composer_dictation::Dictation::default(),
-            composer_attachments: HashMap::new(),
-            queue_edit: None,
-            prompts: composer_prompts::Prompts {
-                store: prompt_store,
-                ..Default::default()
-            },
-            composer_choices: composer_controls::Controls::new(cx),
-            queued: Vec::new(),
-            thread_loading: false,
-            completion: None,
-            completion_seq: 0,
-            find_input,
             palette,
             palette_open: false,
+            project_search: project_search::ProjectSearch::new(window, cx),
             file_picker,
             file_picker_open: false,
             file_hits: Vec::new(),
@@ -827,13 +778,9 @@ impl Root {
             file_find_input,
             file_find_open: false,
             panel_focus: cx.focus_handle(),
-            find_open: false,
-            find_hits: Vec::new(),
-            find_at: 0,
             drafts,
             drafts_path,
             drafts_save_scheduled: false,
-            pending_composer: None,
             key_rules: Vec::new(),
             jump_modifiers: Modifiers::default(),
             jump_hints: false,
@@ -857,7 +804,6 @@ impl Root {
             collapsed_families: HashSet::new(),
             window_active: window.is_window_active(),
             shell_dirty: false,
-            thread_dirty: false,
             redraw_scheduled: false,
             focus: cx.focus_handle(),
             host_tasks: shell_tasks,
@@ -880,6 +826,15 @@ impl Root {
         if window.has_active_dialog(cx) {
             return false;
         }
+        if let Some(id) = self.panes.iter().find_map(|(id, pane)| {
+            pane.composer
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+                .then_some(*id)
+        }) {
+            self.activate_conversation(id, window, cx, false);
+        }
         if self.composer_composing(window, cx) {
             return false;
         }
@@ -888,20 +843,33 @@ impl Root {
         if self.prompt_key(keystroke, window, cx) {
             return true;
         }
+        if !((modifiers.control || modifiers.platform) && keystroke.key == "z") {
+            self.thread_undo_claimed = false;
+        }
         if self.completion_key(keystroke, window, cx) {
             return true;
         }
         if keystroke.key == "v"
             && keystroke.modifiers.control
             && !keystroke.modifiers.alt
-            && self.composer.read(cx).focus_handle(cx).is_focused(window)
+            && self
+                .conversation
+                .composer
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
             && self.paste_image(cx)
         {
             return true;
         }
         if keystroke.key == "escape"
-            && self.find_open
-            && self.find_input.read(cx).focus_handle(cx).is_focused(window)
+            && self.conversation.find_open
+            && self
+                .conversation
+                .find_input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
         {
             self.close_find(window, cx);
             return true;
@@ -950,10 +918,16 @@ impl Root {
         if keystroke.key != "enter" || modifiers.alt || modifiers.shift || modifiers.platform {
             return false;
         }
-        if !self.composer.read(cx).focus_handle(cx).is_focused(window) {
+        if !self
+            .conversation
+            .composer
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
             return false;
         }
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.conversation.composer.read(cx).value().to_string();
         if !modifiers.control && self.settings.requires_modifier(&text) {
             return false;
         }
@@ -978,7 +952,7 @@ impl Root {
                 .and_then(|key| self.terminal_drawers.get(&key))
                 .is_some_and(|drawer| drawer.read(cx).is_focused(window, cx)),
             "isDesktop" => true,
-            "modelPickerOpen" => self.picker_open,
+            "modelPickerOpen" => self.conversation.picker_open,
             "usagePageOpen" => {
                 self.usage_page.is_some()
                     && !self.key_context("editableFocus", window, cx)
@@ -989,7 +963,19 @@ impl Root {
                     })
             }
             "rightPanelOpen" => self.right_panel.open,
-            "composerFocus" => self.composer.read(cx).focus_handle(cx).is_focused(window),
+            "composerFocus" => self
+                .conversation
+                .composer
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window),
+            "editableFocus"
+                if self.thread_undo_claimed
+                    && !self.sidebar_hidden
+                    && !self.thread_undos.is_empty() =>
+            {
+                false
+            }
             "editableFocus" => {
                 window
                     .context_stack()
@@ -997,15 +983,15 @@ impl Root {
                     .any(|context| context.contains("Input"))
                     || self.key_context("terminalFocus", window, cx)
                     || [
-                        self.composer.read(cx).focus_handle(cx),
+                        self.conversation.composer.read(cx).focus_handle(cx),
                         self.pr_search.read(cx).focus_handle(cx),
                         self.pr_comment.read(cx).focus_handle(cx),
-                        self.find_input.read(cx).focus_handle(cx),
+                        self.conversation.find_input.read(cx).focus_handle(cx),
                         self.file_find_input.read(cx).focus_handle(cx),
                         self.palette.read(cx).focus_handle(cx),
                         self.file_picker.read(cx).focus_handle(cx),
-                        self.branch_picker.read(cx).focus_handle(cx),
-                        self.model_picker.read(cx).focus_handle(cx),
+                        self.conversation.branch_picker.read(cx).focus_handle(cx),
+                        self.conversation.model_picker.read(cx).focus_handle(cx),
                     ]
                     .iter()
                     .any(|handle| handle.contains_focused(window, cx))
@@ -1016,8 +1002,8 @@ impl Root {
             }
             "composerRequiresModifier" => self
                 .settings
-                .requires_modifier(&self.composer.read(cx).value()),
-            "draftThreadRoute" => self.draft.is_some(),
+                .requires_modifier(&self.conversation.composer.read(cx).value()),
+            "draftThreadRoute" => self.conversation.draft.is_some(),
             "turnRunning" => self
                 .open_entry()
                 .is_some_and(|entry| entry.status == ThreadStatus::Working),
@@ -1068,7 +1054,8 @@ impl Root {
     }
 
     fn current(&self) -> Option<(String, String)> {
-        self.open
+        self.conversation
+            .open
             .as_ref()
             .map(|o| (o.environment.clone(), o.watch.thread_id().to_string()))
     }
@@ -1095,15 +1082,26 @@ impl Root {
                 environment,
                 thread_id,
             } => {
-                let open = self.open.as_ref().is_some_and(|open| {
+                let open = self.conversation.open.as_ref().is_some_and(|open| {
                     open.environment == environment && open.watch.thread_id() == thread_id
                 });
                 if open {
-                    self.thread_dirty = true;
+                    self.conversation.thread_dirty = true;
+                }
+                for pane in self.panes.values_mut() {
+                    if pane.open.as_ref().is_some_and(|open| {
+                        open.environment == environment && open.watch.thread_id() == thread_id
+                    }) {
+                        pane.thread_dirty = true;
+                    }
                 }
             }
         }
-        if !self.redraw_scheduled && (self.shell_dirty || self.thread_dirty) {
+        if !self.redraw_scheduled
+            && (self.shell_dirty
+                || self.conversation.thread_dirty
+                || self.panes.values().any(|pane| pane.thread_dirty))
+        {
             self.redraw_scheduled = true;
             cx.spawn_in(window, async move |this, cx| {
                 cx.background_executor().timer(REDRAW_INTERVAL).await;
@@ -1123,8 +1121,15 @@ impl Root {
             self.visit_if_done();
             cx.notify();
         }
-        if std::mem::take(&mut self.thread_dirty) {
+        if std::mem::take(&mut self.conversation.thread_dirty) {
             self.rebuild_rows(window, cx);
+        }
+        for id in self.pane_layout.ids() {
+            self.with_conversation(id, |root| {
+                if std::mem::take(&mut root.conversation.thread_dirty) {
+                    root.rebuild_rows(window, cx);
+                }
+            });
         }
         self.finish_parks(cx);
         self.sync_lineage();
@@ -1185,21 +1190,28 @@ impl Root {
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if std::mem::take(&mut self.focus_after_park) {
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
         }
         self.sync_terminal_drawers(window, cx);
-        if self.draft.is_none() && !self.picker_open {
-            self.permissions_menu = None;
-            self.permissions_subscription = None;
+        if self.conversation.draft.is_none() && !self.conversation.picker_open {
+            self.conversation.permissions_menu = None;
+            self.conversation.permissions_subscription = None;
         }
         self.settings.sidebar_width = self.settings.sidebar_width.clamp(
             208.,
             (f32::from(window.viewport_size().width) - 640.).max(208.),
         );
         let sidebar_stamp = SidebarStamp {
+            undo: self
+                .thread_undos
+                .iter()
+                .map(|entry| (entry.environment.clone(), entry.thread.clone(), entry.kind))
+                .collect(),
             catalog_revision: self.model_catalog_revision,
-            jump_labels: if self.jump_hints && !self.picker_open && !self.palette_open {
+            jump_labels: if self.jump_hints && !self.conversation.picker_open && !self.palette_open
+            {
                 keymap::jump_labels(&self.key_rules, &|name| self.key_context(name, window, cx))
             } else {
                 Vec::new()
@@ -1252,19 +1264,21 @@ impl Render for Root {
                 .map(|thread| thread["pullRequests"].clone())
                 .unwrap_or(Value::Null),
             target: self
+                .conversation
                 .workspace_watch
                 .as_ref()
                 .map(|watch| watch.target.clone()),
-            status_revision: self.workspace_revision,
+            status_revision: self.conversation.workspace_revision,
             catalog_revision: self.model_catalog_revision,
             draft_strategy: self
+                .conversation
                 .draft
                 .as_ref()
                 .map(|draft| draft.workspace_strategy.clone()),
-            branch_anchor: self.branch_anchor,
-            branch_request: self.branch_request,
-            branch_loading: self.branch_loading,
-            branch_count: self.branch_refs.len(),
+            branch_anchor: self.conversation.branch_anchor,
+            branch_request: self.conversation.branch_request,
+            branch_loading: self.conversation.branch_loading,
+            branch_count: self.conversation.branch_refs.len(),
             light: self.settings.light_theme,
             preferred_editor: self.settings.preferred_editor.clone(),
             lineage_revision: self.lineage_revision,
@@ -1273,42 +1287,9 @@ impl Render for Root {
             self.details_stamp = Some(details_stamp);
             window.mark_view_dirty(self.details_pane.entity_id());
         }
-        if let Some(text) = self.pending_composer.take() {
-            self.composer.update(cx, |state, cx| {
-                state.set_value(composer_tokens::content(text), window, cx)
-            });
-        }
-        self.sync_composer_controls(window, cx);
-        let controls_stamp = ComposerControlsStamp {
-            target: self.composer_target(),
-            current: self.current(),
-            draft: self.draft.is_some(),
-            status: self.open_entry().map(|entry| entry.status),
-            delivery: self.composer_delivery(false),
-            dictation: (self.dictation.busy, self.dictation.recording.is_some()),
-            effort_cursor: self.composer_choices.effort_cursor.clone(),
-            queue_edit: self
-                .queue_edit
-                .as_ref()
-                .map(|edit| (edit.run_id.clone(), edit.saving)),
-            question: self.pending_question().is_some(),
-            empty: self.composer.read(cx).value().trim().is_empty(),
-            attachments: !self.attachments.is_empty(),
-            picker: self.picker_open,
-            permissions: self.permissions_menu.is_some(),
-            picker_instance: self.picker_instance.clone(),
-            catalog_revision: self.model_catalog_revision,
-            light: self.settings.light_theme,
-            font_size: self.settings.font_size_interface,
-            plan_enabled: self.settings.plan_mode_enabled,
-        };
-        if self.composer_controls_stamp.as_ref() != Some(&controls_stamp) {
-            self.composer_controls_stamp = Some(controls_stamp);
-            window.mark_view_dirty(self.composer_controls.entity_id());
-        }
         if !self.focus.contains_focused(window, cx)
-            && self.open.is_none()
-            && self.draft.is_none()
+            && self.conversation.open.is_none()
+            && self.conversation.draft.is_none()
             && !self.palette_open
             && !self.file_picker_open
             && !self.hosts_open
@@ -1317,8 +1298,12 @@ impl Render for Root {
         {
             self.focus.focus(window, cx);
         }
-        let draft_groups = self.draft.as_ref().map(|_| self.project_groups());
-        let target = self.draft.as_ref().map(|draft| {
+        let draft_groups = self
+            .conversation
+            .draft
+            .as_ref()
+            .map(|_| self.project_groups());
+        let target = self.conversation.draft.as_ref().map(|draft| {
             draft_groups
                 .as_ref()
                 .unwrap()
@@ -1327,10 +1312,8 @@ impl Render for Root {
                 .map(|group| group.title.clone())
                 .unwrap_or_else(|| "Pick a project".into())
         });
-        let pane = match &self.draft {
-            Some(draft) => self.render_draft(draft, draft_groups.as_ref().unwrap(), cx),
-            None => self.render_thread(cx),
-        };
+        self.reveal_project_match();
+        let pane = self.render_conversations(window, cx);
         let terminal_drawer = self
             .terminal_key()
             .and_then(|key| self.terminal_drawers.get(&key))
@@ -1351,6 +1334,16 @@ impl Render for Root {
             .size_full()
             .track_focus(&self.focus)
             .key_context("Root")
+            .on_action(cx.listener(|root, _: &OpenSideChat, window, cx| root.open_side_chat(window, cx)))
+            .on_action(cx.listener(|root, _: &SplitConversation, window, cx| root.split_conversation(false, window, cx)))
+            .on_action(cx.listener(|root, _: &SplitConversationVertical, window, cx| root.split_conversation(true, window, cx)))
+            .on_action(cx.listener(|root, _: &CloseConversation, window, cx| root.close_conversation(window, cx)))
+            .on_action(cx.listener(|root, _: &FocusNextWorkspace, window, cx| root.focus_workspace(true, window, cx)))
+            .on_action(cx.listener(|root, _: &FocusPreviousWorkspace, window, cx| root.focus_workspace(false, window, cx)))
+            .on_action(cx.listener(|root, _: &CopyThreadReference, _, cx| root.copy_thread_reference(cx)))
+            .on_action(cx.listener(|root, _: &RegenerateTitle, _, cx| root.regenerate_thread_title(cx)))
+            .on_action(cx.listener(|root, _: &UndoThreadAction, _, cx| root.undo_thread_action(cx)))
+            .on_action(cx.listener(|root, _: &ReopenClosed, window, cx| root.reopen_conversation(window, cx)))
             .on_action(cx.listener(|root, _: &NextDone, _, cx| root.next_done(true, cx)))
             .on_action(cx.listener(|root, _: &PreviousDone, _, cx| root.next_done(false, cx)))
             .on_action(
@@ -1360,7 +1353,7 @@ impl Render for Root {
             .on_action(cx.listener(|root,action:&snooze_controls::CustomSnooze,window,cx| root.open_custom_snooze(action,window,cx)))
             .on_action(cx.listener(|root, _: &Find, window, cx| {
                 let in_file = root.panel_focus.contains_focused(window, cx)
-                    || (root.open.is_none() && root.file_panel.is_some());
+                    || (root.conversation.open.is_none() && root.file_panel.is_some());
                 if in_file {
                     root.open_file_find(window, cx)
                 } else {
@@ -1370,6 +1363,8 @@ impl Render for Root {
             .on_action(
                 cx.listener(|root, _: &TogglePalette, window, cx| root.toggle_palette(window, cx)),
             )
+            .on_action(cx.listener(|root, _: &ToggleProjectSearch, window, cx| root.toggle_project_search(window, cx)))
+            .on_action(cx.listener(|root, action: &project_search::OpenMatch, _, cx| root.open_project_match(action, cx)))
             .on_action(cx.listener(|root, _: &ToggleFilePicker, window, cx| {
                 root.toggle_file_picker(window, cx)
             }))
@@ -1487,10 +1482,10 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &Dictate, window, cx| root.toggle_dictation(window, cx)))
             .on_action(cx.listener(|root, _: &SendAlternate, window, cx| root.send_intent(composer::SubmissionIntent::Alternate, window, cx)))
             .on_action(cx.listener(|root, _: &SendBackground, window, cx| {
-                if root.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
+                if root.conversation.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
             }))
             .on_action(cx.listener(|root, _: &SendAndNewThread, window, cx| {
-                if root.draft.is_none() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
+                if root.conversation.draft.is_none() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
             }))
             .on_action(
                 cx.listener(|root, _: &NextUserMessage, _, cx| root.jump_user_message(true, cx)),
@@ -1526,12 +1521,12 @@ impl Render for Root {
             )
             .on_action(cx.listener(|root, _: &Settle, _, cx| root.settle(cx)))
             .on_action(cx.listener(|root, _: &NewThread, window, cx| root.new_thread(window, cx)))
-            .on_action(cx.listener(|root, _: &Cancel, window, cx| {if root.usage_page.is_some() {root.usage_page=None;root.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else if root.settings_open {root.settings_open=false;root.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else {root.cancel(window,cx);}}))
+            .on_action(cx.listener(|root, _: &Cancel, window, cx| {if root.usage_page.is_some() {root.usage_page=None;root.conversation.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else if root.settings_open {root.settings_open=false;root.conversation.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else {root.cancel(window,cx);}}))
             .on_action(cx.listener(|root, _: &ToggleModelPicker, window, cx| {
                 root.toggle_model_picker(window, cx)
             }))
             .on_action(cx.listener(|root, action: &PickProjectAction, _, cx| {
-                if let Some(draft) = root.draft.as_mut() {
+                if let Some(draft) = root.conversation.draft.as_mut() {
                     draft.group = Some(action.key.clone());
                     draft.environment = None;
                     draft.workspace_strategy = json!({"type":"root"});
@@ -1556,6 +1551,10 @@ impl Render for Root {
                     root.right_panel_width = (f32::from(window.viewport_size().width) - f32::from(event.position.x)).max(360.);
                     cx.notify();
                 }
+                if let Some((path, vertical, bounds)) = root.pane_resize.clone() && event.pressed_button == Some(MouseButton::Left) {
+                    let (position, start, length) = if vertical { (event.position.y, bounds.origin.y, bounds.size.height) } else { (event.position.x, bounds.origin.x, bounds.size.width) };
+                    if length > px(0.) { root.pane_layout.resize(&path, f32::from(position - start) / f32::from(length)); cx.notify(); }
+                }
                 if root.sidebar_resizing && event.pressed_button == Some(MouseButton::Left) {
                     let max = (f32::from(window.viewport_size().width) - 640.).max(208.);
                     root.settings.sidebar_width = f32::from(event.position.x).clamp(208., max);
@@ -1569,6 +1568,7 @@ impl Render for Root {
                     root.window_drag_pending = false;
                     if root.panel_resizing { root.save_right_panel(); }
                     root.panel_resizing = false;
+                    if root.pane_resize.take().is_some() { root.save_conversations(); }
                     if root.sidebar_resizing {
                         root.sidebar_resizing = false;
                         if let Err(error) = client_settings::update(
@@ -1578,7 +1578,7 @@ impl Render for Root {
                                 serde_json::json!(root.settings.sidebar_width),
                             )],
                         ) {
-                            root.message = Some(format!("Cannot save sidebar width: {error:#}"));
+                            root.conversation.message = Some(format!("Cannot save sidebar width: {error:#}"));
                         }
                         cx.notify();
                     }
@@ -1623,6 +1623,8 @@ impl Render for Root {
                         .child(div().w(px(4.)).h_full().cursor_col_resize().on_mouse_down(MouseButton::Left, cx.listener(|root, _, _, cx| { root.panel_resizing = true; cx.notify(); })))
                         .child(self.panel_pane.clone().cached(if self.right_panel.maximized || f32::from(window.viewport_size().width) <= 980. { StyleRefinement::default().flex_1().h_full().min_w_0() } else { StyleRefinement::default().w(px(self.panel_width(f32::from(window.viewport_size().width)))).h_full().flex_none() }))),
             )
+            .when(!self.sidebar_hidden, |root_el| root_el.children(self.render_thread_undo(cx)))
+            .when(self.project_search.open, |root_el| root_el.child(self.render_project_search(window, cx)))
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))
             })
@@ -1646,8 +1648,6 @@ pub fn run(
 ) -> anyhow::Result<()> {
     let drafts_path = drafts::default_path()?;
     let drafts = Drafts::load(&drafts_path)?;
-    let prompt_store =
-        crate::prompt_store::Store::load(&crate::prompt_store::Store::path(&drafts_path))?;
     let runtime = Runtime::new()?;
     let handle = runtime.handle().clone();
     gpui_kit::application()
@@ -1696,7 +1696,7 @@ pub fn run(
                     Root::new(
                         (config, config_path),
                         (settings.clone(), settings_path),
-                        (drafts, drafts_path, prompt_store),
+                        (drafts, drafts_path),
                         handle,
                         window,
                         cx,

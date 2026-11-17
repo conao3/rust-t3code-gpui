@@ -1,0 +1,90 @@
+{
+  "name": "project-content-search",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 300,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Pane Beta, UI parity"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+f"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Search project contents"
+      },
+      "count": 1
+    },
+    {
+      "action": "type",
+      "value": "Deterministic"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "3 Deterministic local workspace."
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Match case"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Match whole word"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Use regular expression"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "3 Deterministic local workspace."
+      },
+      "count": 1
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "combobox",
+        "name": "Search in UI parity"
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Search project contents"
+      },
+      "count": 0
+    }
+  ]
+}

@@ -121,7 +121,9 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         )
         app.nodes = Mock(return_value=[node])
         app.snapshot_controls = {("entry", "Message"): [node]}
-        app.tree = Mock(return_value=[{"role": "entry", "name": "Message"}])
+        app.tree = Mock(
+            return_value=[{"role": "entry", "name": "Message", "focused": True}]
+        )
         with self.assertRaisesRegex(RuntimeError, "cannot take focus"):
             app.focus_control("entry", "Message")
         node.queryComponent.assert_not_called()
@@ -132,6 +134,22 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         node.queryComponent.return_value.scrollTo.assert_called_once_with("anywhere")
         node.queryComponent.return_value.grabFocus.assert_called_once()
         app.xdo.assert_not_called()
+
+    def test_native_focus_waits_for_application_confirmation(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.reveal_control = Mock()
+        app.tree = Mock(
+            side_effect=[
+                [{"role": "entry", "name": "Message", "focused": focused}]
+                for focused in [False, True]
+            ]
+        )
+        with patch("native.time.sleep"):
+            app.focus_control("entry", "Message")
+        self.assertEqual(app.tree.call_count, 2)
 
     async def test_held_control_applies_to_a_number_and_is_released(self):
         app = Cdp("http://127.0.0.1:39991")
@@ -147,6 +165,15 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual([event["modifiers"] for event in events], [2, 2, 2, 2, 2, 0])
         self.assertEqual(app.held_modifiers, 0)
+
+    def test_native_function_keys_use_x11_keysyms(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.xdo = Mock()
+        app.press("shift+F6")
+        app.xdo.assert_called_once_with("key", "--clearmodifiers", "shift+F6")
 
     def test_native_number_keeps_held_control_and_cleanup_releases_it(self):
         from native import Native
@@ -274,6 +301,32 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(result[0]["status"], "passed")
         app.click.assert_awaited_once_with("button", "Settle thread", 1)
+
+    async def test_native_radio_menu_click_uses_the_observed_platform_role(self):
+        app = Mock()
+        app.tree = AsyncMock(
+            return_value=[{"role": "radio menu item", "name": "New worktree"}]
+        )
+        app.click = AsyncMock()
+        with tempfile.TemporaryDirectory() as directory:
+            result = await execute(
+                app,
+                "native",
+                {
+                    "steps": [
+                        {
+                            "action": "click",
+                            "selector": {
+                                "role": "menuitemradio",
+                                "name": "New worktree",
+                            },
+                        }
+                    ]
+                },
+                Path(directory),
+            )
+        self.assertEqual(result[0]["status"], "passed")
+        app.click.assert_awaited_once_with("radio menu item", "New worktree", 0)
 
     async def test_cdp_keeps_visible_ancestors_across_ignored_layout_nodes(self):
         app = Cdp("http://127.0.0.1:39991")
@@ -565,6 +618,30 @@ class ComparisonTests(unittest.TestCase):
             app.click("button", "Choose editor")
         app.nodes.assert_not_called()
         self.assertEqual(app.xdo.call_args_list[0].args, ("mousemove", 26, 36))
+
+    def test_native_traversal_discards_removed_cached_children(self):
+        from native import Native
+
+        class Node:
+            def __init__(self, children):
+                self.children = children
+                self.cached = [object()]
+
+            def clear_cache(self):
+                self.cached = self.children
+
+            def __iter__(self):
+                return iter(self.cached)
+
+        child = Node([])
+        parent = Node([child])
+        app = object.__new__(Native)
+        app.app = Mock(return_value=parent)
+        nodes = app.nodes()
+        self.assertIs(next(nodes), parent)
+        self.assertNotEqual(child.cached, child.children)
+        self.assertEqual(list(nodes), [child])
+        self.assertEqual(app.parent_paths[id(child)], [id(parent)])
 
     def test_platform_accessibility_roles_keep_the_same_control_semantics(self):
         for native, reference in [

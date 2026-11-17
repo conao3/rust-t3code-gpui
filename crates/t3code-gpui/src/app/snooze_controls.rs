@@ -332,7 +332,7 @@ impl Root {
                 cx,
             );
         } else {
-            self.message = Some(
+            self.conversation.message = Some(
                 "Could not snooze thread: That snooze time has passed. Choose another time.".into(),
             );
             cx.notify();

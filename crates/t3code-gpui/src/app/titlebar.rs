@@ -38,7 +38,7 @@ impl Root {
         cx: &Context<Self>,
     ) -> AnyElement {
         let theme = cx.theme();
-        let content = if self.draft.is_some() || self.open.is_none() {
+        let content = if self.conversation.draft.is_some() || self.conversation.open.is_none() {
             self.window_drag_area("empty-window-drag", cx)
                 .flex_1()
                 .min_w_0()
@@ -55,17 +55,13 @@ impl Root {
                         .child(label)
                         .child("/")
                 }))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .child(if self.draft.is_some() {
-                            "New thread"
-                        } else {
-                            APP_NAME
-                        }),
-                )
+                .child(div().flex_1().min_w_0().truncate().child(
+                    if self.conversation.draft.is_some() {
+                        "New thread"
+                    } else {
+                        APP_NAME
+                    },
+                ))
                 .into_any_element()
         } else {
             self.render_thread_header(cx)
@@ -104,7 +100,7 @@ impl Root {
                 )
             })
             .child(content)
-            .when(self.workspace_watch.is_some(), |bar| {
+            .when(self.conversation.workspace_watch.is_some(), |bar| {
                 bar.child(
                     Button::new("thread-details-toggle")
                         .icon(gpui_kit::assets::IconName::PanelRight)

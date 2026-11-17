@@ -31,7 +31,7 @@ impl Root {
         };
         let environment = connection.label().to_string();
         let runtime = self.runtime.clone();
-        cx.spawn_in(window, async move |this, cx| {
+        self.spawn_pane_in(window, cx, async move |this, cx| {
             let result = on_runtime(&runtime, async move {
                 let result = connection
                     .request("projects.ensureScratch", json!({}))
@@ -65,13 +65,14 @@ impl Root {
                             .find(|g| g.contains(&environment, &project_id))
                             .map(|g| g.key.clone());
                         root.new_thread(window, cx);
-                        if let Some(draft) = root.draft.as_mut() {
+                        if let Some(draft) = root.conversation.draft.as_mut() {
                             draft.group = group;
                             draft.environment = Some(environment);
                         }
                     }
                     Err(error) => {
-                        root.message = Some(format!("Could not start without a project: {error:#}"))
+                        root.conversation.message =
+                            Some(format!("Could not start without a project: {error:#}"))
                     }
                 }
                 cx.notify();

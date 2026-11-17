@@ -71,20 +71,21 @@ class Native:
 
     def nodes(self):
         queue = [(self.app(), [])]
-        result = []
+        count = 0
         self.parent_paths = {}
         while queue:
             node, parents = queue.pop(0)
+            node.clear_cache()
             self.parent_paths[id(node)] = parents
-            result.append(node)
-            if len(result) > 5000:
+            count += 1
+            if count > 5000:
                 raise RuntimeError(
                     "Accessible tree exceeds 5000 nodes; refusing an incomplete snapshot"
                 )
+            yield node
             queue.extend(
                 (child, parents + [id(node)]) for child in node if child is not None
             )
-        return result
 
     def tree(self):
         from gi.repository import GLib
@@ -173,6 +174,18 @@ class Native:
         node = self.reveal_control(role, name, index, require_focus=True)
         if not node.queryComponent().grabFocus():
             raise RuntimeError(f"Focus request failed: {role} {name!r}")
+        deadline = time.monotonic() + 5
+        while True:
+            matches = [
+                node
+                for node in self.tree()
+                if node["role"] == role and node["name"] == name
+            ]
+            if index < len(matches) and matches[index]["focused"]:
+                return
+            if time.monotonic() >= deadline:
+                raise RuntimeError(f"Focus was not applied: {role} {name!r} #{index}")
+            time.sleep(0.05)
 
     def reveal_control(self, role, name, index=0, *, require_focus=False):
         matches = [
@@ -237,6 +250,7 @@ class Native:
             "delete": "Delete",
             "space": "space",
         }
+        keys.update({f"f{number}": f"F{number}" for number in range(1, 25)})
         parts = chord.lower().split("+")
         parts[-1] = keys.get(parts[-1], parts[-1])
         if getattr(self, "held_modifiers", set()):

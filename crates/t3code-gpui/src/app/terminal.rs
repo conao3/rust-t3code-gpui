@@ -2,7 +2,7 @@ use super::*;
 
 impl Root {
     pub(super) fn terminal_key(&self) -> Option<String> {
-        if let Some(draft) = &self.draft {
+        if let Some(draft) = &self.conversation.draft {
             let (environment, _) = self.draft_project()?;
             return Some(drafts::thread_key(&environment, &draft.id));
         }
@@ -12,7 +12,7 @@ impl Root {
 
     fn terminal_target(&self) -> Option<(String, t3_terminal::session::Target)> {
         let (environment, cwd) = self.composer_cwd()?;
-        let (id, project_id) = if let Some(draft) = &self.draft {
+        let (id, project_id) = if let Some(draft) = &self.conversation.draft {
             (draft.id.clone(), self.draft_project()?.1)
         } else {
             let (_, id) = self.current()?;
@@ -55,7 +55,8 @@ impl Root {
                 .await;
             if let Err(error) = result {
                 let _ = this.update(cx, |root, cx| {
-                    root.message = Some(format!("Cannot save terminal layout: {error:#}"));
+                    root.conversation.message =
+                        Some(format!("Cannot save terminal layout: {error:#}"));
                     cx.notify();
                 });
             }
@@ -183,7 +184,7 @@ impl Root {
                 drawer.update(cx, |drawer, cx| drawer.focus(window, cx));
             }
         } else {
-            window.focus(&self.composer.read(cx).focus_handle(cx), cx);
+            window.focus(&self.conversation.composer.read(cx).focus_handle(cx), cx);
         }
         self.save_terminal_layout(cx);
         cx.notify();

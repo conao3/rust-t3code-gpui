@@ -30,14 +30,14 @@ impl Root {
             .clone()
             .map(|input| input.read(cx).value().trim().to_string());
         if label.is_empty() || self.connection(&label).is_some() {
-            self.message = Some("Give the host a name no other host has.".into());
+            self.conversation.message = Some("Give the host a name no other host has.".into());
             cx.notify();
             return;
         }
         let (origin, code, is_token) = match config::pairing_url(&url) {
             Some((origin, code)) => (origin, code, false),
             None if secret.is_empty() => {
-                self.message = Some(
+                self.conversation.message = Some(
                     "Paste a pairing URL, or a server URL with a pairing code or token.".into(),
                 );
                 cx.notify();
@@ -80,14 +80,18 @@ impl Root {
                                 for input in root.host_inputs.clone() {
                                     input.update(cx, |state, cx| state.set_value("", window, cx));
                                 }
-                                root.message = None;
+                                root.conversation.message = None;
                             }
                             Err(error) => {
-                                root.message = Some(format!("Saving the hosts failed: {error:#}"))
+                                root.conversation.message =
+                                    Some(format!("Saving the hosts failed: {error:#}"))
                             }
                         }
                     }
-                    Err(error) => root.message = Some(format!("Adding the host failed: {error:#}")),
+                    Err(error) => {
+                        root.conversation.message =
+                            Some(format!("Adding the host failed: {error:#}"))
+                    }
                 }
                 root.shell_dirty = true;
                 root.refresh(window, cx);
@@ -100,7 +104,7 @@ impl Root {
         let mut next = self.config.clone();
         next.environments.retain(|e| e.label != label);
         if let Err(error) = next.save(&self.config_path) {
-            self.message = Some(format!("Saving the hosts failed: {error:#}"));
+            self.conversation.message = Some(format!("Saving the hosts failed: {error:#}"));
             cx.notify();
             return;
         }

@@ -3,6 +3,7 @@ use super::*;
 pub(super) struct TimelinePane {
     pub(super) views: Vec<Entity<RowView>>,
     pub(super) list: ListState,
+    pub(super) minimap: Entity<super::minimap::Minimap>,
 }
 
 impl Render for TimelinePane {
@@ -25,6 +26,15 @@ impl Render for TimelinePane {
                 .pt_4(),
             )
             .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .top_0()
+                    .bottom_0()
+                    .w(px(48.))
+                    .child(self.minimap.clone()),
+            )
+            .child(
                 gpui_kit::base::Scrollbar::vertical(&self.list)
                     .mode(gpui_kit::base::ScrollbarMode::Always),
             )
@@ -33,7 +43,9 @@ impl Render for TimelinePane {
 
 impl Root {
     pub(super) fn rebuild_rows(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(open) = &self.open else { return };
+        let Some(open) = &self.conversation.open else {
+            return;
+        };
         let (rows, queued, loading) = {
             let state = open.watch.state();
             let state = state.lock().expect("thread lock");
@@ -43,16 +55,22 @@ impl Root {
                 state.projection.is_empty(),
             )
         };
-        self.queued = queued;
-        self.thread_loading = loading;
+        self.conversation.revision += 1;
+        self.conversation.queued = queued;
+        self.conversation.thread_loading = loading;
         let mut existing: HashMap<String, Entity<RowView>> = self
             .rows
             .iter()
             .map(|r| r.key.clone())
-            .zip(self.row_views.iter().cloned())
+            .zip(self.conversation.row_views.iter().cloned())
             .collect();
-        let old_keys: Vec<String> = self.rows.iter().map(|r| r.key.clone()).collect();
-        let mut subscriptions = std::mem::take(&mut self.row_subscriptions);
+        let old_keys: Vec<String> = self
+            .conversation
+            .rows
+            .iter()
+            .map(|r| r.key.clone())
+            .collect();
+        let mut subscriptions = std::mem::take(&mut self.conversation.row_subscriptions);
         let mut kept = HashMap::new();
         let views: Vec<Entity<RowView>> = rows
             .iter()
@@ -91,8 +109,10 @@ impl Root {
         if appended {
             let old = old_keys.len();
             if rows.len() > old {
-                self.user_cursor = None;
-                self.list_state.splice(old..old, rows.len() - old);
+                self.conversation.user_cursor = None;
+                self.conversation
+                    .list_state
+                    .splice(old..old, rows.len() - old);
             }
         } else {
             let prefix = old_keys
@@ -106,15 +126,20 @@ impl Root {
                 .zip(rows[prefix..].iter().rev())
                 .take_while(|(old, new)| **old == new.key)
                 .count();
-            self.list_state.splice(
+            self.conversation.list_state.splice(
                 prefix..old_keys.len() - suffix,
                 rows.len() - prefix - suffix,
             );
         }
-        self.rows = rows;
-        self.row_views = views;
+        self.conversation.rows = rows;
+        self.conversation.row_views = views;
         self.load_timeline_images(cx);
-        for (row, view) in self.rows.iter().zip(&self.row_views) {
+        for (row, view) in self
+            .conversation
+            .rows
+            .iter()
+            .zip(&self.conversation.row_views)
+        {
             if let Some(metadata) = row
                 .message_part
                 .as_ref()
@@ -122,17 +147,41 @@ impl Root {
             {
                 view.update(cx, |view, cx| {
                     view.set_message_hovered(
-                        self.hovered_message.as_ref() == Some(&metadata.message_id),
+                        self.conversation.hovered_message.as_ref() == Some(&metadata.message_id),
                         cx,
                     )
                 });
             }
         }
-        self.timeline_pane.update(cx, |pane, cx| {
-            pane.views = self.row_views.clone();
+        let mut minimap_items: Vec<(usize, String, String)> = Vec::new();
+        for (index, row) in self.conversation.rows.iter().enumerate() {
+            if row.kind == RowKind::User {
+                minimap_items.push((
+                    index,
+                    row.text.split_whitespace().collect::<Vec<_>>().join(" "),
+                    String::new(),
+                ));
+            } else if row.kind == RowKind::Assistant
+                && let Some((_, _, text)) = minimap_items.last_mut()
+            {
+                text.extend(
+                    row.text
+                        .chars()
+                        .take(1500usize.saturating_sub(text.chars().count())),
+                );
+            }
+        }
+        self.conversation.timeline_pane.update(cx, |pane, cx| {
+            pane.views = self.conversation.row_views.clone();
+            pane.minimap.update(cx, |map, cx| {
+                if map.items != minimap_items {
+                    map.items = minimap_items;
+                    cx.notify();
+                }
+            });
             cx.notify();
         });
-        self.row_subscriptions = kept;
+        self.conversation.row_subscriptions = kept;
         self.find_again(false, cx);
         cx.notify();
     }
@@ -144,29 +193,44 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some(id) = self
+            .panes
+            .iter()
+            .find_map(|(id, pane)| pane.row_views.iter().any(|row| row == view).then_some(*id))
+        {
+            self.with_conversation(id, |root| root.on_row_event(view, event, window, cx));
+            return;
+        }
         match event {
             RowEvent::MessageHover {
                 message_id,
                 hovered,
             } => {
-                let old = self.hovered_message.clone();
+                let old = self.conversation.hovered_message.clone();
                 if *hovered {
-                    self.hovered_message = Some(message_id.clone());
-                } else if self.hovered_message.as_ref() == Some(message_id) {
-                    self.hovered_message = None;
+                    self.conversation.hovered_message = Some(message_id.clone());
+                } else if self.conversation.hovered_message.as_ref() == Some(message_id) {
+                    self.conversation.hovered_message = None;
                 }
-                if old != self.hovered_message {
-                    for (row, view) in self.rows.iter().zip(&self.row_views) {
+                if old != self.conversation.hovered_message {
+                    for (row, view) in self
+                        .conversation
+                        .rows
+                        .iter()
+                        .zip(&self.conversation.row_views)
+                    {
                         if let Some(metadata) = row
                             .message_part
                             .as_ref()
                             .and_then(|part| part.metadata.as_ref())
                             && (Some(&metadata.message_id) == old.as_ref()
-                                || Some(&metadata.message_id) == self.hovered_message.as_ref())
+                                || Some(&metadata.message_id)
+                                    == self.conversation.hovered_message.as_ref())
                         {
                             view.update(cx, |view, cx| {
                                 view.set_message_hovered(
-                                    Some(&metadata.message_id) == self.hovered_message.as_ref(),
+                                    Some(&metadata.message_id)
+                                        == self.conversation.hovered_message.as_ref(),
                                     cx,
                                 )
                             });
@@ -175,7 +239,7 @@ impl Root {
                 }
             }
             RowEvent::CopyMessage { message_id } => {
-                let text = self.open.as_ref().and_then(|open| {
+                let text = self.conversation.open.as_ref().and_then(|open| {
                     let state = open.watch.state();
                     let state = state.lock().expect("thread lock");
                     state
@@ -194,7 +258,8 @@ impl Root {
                         view.update(cx, |view, cx| view.copied(cx));
                     }
                     Err(error) => {
-                        self.message = Some(format!("Failed to copy message: {error:#}"));
+                        self.conversation.message =
+                            Some(format!("Failed to copy message: {error:#}"));
                         cx.notify();
                     }
                 }
@@ -220,7 +285,7 @@ impl Root {
                 );
                 let runtime = self.runtime.clone();
                 let view = view.clone();
-                cx.spawn(async move |this, cx| {
+                self.spawn_pane(cx, async move |this, cx| {
                     let command = json!({
                         "type": "thread.fork",
                         "createdBy": "user",
@@ -238,7 +303,7 @@ impl Root {
                         match result {
                             Ok(_) => root.open_thread(environment, target, cx),
                             Err(error) => {
-                                root.message =
+                                root.conversation.message =
                                     Some(format!("Failed to fork this response: {error:#}"));
                                 cx.notify();
                             }
@@ -269,7 +334,7 @@ impl Root {
                     return;
                 };
                 let runtime = self.runtime.clone();
-                cx.spawn(async move |this, cx| {
+                self.spawn_pane(cx, async move |this, cx| {
                     let result = on_runtime(&runtime, async move {
                         connection
                             .implement_plan(&thread_id, &plan_id, &markdown)
@@ -279,7 +344,8 @@ impl Root {
                     if let Err(error) = result {
                         view.update(cx, |view, cx| view.set_responding(false, cx));
                         let _ = this.update(cx, |root, cx| {
-                            root.message = Some(format!("Implementing the plan failed: {error:#}"));
+                            root.conversation.message =
+                                Some(format!("Implementing the plan failed: {error:#}"));
                             cx.notify();
                         });
                     }
@@ -303,7 +369,7 @@ impl Root {
             return;
         };
         let runtime = self.runtime.clone();
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             let result = on_runtime(&runtime, async move {
                 connection.respond(&thread_id, &request_id, &decision).await
             })
@@ -311,7 +377,7 @@ impl Root {
             if let Err(error) = result {
                 view.update(cx, |view, cx| view.set_responding(false, cx));
                 let _ = this.update(cx, |root, cx| {
-                    root.message = Some(format!("Reply failed: {error:#}"));
+                    root.conversation.message = Some(format!("Reply failed: {error:#}"));
                     cx.notify();
                 });
             }
@@ -320,9 +386,10 @@ impl Root {
     }
 
     pub(super) fn pending_question(&self) -> Option<(Entity<RowView>, String)> {
-        self.rows
+        self.conversation
+            .rows
             .iter()
-            .zip(&self.row_views)
+            .zip(&self.conversation.row_views)
             .rev()
             .find_map(|(row, view)| match &row.pending {
                 Some(Pending::Question { request_id, .. }) => {
@@ -345,28 +412,33 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
-        let questions = self.rows.iter().find_map(|row| match &row.pending {
-            Some(Pending::Question {
-                request_id: id,
-                questions,
-            }) if *id == request_id => Some(questions.clone()),
-            _ => None,
-        });
+        let questions = self
+            .conversation
+            .rows
+            .iter()
+            .find_map(|row| match &row.pending {
+                Some(Pending::Question {
+                    request_id: id,
+                    questions,
+                }) if *id == request_id => Some(questions.clone()),
+                _ => None,
+            });
         let Some(questions) = questions else { return };
-        let typed = self.composer.read(cx).value().to_string();
+        let typed = self.conversation.composer.read(cx).value().to_string();
         let Some(answers) = timeline::answers_with_text(&questions, view.read(cx).drafts(), &typed)
         else {
-            self.message = Some("Answer every question first.".into());
+            self.conversation.message = Some("Answer every question first.".into());
             cx.notify();
             return;
         };
-        self.message = None;
+        self.conversation.message = None;
         view.update(cx, |view, cx| view.set_responding(true, cx));
-        self.composer
+        self.conversation
+            .composer
             .update(cx, |state, cx| state.set_value("", window, cx));
         self.stash_composer(cx);
         let runtime = self.runtime.clone();
-        cx.spawn_in(window, async move |this, cx| {
+        self.spawn_pane_in(window, cx, async move |this, cx| {
             let result = on_runtime(&runtime, async move {
                 connection.answer(&thread_id, &request_id, answers).await
             })
@@ -374,8 +446,9 @@ impl Root {
             if let Err(error) = result {
                 view.update(cx, |view, cx| view.set_responding(false, cx));
                 let _ = this.update_in(cx, |root, window, cx| {
-                    root.message = Some(format!("Answer failed: {error:#}"));
-                    root.composer
+                    root.conversation.message = Some(format!("Answer failed: {error:#}"));
+                    root.conversation
+                        .composer
                         .update(cx, |state, cx| state.set_value(typed, window, cx));
                     root.stash_composer(cx);
                     cx.notify();
@@ -386,21 +459,29 @@ impl Root {
     }
 
     pub(super) fn jump_user_message(&mut self, forward: bool, cx: &mut Context<Self>) {
-        let top = self.list_state.logical_scroll_top();
-        let (from, inside) = if top.item_ix < self.rows.len() {
+        let top = self.conversation.list_state.logical_scroll_top();
+        let (from, inside) = if top.item_ix < self.conversation.rows.len() {
             (top.item_ix, top.offset_in_item > px(0.))
         } else {
-            (self.user_cursor.unwrap_or(self.rows.len()), false)
+            (
+                self.conversation
+                    .user_cursor
+                    .unwrap_or(self.conversation.rows.len()),
+                false,
+            )
         };
-        let target = timeline::user_message_jump(&self.rows, from, inside, forward);
-        self.user_cursor = target;
+        let target = timeline::user_message_jump(&self.conversation.rows, from, inside, forward);
+        self.conversation.user_cursor = target;
         match target {
-            Some(item_ix) => self.list_state.scroll_to(ListOffset {
+            Some(item_ix) => self.conversation.list_state.scroll_to(ListOffset {
                 item_ix,
                 offset_in_item: px(0.),
             }),
-            None if forward => self.list_state.set_follow_mode(FollowMode::Tail),
-            None => self.list_state.scroll_to(ListOffset {
+            None if forward => self
+                .conversation
+                .list_state
+                .set_follow_mode(FollowMode::Tail),
+            None => self.conversation.list_state.scroll_to(ListOffset {
                 item_ix: 0,
                 offset_in_item: px(0.),
             }),
@@ -411,7 +492,7 @@ impl Root {
     pub(super) fn render_thread(&self, cx: &mut Context<Self>) -> AnyElement {
         let message = self.render_message(cx);
         let theme = cx.theme();
-        let Some(_) = &self.open else {
+        let Some(_) = &self.conversation.open else {
             return div()
                 .flex_1()
                 .flex()
@@ -425,11 +506,15 @@ impl Root {
             .flex_1()
             .h_full()
             .min_w_0()
-            .when(self.find_open, |pane| {
-                let count = if self.find_hits.is_empty() {
+            .when(self.conversation.find_open, |pane| {
+                let count = if self.conversation.find_hits.is_empty() {
                     "No results".to_string()
                 } else {
-                    format!("{} / {}", self.find_at + 1, self.find_hits.len())
+                    format!(
+                        "{} / {}",
+                        self.conversation.find_at + 1,
+                        self.conversation.find_hits.len()
+                    )
                 };
                 pane.child(
                     h_flex()
@@ -438,7 +523,11 @@ impl Root {
                         .gap_2()
                         .border_b_1()
                         .border_color(theme.border)
-                        .child(div().flex_1().child(Input::new(&self.find_input)))
+                        .child(
+                            div()
+                                .flex_1()
+                                .child(Input::new(&self.conversation.find_input)),
+                        )
                         .child(
                             div()
                                 .text_sm()
@@ -450,27 +539,35 @@ impl Root {
                                 .label("Previous")
                                 .compact()
                                 .outline()
-                                .on_click(cx.listener(|root, _, _, cx| root.step_find(false, cx))),
+                                .on_click(
+                                    self.pane_listener(cx, |root, _, _, cx| {
+                                        root.step_find(false, cx)
+                                    }),
+                                ),
                         )
                         .child(
                             Button::new("find-next")
                                 .label("Next")
                                 .compact()
                                 .outline()
-                                .on_click(cx.listener(|root, _, _, cx| root.step_find(true, cx))),
+                                .on_click(
+                                    self.pane_listener(cx, |root, _, _, cx| {
+                                        root.step_find(true, cx)
+                                    }),
+                                ),
                         )
                         .child(
                             Button::new("find-close")
                                 .label("Close")
                                 .compact()
                                 .outline()
-                                .on_click(
-                                    cx.listener(|root, _, window, cx| root.close_find(window, cx)),
-                                ),
+                                .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                                    root.close_find(window, cx)
+                                })),
                         ),
                 )
             })
-            .when(self.thread_loading, |pane| {
+            .when(self.conversation.thread_loading, |pane| {
                 pane.child(
                     div()
                         .flex_1()
@@ -482,9 +579,10 @@ impl Root {
                         .child("Loading thread…"),
                 )
             })
-            .when(!self.thread_loading, |pane| {
+            .when(!self.conversation.thread_loading, |pane| {
                 pane.child(
-                    self.timeline_pane
+                    self.conversation
+                        .timeline_pane
                         .clone()
                         .cached(StyleRefinement::default().flex_1().w_full()),
                 )

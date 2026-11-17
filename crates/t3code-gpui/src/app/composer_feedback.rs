@@ -9,7 +9,7 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let root = cx.entity().downgrade();
+        let root = self.pane_root(cx);
         window.push_notification(
             Notification::success("Started in background")
                 .placement(Anchor::TopRight)

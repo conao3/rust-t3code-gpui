@@ -2,7 +2,7 @@ use super::*;
 
 impl Root {
     pub(super) fn load_timeline_images(&mut self, cx: &mut Context<Self>) {
-        let Some(open) = &self.open else {
+        let Some(open) = &self.conversation.open else {
             return;
         };
         let Some(connection) = self.connection(&open.environment) else {
@@ -28,7 +28,12 @@ impl Root {
                 ))
             })
             .collect();
-        for (row, view) in self.rows.iter().zip(&self.row_views) {
+        for (row, view) in self
+            .conversation
+            .rows
+            .iter()
+            .zip(&self.conversation.row_views)
+        {
             let source = sources.get(&row.key).cloned().unwrap_or_default();
             view.update(cx, |view, cx| {
                 view.load_images(source, connection.clone(), self.runtime.clone(), cx)

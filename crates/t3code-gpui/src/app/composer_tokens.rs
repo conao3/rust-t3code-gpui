@@ -112,13 +112,13 @@ impl Root {
             suggestion.label.clone()
         };
         let token = InlineToken::new(text.clone(), text).with_label(label);
-        let result = self.composer.update(cx, |state, cx| {
+        let result = self.conversation.composer.update(cx, |state, cx| {
             state.replace_range_with_token(trigger.start..trigger.end, token, window, cx)?;
             state.replace_text_in_range(None, " ", window, cx);
             Ok::<_, gpui_kit::base::input::InlineTokenError>(())
         });
         if let Err(error) = result {
-            self.message = Some(format!("Could not insert composer token: {error:?}"));
+            self.conversation.message = Some(format!("Could not insert composer token: {error:?}"));
         }
         true
     }

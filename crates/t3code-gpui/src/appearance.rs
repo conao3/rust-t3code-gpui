@@ -202,7 +202,7 @@ pub fn apply(light: bool, cx: &mut App) {
 
 // Standard roles from T3 packages/shared/src/themePalettes.ts. Message surfaces
 // use the web overrides in apps/web/src/themePalette.ts, not the mobile palette.
-fn color(role: &str, light: bool) -> Hsla {
+pub(crate) fn color(role: &str, light: bool) -> Hsla {
     let (dark, bright) = match role {
         "canvas" => (0x000000, 0xfcfcfc),
         "surface" => (0x111111, 0xffffff),

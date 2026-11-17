@@ -198,7 +198,7 @@ impl Root {
                         .await;
                         if let Err(error) = result {
                             let _ = this.update(cx, |root, cx| {
-                                root.message =
+                                root.conversation.message =
                                     Some(format!("Could not dismiss Woke notification: {error:#}"));
                                 cx.notify();
                             });

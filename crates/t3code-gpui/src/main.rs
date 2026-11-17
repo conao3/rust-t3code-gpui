@@ -16,6 +16,7 @@ mod permissions;
 mod projects;
 mod prompt_store;
 mod provider_display;
+mod rich_markdown;
 mod row_view;
 mod shell_presentation;
 mod sidebar;

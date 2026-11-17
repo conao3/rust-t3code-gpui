@@ -9,7 +9,8 @@ impl Root {
                 state.focus(window, cx);
             });
         } else {
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
         }
         cx.notify();
@@ -17,7 +18,20 @@ impl Root {
 
     pub(super) fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 12] = [
+        let commands: [(&str, Box<dyn Action>); 22] = [
+            ("Search project contents", Box::new(ToggleProjectSearch)),
+            (self.reference_label(), Box::new(CopyThreadReference)),
+            ("Regenerate thread title", Box::new(RegenerateTitle)),
+            ("Undo thread action", Box::new(UndoThreadAction)),
+            ("Side chat", Box::new(OpenSideChat)),
+            ("Split conversation right", Box::new(SplitConversation)),
+            (
+                "Split conversation down",
+                Box::new(SplitConversationVertical),
+            ),
+            ("Close conversation pane", Box::new(CloseConversation)),
+            ("Focus Next Workspace Area", Box::new(FocusNextWorkspace)),
+            ("Reopen Closed Tab", Box::new(ReopenClosed)),
             ("New thread", Box::new(NewThread)),
             ("Next Done or waiting thread", Box::new(NextDone)),
             ("Settle the thread", Box::new(Settle)),
@@ -44,8 +58,15 @@ impl Root {
         let closer = move |window: &mut Window, cx: &mut App| {
             let _ = weak.update(cx, |root, cx| {
                 root.palette_open = false;
-                root.composer
-                    .update(cx, |state, cx| state.focus(window, cx));
+                if root.project_search.open {
+                    root.project_search
+                        .input
+                        .update(cx, |state, cx| state.focus(window, cx));
+                } else {
+                    root.conversation
+                        .composer
+                        .update(cx, |state, cx| state.focus(window, cx));
+                }
                 cx.notify();
             });
         };
