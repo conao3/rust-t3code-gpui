@@ -573,6 +573,7 @@ impl Root {
                     save = true;
                 }
                 root.follow_workspace();
+                root.sync_prompt_thumbnails(cx);
                 root.sync_composer_controls(window, cx);
                 let controls = ComposerControlsStamp {
                     width: root.composer_width().to_bits(),
@@ -639,6 +640,23 @@ impl Root {
                         .completion
                         .as_ref()
                         .map(|completion| completion.selected)
+                );
+                let stamp = format!(
+                    "{stamp}:{:?}",
+                    root.conversation.prompts.open.then(|| root
+                        .conversation
+                        .prompts
+                        .store
+                        .entries
+                        .iter()
+                        .map(|entry| crate::prompt_store::relative_time(
+                            entry.created_at,
+                            SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .expect("current time")
+                                .as_secs()
+                        ))
+                        .collect::<Vec<_>>())
                 );
                 let stamp = format!(
                     "{stamp}:{:?}:{:?}",
