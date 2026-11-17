@@ -407,6 +407,36 @@ impl Root {
             last.kind,
             if count == 1 { "" } else { "s" }
         );
+        let undo_label = self
+            .key_rules
+            .iter()
+            .find(|rule| rule.command == "thread.undo")
+            .map(|rule| {
+                let chord = &rule.chord;
+                let mut parts = Vec::new();
+                if chord.control {
+                    parts.push("Ctrl".to_string());
+                }
+                if chord.platform {
+                    parts.push(
+                        if cfg!(target_os = "macos") {
+                            "⌘"
+                        } else {
+                            "Super"
+                        }
+                        .to_string(),
+                    );
+                }
+                if chord.alt {
+                    parts.push("Alt".to_string());
+                }
+                if chord.shift {
+                    parts.push("Shift".to_string());
+                }
+                parts.push(chord.key.to_uppercase());
+                format!("{} to undo", parts.join("+"))
+            })
+            .unwrap_or_else(|| "Undo".into());
         Some(
             h_flex()
                 .id("thread-undo-notice")
@@ -427,7 +457,7 @@ impl Root {
                 .child(div().flex_1().text_xs().child(label))
                 .child(
                     Button::new("undo-thread")
-                        .label("Undo")
+                        .label(undo_label)
                         .compact()
                         .ghost()
                         .on_click(cx.listener(|root, _, _, cx| root.undo_thread_action(cx))),
