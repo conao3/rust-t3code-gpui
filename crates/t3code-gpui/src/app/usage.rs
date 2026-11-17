@@ -1,6 +1,7 @@
 use super::usage_data::{self as data, Merged, Totals, number, text};
 use super::*;
 use gpui_kit::component::button::{Toggle, ToggleGroup};
+use gpui_kit::component::popover::Popover;
 use std::collections::BTreeMap;
 use t3_client::rpc::StreamLimits;
 
@@ -345,15 +346,6 @@ impl UsagePage {
         self.recompute();
         self.save_preferences(cx);
         cx.notify();
-    }
-    fn value(&self, total: &Totals) -> String {
-        if self.metric == "tokens" {
-            data::tokens(total.total_tokens())
-        } else if total.records > 0. && total.unpriced >= total.records {
-            "Unknown".into()
-        } else {
-            data::usd(total.cost)
-        }
     }
     fn open_model(&self, key: &(String, String), window: &mut Window, cx: &mut Context<Self>) {
         let Some(total) = self.merged.models.get(key).cloned() else {
@@ -885,9 +877,9 @@ impl Render for UsagePage {
         let menu_root = cx.entity().downgrade();
         let provider_root = menu_root.clone();
         let mut body = v_flex()
-            .gap_5()
+            .gap_6()
             .w_full()
-            .max_w(px(1120.))
+            .max_w(px(1024.))
             .mx_auto()
             .p_6()
             .children(
@@ -912,41 +904,64 @@ impl Render for UsagePage {
             body = body.child("Loading usage…");
         } else {
             let total = &self.merged.totals;
-            body = body
-                .child(
-                    h_flex()
-                        .gap_6()
-                        .child(
-                            v_flex()
-                                .gap_1()
-                                .child(div().text_xs().text_color(theme.muted_foreground).child(
-                                    if self.metric == "tokens" {
-                                        "Total tokens"
-                                    } else {
-                                        "Total cost"
-                                    },
-                                ))
-                                .child(
-                                    div()
-                                        .text_3xl()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(self.value(total)),
-                                ),
-                        )
-                        .child(
-                            v_flex()
-                                .gap_1()
-                                .child("Sessions")
-                                .child(data::count(total.sessions)),
-                        )
-                        .child(
-                            v_flex()
-                                .gap_1()
-                                .child("Records")
-                                .child(data::count(total.records)),
-                        ),
-                )
-                .child(self.render_chart(cx));
+            let quality = format!(
+                "API estimate excludes {} unpriced records.",
+                data::percent(if total.records > 0. {
+                    total.unpriced / total.records
+                } else {
+                    0.
+                })
+            );
+            let mut summary = v_flex().w(px(288.)).flex_none().gap_5().child(
+                v_flex()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_size(rems(2.25))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(if self.metric == "tokens" {
+                                data::tokens(total.total_tokens())
+                            } else {
+                                data::usd(total.cost)
+                            }),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(settings_controls::text(format!(
+                                "{} sessions{}",
+                                data::count(total.sessions),
+                                if self.metric == "cost" {
+                                    " · API estimate"
+                                } else {
+                                    ""
+                                }
+                            )))
+                            .when(self.metric == "cost" && total.unpriced > 0., |row| {
+                                let content = quality.clone();
+                                row.child(
+                                    Popover::new("usage-unpriced")
+                                        .anchor(Anchor::BottomCenter)
+                                        .trigger(
+                                            Button::new("usage-unpriced-trigger")
+                                                .icon(IconName::Info)
+                                                .accessibility_label("Unpriced usage details")
+                                                .tooltip(quality.clone())
+                                                .ghost()
+                                                .small()
+                                                .compact(),
+                                        )
+                                        .content(move |_, _, _| {
+                                            settings_controls::text(content.clone())
+                                                .text_xs()
+                                                .max_w(px(300.))
+                                        }),
+                                )
+                            }),
+                    ),
+            );
             let mut providers = self.merged.providers.iter().collect::<Vec<_>>();
             providers.sort_by(|(_, a), (_, b)| {
                 let metric = |value: &Totals| {
@@ -958,22 +973,126 @@ impl Render for UsagePage {
                 };
                 metric(b).total_cmp(&metric(a))
             });
-            body = body.child(
-                h_flex()
-                    .gap_4()
-                    .flex_wrap()
-                    .children(providers.into_iter().map(|(provider, total)| {
-                        div().text_sm().child(format!(
-                            "{}  {}",
-                            PROVIDERS
-                                .iter()
-                                .find(|(id, _, _)| id == provider)
-                                .map(|(_, label, _)| *label)
-                                .unwrap_or(provider),
-                            self.value(total)
-                        ))
-                    })),
-            );
+            for (provider, provider_total) in providers {
+                let (label, color) = PROVIDERS
+                    .iter()
+                    .find(|(id, _, _)| id == provider)
+                    .map(|(_, label, color)| (*label, *color))
+                    .unwrap_or((provider, 0x888888));
+                let share = if self.metric == "tokens" {
+                    if total.total_tokens() > 0. {
+                        provider_total.total_tokens() / total.total_tokens()
+                    } else {
+                        0.
+                    }
+                } else if total.cost > 0. {
+                    provider_total.cost / total.cost
+                } else {
+                    0.
+                };
+                summary = summary.child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .text_sm()
+                                .child(div().size(px(8.)).rounded_full().bg(rgb(color)))
+                                .child(settings_controls::text(label.to_string()))
+                                .child(
+                                    settings_controls::text(format!(
+                                        "{} {}",
+                                        data::count(provider_total.sessions),
+                                        if provider_total.sessions == 1. {
+                                            "session"
+                                        } else {
+                                            "sessions"
+                                        }
+                                    ))
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground),
+                                )
+                                .child(div().flex_1())
+                                .child(settings_controls::text(if self.metric == "tokens" {
+                                    data::tokens(provider_total.total_tokens())
+                                } else {
+                                    data::usd(provider_total.cost)
+                                })),
+                        )
+                        .child(
+                            settings_controls::text(if self.metric == "tokens" {
+                                format!(
+                                    "{} of tokens · {}",
+                                    data::percent(share),
+                                    data::usd(provider_total.cost)
+                                )
+                            } else {
+                                format!(
+                                    "{} of cost · {} tokens",
+                                    data::percent(share),
+                                    data::tokens(provider_total.total_tokens())
+                                )
+                            })
+                            .text_xs()
+                            .text_color(theme.muted_foreground),
+                        ),
+                );
+            }
+            body = body
+                .child(
+                    h_flex().items_start().gap_6().child(summary).child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_3()
+                            .child(
+                                settings_controls::text(format!(
+                                    "{} {}",
+                                    if self.days == 1 { "Hourly" } else { "Daily" },
+                                    if self.metric == "tokens" {
+                                        "processed tokens"
+                                    } else {
+                                        "cost"
+                                    }
+                                ))
+                                .text_sm()
+                                .font_weight(FontWeight::MEDIUM),
+                            )
+                            .child(self.render_chart(cx)),
+                    ),
+                )
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .child(
+                            settings_controls::text("Totals")
+                                .text_sm()
+                                .font_weight(FontWeight::MEDIUM),
+                        )
+                        .child(
+                            h_flex().gap_6().children(
+                                [
+                                    ("Processed tokens", data::tokens(total.total_tokens())),
+                                    ("Cached input", data::tokens(total.tokens[1])),
+                                    ("Uncached input", data::tokens(total.tokens[0])),
+                                    ("Output", data::tokens(total.tokens[3])),
+                                    ("Cache savings", data::usd(total.cache_savings)),
+                                ]
+                                .into_iter()
+                                .map(|(label, value)| {
+                                    v_flex()
+                                        .flex_1()
+                                        .gap_1()
+                                        .child(
+                                            settings_controls::text(label)
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground),
+                                        )
+                                        .child(settings_controls::text(value).text_lg())
+                                }),
+                            ),
+                        ),
+                );
             body = body.child(
                 h_flex()
                     .justify_between()
@@ -1107,7 +1226,7 @@ impl Render for UsagePage {
                             )
                             .child(div().flex_1())
                             .child(if total.records > 0. && total.unpriced >= total.records {
-                                "Unknown".to_string()
+                                "Unpriced".to_string()
                             } else {
                                 data::usd(total.cost)
                             })
@@ -1124,12 +1243,12 @@ impl Render for UsagePage {
             .bg(theme.background)
             .child(
                 h_flex()
-                    .h(px(52.))
+                    .h(px(48.))
                     .px_4()
                     .gap_3()
                     .border_b_1()
                     .border_color(theme.border)
-                    .child(div().text_lg().child("Usage"))
+                    .child(div().text_sm().child("Usage"))
                     .child(
                         Button::new("usage-environments")
                             .label("Environments")
