@@ -1107,7 +1107,7 @@ impl Render for ThreadServices {
                 .py_2()
                 .border_t_1()
                 .border_color(cx.theme().border)
-                .child(div().px_2p5().text_xs().child("Servers"));
+                .child(div().px_2p5().text_xs().child(text!("Servers")));
             for (index, server) in self.servers.iter().take(self.visible).enumerate() {
                 let port = server["port"].as_u64().unwrap_or_default();
                 let mut description = if server["terminal"].is_null() {
@@ -1193,7 +1193,7 @@ impl Render for ThreadServices {
                 .child(
                     h_flex()
                         .justify_between()
-                        .child(div().px_2p5().text_xs().child("Automations"))
+                        .child(div().px_2p5().text_xs().child(text!("Automations")))
                         .child(
                             Button::new("manage-tasks")
                                 .icon(gpui_kit::assets::IconName::Settings2)
@@ -1219,11 +1219,11 @@ impl Render for ThreadServices {
                         .py_1p5()
                         .gap_2()
                         .child(
-                            v_flex().flex_1().child(title.clone()).child(
+                            v_flex().flex_1().child(text!(title.clone())).child(
                                 div()
                                     .text_xs()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(schedule),
+                                    .child(text!(schedule)),
                             ),
                         )
                         .child(

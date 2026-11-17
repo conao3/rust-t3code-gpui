@@ -1721,7 +1721,7 @@ impl Root {
                 .child(if wide {
                     div()
                         .text_xs()
-                        .child(format!("Stop {} of {}", position + 1, stops.len()))
+                        .child(text!(format!("Stop {} of {}", position + 1, stops.len())))
                         .into_any_element()
                 } else {
                     Button::new("guide-stops")
@@ -1773,7 +1773,11 @@ impl Root {
             .aria_label("Review tour")
             .gap_2();
         if wide {
-            rail = rail.child(format!("{} of {} read", view.guide_seen.len(), stops.len()));
+            rail = rail.child(text!(format!(
+                "{} of {} read",
+                view.guide_seen.len(),
+                stops.len()
+            )));
         }
         if view.guide_rail || wide {
             for (index, stop) in stops.iter().enumerate() {
@@ -1810,7 +1814,11 @@ impl Root {
                         )
                         .accessibility_label(format!(
                             "{} {} {}{}",
-                            index + 1,
+                            if view.guide_seen.contains(&index) {
+                                format!("Stop {}, read", index + 1)
+                            } else {
+                                (index + 1).to_string()
+                            },
                             stop["title"].as_str().unwrap_or_default(),
                             if stop["attention"].is_null() {
                                 ""
@@ -1835,13 +1843,17 @@ impl Root {
                     .role(accesskit::Role::Heading)
                     .text_lg()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(stop["title"].as_str().unwrap_or_default().to_string()),
+                    .child(text!(
+                        stop["title"].as_str().unwrap_or_default().to_string()
+                    )),
             )
             .child(
                 div()
                     .text_sm()
                     .text_color(cx.theme().muted_foreground)
-                    .child(stop["summary"].as_str().unwrap_or_default().to_string()),
+                    .child(text!(
+                        stop["summary"].as_str().unwrap_or_default().to_string()
+                    )),
             );
         if let Some(kind) = stop["attention"]["kind"].as_str() {
             let label = match kind {
@@ -1859,13 +1871,13 @@ impl Root {
                     .border_color(cx.theme().border)
                     .rounded_lg()
                     .p_3()
-                    .child(label.to_string())
-                    .child(
+                    .child(text!(label.to_string()))
+                    .child(text!(
                         stop["attention"]["note"]
                             .as_str()
                             .unwrap_or_default()
-                            .to_string(),
-                    ),
+                            .to_string()
+                    )),
             );
         }
         for file in stop["files"].as_array().into_iter().flatten() {

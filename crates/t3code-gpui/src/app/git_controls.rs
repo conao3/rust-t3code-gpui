@@ -1161,7 +1161,7 @@ impl Render for ScriptEditor {
             )
             .child(text!("Keybinding"))
             .child(Input::new(&self.keybinding).aria_label("Keybinding").readonly(true))
-            .child(div().text_xs().child("Press a shortcut. Use Backspace to clear. Shortcuts are environment-wide. Projects using the same action share its shortcut."))
+            .child(div().text_xs().child(text!("Press a shortcut. Use Backspace to clear. Shortcuts are environment-wide. Projects using the same action share its shortcut.")))
             .child(text!("Command"))
             .child(
                 Textarea::new(&self.command)
