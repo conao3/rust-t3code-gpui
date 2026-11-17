@@ -382,54 +382,7 @@ impl Root {
     }
 
     pub(super) fn render_workspace_mode(&self, cx: &Context<Self>) -> AnyElement {
-        let worktree = self
-            .draft
-            .as_ref()
-            .is_some_and(|draft| draft.workspace_strategy["type"].as_str() == Some("worktree"));
-        let focus = self.focus.clone();
-        Button::new("workspace-mode")
-            .child(
-                h_flex()
-                    .gap_1()
-                    .text_size(px(12.))
-                    .child(
-                        Icon::new(if worktree {
-                            gpui_kit::assets::IconName::GitBranch
-                        } else {
-                            gpui_kit::assets::IconName::Folder
-                        })
-                        .size(px(12.)),
-                    )
-                    .child(if worktree {
-                        "New worktree"
-                    } else {
-                        "Current checkout"
-                    }),
-            )
-            .ghost()
-            .compact()
-            .h(px(28.))
-            .px_1()
-            .text_color(cx.theme().muted_foreground)
-            .role(accesskit::Role::ComboBox)
-            .accessibility_label("Workspace")
-            .dropdown_menu(move |mut menu, _, _| {
-                for (label, mode, checked) in [
-                    ("Current checkout", "root", !worktree),
-                    ("New worktree", "worktree", worktree),
-                ] {
-                    menu = menu.menu_with_check(
-                        label,
-                        checked,
-                        Box::new(WorkspaceAction {
-                            kind: "mode".into(),
-                            value: json!(mode),
-                        }),
-                    );
-                }
-                menu.action_context(focus.clone())
-            })
-            .into_any_element()
+        self.render_workspace_select(cx)
     }
 
     pub(super) fn workspace_editor(&self) -> Option<String> {

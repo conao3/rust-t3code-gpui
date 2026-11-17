@@ -113,6 +113,7 @@ impl Root {
         }
         self.rows = rows;
         self.row_views = views;
+        self.load_timeline_images(cx);
         for (row, view) in self.rows.iter().zip(&self.row_views) {
             if let Some(metadata) = row
                 .message_part

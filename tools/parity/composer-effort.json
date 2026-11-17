@@ -1,0 +1,44 @@
+{
+  "name": "composer-effort",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+e"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText",
+        "name": "No effort levels"
+      },
+      "native": {
+        "role": "list item",
+        "name": "GPT-6-Luna"
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      }
+    }
+  ]
+}

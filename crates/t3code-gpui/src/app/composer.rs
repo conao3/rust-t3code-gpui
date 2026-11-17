@@ -1,5 +1,22 @@
 use super::*;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum SubmissionIntent {
+    Foreground,
+    Alternate,
+    Background,
+}
+
+fn delivery(running: bool, alternate: bool, steer: bool, can_steer: bool) -> Delivery {
+    if !running {
+        Delivery::Start
+    } else if can_steer && (steer != alternate) {
+        Delivery::Steer
+    } else {
+        Delivery::Queue
+    }
+}
+
 pub(super) struct ComposerControlsPane {
     pub(super) root: WeakEntity<Root>,
 }
@@ -168,9 +185,16 @@ impl Root {
             "up" => open.selected = (open.selected + n - 1) % n,
             "escape" => self.completion = None,
             "enter" | "tab" if !keystroke.modifiers.control => {
+                let trigger = open.trigger.clone();
+                let suggestion = open.suggestions[open.selected].clone();
+                self.completion = None;
+                if self.accept_token(&trigger, &suggestion, window, cx) {
+                    self.stash_composer(cx);
+                    cx.notify();
+                    return true;
+                }
                 let text = self.composer.read(cx).value().to_string();
-                let (value, at) =
-                    completion::apply(&text, &open.trigger, &open.suggestions[open.selected]);
+                let (value, at) = completion::apply(&text, &trigger, &suggestion);
                 let (line, column) = completion::line_column(&value, at);
                 self.completion = None;
                 self.composer.update(cx, |state, cx| {
@@ -252,7 +276,7 @@ impl Root {
         true
     }
 
-    fn composer_key(&self) -> Option<String> {
+    pub(super) fn composer_key(&self) -> Option<String> {
         if self.draft.is_some() {
             return Some(drafts::NEW_THREAD.to_string());
         }
@@ -263,10 +287,19 @@ impl Root {
     /// Keeps the composer text as the draft of what the composer is for now. Call before the
     /// composer changes what it is for.
     pub(super) fn stash_composer(&mut self, cx: &mut Context<Self>) {
+        if self.queue_edit.is_some() {
+            return;
+        }
         let Some(key) = self.composer_key() else {
             return;
         };
         let text = self.composer.read(cx).value().to_string();
+        if self.attachments.is_empty() {
+            self.composer_attachments.remove(&key);
+        } else {
+            self.composer_attachments
+                .insert(key.clone(), self.attachments.clone());
+        }
         if self.drafts.set(&key, &text) {
             self.schedule_drafts_save(cx);
         }
@@ -274,6 +307,15 @@ impl Root {
 
     /// Puts the draft of what the composer is for now into it, at the next render.
     pub(super) fn load_composer(&mut self) {
+        self.picker_open = false;
+        self.abandon_queue_edit();
+        self.attachments = self
+            .composer_key()
+            .and_then(|key| self.composer_attachments.get(&key))
+            .cloned()
+            .unwrap_or_default();
+        self.prompts.history = None;
+        self.prompts.open = false;
         self.hovered_message = None;
         let text = self
             .composer_key()
@@ -300,9 +342,62 @@ impl Root {
         .detach();
     }
 
+    pub(super) fn composer_composing(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.composer.update(cx, |state, cx| {
+            state.marked_text_range(window, cx).is_some()
+        })
+    }
+
+    pub(super) fn composer_delivery(&self, alternate: bool) -> Delivery {
+        let running = self.open_entry().is_some_and(|entry| {
+            matches!(
+                entry.status,
+                ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval
+            )
+        });
+        let approval = self
+            .open_entry()
+            .is_some_and(|entry| entry.status == ThreadStatus::Approval);
+        let compacting = self.open.as_ref().is_some_and(|open| {
+            let state = open.watch.state();
+            let state = state.lock().expect("thread state");
+            state
+                .projection
+                .get("turnItems")
+                .and_then(Value::as_array)
+                .is_some_and(|items| {
+                    items
+                        .iter()
+                        .any(|item| item["type"] == "compaction" && item["status"] == "running")
+                })
+        });
+        delivery(
+            running,
+            alternate,
+            approval || self.settings.steer_follow_ups,
+            !compacting,
+        )
+    }
+
     pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.send_intent(SubmissionIntent::Foreground, window, cx);
+    }
+
+    pub(super) fn send_intent(
+        &mut self,
+        intent: SubmissionIntent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.composer_composing(window, cx) {
+            return;
+        }
+        if self.queue_edit.is_some() {
+            self.save_queue_edit(window, cx);
+            return;
+        }
         if self.draft.is_some() {
-            self.launch(window, cx);
+            self.launch(intent, window, cx);
             return;
         }
         if let Some((view, request_id)) = self.pending_question() {
@@ -319,13 +414,22 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
-        let delivery = match self.open_entry().map(|e| e.status) {
-            Some(ThreadStatus::Working) if self.settings.steer_follow_ups => Delivery::Steer,
-            Some(ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval) => {
-                Delivery::Queue
-            }
-            _ => Delivery::Start,
+        let background_thread = thread_id.clone();
+        let delivery = self.composer_delivery(intent == SubmissionIntent::Alternate);
+        let approvals: Vec<String> = self
+            .rows
+            .iter()
+            .filter_map(|row| match &row.pending {
+                Some(Pending::Approval { request_id, .. }) => Some(request_id.clone()),
+                _ => None,
+            })
+            .collect();
+        let Some(origin) = self.composer_key() else {
+            return;
         };
+        if !self.composer_sends.insert(origin.clone()) {
+            return;
+        }
         let runtime = self.runtime.clone();
         let pending = std::mem::take(&mut self.attachments);
         self.composer
@@ -337,6 +441,11 @@ impl Root {
                 let pending = pending.clone();
                 async move {
                     let attachments = upload_all(&connection, &pending).await?;
+                    for request_id in approvals {
+                        connection
+                            .respond(&thread_id, &request_id, "decline")
+                            .await?;
+                    }
                     connection
                         .send_message(&thread_id, &text, attachments, delivery)
                         .await
@@ -344,7 +453,15 @@ impl Root {
             })
             .await;
             let _ = this.update_in(cx, |root, window, cx| {
+                root.composer_sends.remove(&origin);
                 root.message = sent.as_ref().err().map(|e| format!("Send failed: {e:#}"));
+                if sent.is_ok()
+                    && intent == SubmissionIntent::Background
+                    && root.composer_key().as_ref() == Some(&origin)
+                {
+                    root.new_thread(window, cx);
+                    root.background_started(environment.clone(), background_thread, window, cx);
+                }
                 if sent.is_err() {
                     root.composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
@@ -472,6 +589,10 @@ impl Root {
     }
 
     pub(super) fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.queue_edit.is_some() {
+            self.cancel_queue_edit(window, cx);
+            return;
+        }
         if self.branch_anchor.take().is_some() {
             self.composer
                 .update(cx, |state, cx| state.focus(window, cx));
@@ -498,9 +619,9 @@ impl Root {
         }
     }
 
-    fn launch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn launch(&mut self, intent: SubmissionIntent, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.composer.read(cx).value().trim().to_string();
-        if text.is_empty() {
+        if text.is_empty() && self.attachments.is_empty() {
             return;
         }
         let Some((environment, project_id, model, runtime_mode)) = self.draft_target() else {
@@ -532,7 +653,9 @@ impl Root {
             .map(|draft| draft.id.clone())
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let promoting = (environment.clone(), thread_id.clone());
-        self.promoting.insert(promoting.clone());
+        if !self.promoting.insert(promoting.clone()) {
+            return;
+        }
         self.rebuild_entries();
         self.schedule_wake(window, cx);
         let title = projects::title_seed(&text);
@@ -568,7 +691,17 @@ impl Root {
                 root.rebuild_entries();
                 root.schedule_wake(window, cx);
                 match launched {
-                    Ok(thread_id) => root.open_thread(environment, thread_id, cx),
+                    Ok(thread_id) => {
+                        if root.draft.as_ref().map(|draft| &draft.id) != Some(&promoting.1) {
+                            return;
+                        }
+                        if intent == SubmissionIntent::Background {
+                            root.new_thread(window, cx);
+                            root.background_started(environment, thread_id, window, cx);
+                        } else {
+                            root.open_thread(environment, thread_id, cx);
+                        }
+                    }
                     Err(error) => {
                         root.message = Some(format!("New thread failed: {error:#}"));
                         root.composer
@@ -616,7 +749,7 @@ impl Root {
         ))
     }
 
-    fn dispatch_on_open(
+    pub(super) fn dispatch_on_open(
         &mut self,
         what: &'static str,
         cx: &mut Context<Self>,
@@ -879,6 +1012,11 @@ impl Root {
         let rows = self.queued.iter().enumerate().map(|(i, queued)| {
             let steer_run = queued.run_id.clone();
             let cancel_run = queued.run_id.clone();
+            let edit_run = queued.run_id.clone();
+            let editing = self
+                .queue_edit
+                .as_ref()
+                .is_some_and(|edit| edit.run_id == queued.run_id);
             h_flex()
                 .gap_2()
                 .child(
@@ -897,7 +1035,8 @@ impl Root {
                 )
                 .child(
                     Button::new(("queue-steer", i))
-                        .label("Steer now")
+                        .disabled(editing)
+                        .label("Send now")
                         .compact()
                         .outline()
                         .on_click(cx.listener(move |root, _, _, cx| {
@@ -905,8 +1044,48 @@ impl Root {
                         })),
                 )
                 .child(
+                    Button::new(("queue-edit", i))
+                        .icon(gpui_kit::assets::IconName::Pencil)
+                        .ghost()
+                        .compact()
+                        .accessibility_label(if editing {
+                            "Cancel editing queued message"
+                        } else {
+                            "Edit queued message"
+                        })
+                        .on_click(cx.listener(move |root, _, window, cx| {
+                            if editing {
+                                root.cancel_queue_edit(window, cx);
+                            } else {
+                                root.edit_queued(edit_run.clone(), window, cx);
+                            }
+                        })),
+                )
+                .child(
+                    Button::new(("queue-up", i))
+                        .icon(IconName::ArrowUp)
+                        .ghost()
+                        .compact()
+                        .disabled(i == 0)
+                        .accessibility_label("Move queued message up")
+                        .on_click(
+                            cx.listener(move |root, _, _, cx| root.move_queued(i, false, cx)),
+                        ),
+                )
+                .child(
+                    Button::new(("queue-down", i))
+                        .icon(IconName::ArrowDown)
+                        .ghost()
+                        .compact()
+                        .disabled(i + 1 == self.queued.len())
+                        .accessibility_label("Move queued message down")
+                        .on_click(cx.listener(move |root, _, _, cx| root.move_queued(i, true, cx))),
+                )
+                .child(
                     Button::new(("queue-cancel", i))
                         .label("Cancel")
+                        .accessibility_label("Remove queued message")
+                        .disabled(editing)
                         .compact()
                         .outline()
                         .on_click(cx.listener(move |root, _, _, cx| {
@@ -924,7 +1103,7 @@ impl Root {
         )
     }
 
-    fn steer_queued(&mut self, run_id: String, cx: &mut Context<Self>) {
+    pub(super) fn steer_queued(&mut self, run_id: String, cx: &mut Context<Self>) {
         let Some((environment, thread_id)) = self.current() else {
             return;
         };
@@ -933,8 +1112,9 @@ impl Root {
                 .and_then(Value::as_str)
                 .map(str::to_string)
         }) else {
-            self.message = Some("No run is active to steer.".into());
-            cx.notify();
+            self.dispatch_on_open("Starting queued message",cx,move |connection,thread_id| Box::pin(async move {
+                connection.dispatch(json!({"type":"queued-run.start","threadId":thread_id,"runId":run_id})).await
+            }));
             return;
         };
         self.dispatch_on_open("Steering", cx, move |connection, thread_id| {
@@ -964,6 +1144,16 @@ impl Root {
     }
 
     fn composer_button(&self, cx: &Context<Self>) -> Button {
+        if let Some(edit) = &self.queue_edit {
+            return Button::new("save-queued-message")
+                .icon(IconName::Check)
+                .size(px(32.))
+                .rounded(px(16.))
+                .accessibility_label("Update queued message")
+                .tooltip("Update queued message")
+                .disabled(edit.saving)
+                .on_click(cx.listener(|root, _, window, cx| root.save_queue_edit(window, cx)));
+        }
         if self.draft.is_some() {
             return Button::new("launch")
                 .icon(IconName::ArrowUp)
@@ -981,9 +1171,11 @@ impl Root {
                     },
                 )
                 .tooltip("Send")
-                .accessibility_label("Send")
+                .accessibility_label("Submit message")
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.launch(window, cx)));
+                .on_click(cx.listener(|root, _, window, cx| {
+                    root.launch(SubmissionIntent::Foreground, window, cx)
+                }));
         }
         let working = self.open_entry().is_some_and(|entry| {
             matches!(
@@ -995,8 +1187,22 @@ impl Root {
             Button::new("answer")
                 .label("Answer")
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
-        } else if working {
+                .on_click(cx.listener(|root, _, window, cx| {
+                    let alternate = window.modifiers().control || window.modifiers().platform;
+                    root.send_intent(
+                        if alternate {
+                            SubmissionIntent::Alternate
+                        } else {
+                            SubmissionIntent::Foreground
+                        },
+                        window,
+                        cx,
+                    );
+                }))
+        } else if working
+            && self.composer.read(cx).value().trim().is_empty()
+            && self.attachments.is_empty()
+        {
             Button::new("stop")
                 .icon(Icon::empty().path("icons/t3-stop.svg"))
                 .tooltip("Interrupt")
@@ -1007,7 +1213,11 @@ impl Root {
                 .on_click(cx.listener(|root, _, _, cx| root.stop(cx)))
         } else {
             Button::new("send")
-                .icon(IconName::ArrowUp)
+                .icon(Icon::empty().path(match self.composer_delivery(false) {
+                    Delivery::Start => "icons/t3-submit.svg",
+                    Delivery::Steer => "icons/t3-steer.svg",
+                    Delivery::Queue => "icons/t3-queue.svg",
+                }))
                 .disabled(
                     self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
                 )
@@ -1020,11 +1230,26 @@ impl Root {
                     },
                 )
                 .tooltip("Send")
-                .accessibility_label("Send")
+                .accessibility_label(match self.composer_delivery(false) {
+                    Delivery::Start => "Submit message",
+                    Delivery::Steer => "Steer message",
+                    Delivery::Queue => "Queue message",
+                })
                 .size(px(32.))
                 .rounded(px(16.))
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
+                .on_click(cx.listener(|root, _, window, cx| {
+                    let alternate = window.modifiers().control || window.modifiers().platform;
+                    root.send_intent(
+                        if alternate {
+                            SubmissionIntent::Alternate
+                        } else {
+                            SubmissionIntent::Foreground
+                        },
+                        window,
+                        cx,
+                    );
+                }))
         }
     }
 
@@ -1164,7 +1389,23 @@ impl Root {
                 let selected = current
                     .as_ref()
                     .and_then(|selection| models::option_value(selection, descriptor));
+                let options: Vec<Value> = descriptor["options"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|option| option["id"].clone())
+                    .collect();
+                let focused = self
+                    .composer_choices
+                    .effort_cursor
+                    .as_ref()
+                    .filter(|value| options.contains(value))
+                    .or(selected.as_ref())
+                    .or(options.first());
                 v_flex()
+                    .id("composer-reasoning")
+                    .role(accesskit::Role::RadioGroup)
+                    .aria_label(descriptor["label"].as_str().unwrap_or("Effort").to_string())
                     .w(px(192.))
                     .h_full()
                     .border_l_1()
@@ -1177,7 +1418,7 @@ impl Root {
                             .px_1()
                             .text_sm()
                             .text_color(theme.muted_foreground)
-                            .child("Reasoning"),
+                            .child(descriptor["label"].as_str().unwrap_or("Effort").to_string()),
                     )
                     .children(
                         descriptor
@@ -1188,9 +1429,67 @@ impl Root {
                             .map(|option| {
                                 let value = option.get("id").cloned().unwrap_or(Value::Null);
                                 let checked = Some(&value) == selected.as_ref();
+                                let tracked = Some(&value) == focused;
+                                let choices = options.clone();
+                                let key_id = id.clone();
+                                let key_value = value.clone();
                                 let id = id.clone();
                                 h_flex()
                                     .id(SharedString::from(format!("reasoning-{value}")))
+                                    .role(accesskit::Role::RadioButton)
+                                    .aria_label(
+                                        option["label"].as_str().unwrap_or_default().to_string(),
+                                    )
+                                    .aria_toggled(if checked {
+                                        accesskit::Toggled::True
+                                    } else {
+                                        accesskit::Toggled::False
+                                    })
+                                    .when(tracked, |row| {
+                                        row.track_focus(&self.composer_choices.effort_focus)
+                                    })
+                                    .on_key_down(cx.listener(
+                                        move |root, event: &KeyDownEvent, window, cx| {
+                                            match event.keystroke.key.as_str() {
+                                                "up" | "down" => {
+                                                    if let Some(index) = choices
+                                                        .iter()
+                                                        .position(|value| value == &key_value)
+                                                    {
+                                                        let next = if event.keystroke.key == "down"
+                                                        {
+                                                            (index + 1) % choices.len()
+                                                        } else {
+                                                            (index + choices.len() - 1)
+                                                                % choices.len()
+                                                        };
+                                                        root.composer_choices.effort_cursor =
+                                                            Some(choices[next].clone());
+                                                        cx.notify();
+                                                    }
+                                                }
+                                                "enter" | "space" => root.set_model_option(
+                                                    &key_id,
+                                                    key_value.clone(),
+                                                    cx,
+                                                ),
+                                                "left" => {
+                                                    root.model_picker.update(cx, |state, cx| {
+                                                        state.focus(window, cx)
+                                                    })
+                                                }
+                                                "escape" => {
+                                                    root.picker_open = false;
+                                                    root.composer.update(cx, |state, cx| {
+                                                        state.focus(window, cx)
+                                                    });
+                                                    cx.notify();
+                                                }
+                                                _ => return,
+                                            }
+                                            cx.stop_propagation();
+                                        },
+                                    ))
                                     .w_full()
                                     .h(px(34.))
                                     .px_2()
@@ -1221,7 +1520,7 @@ impl Root {
                 .bottom(px(40.))
                 .right(px(48.))
                 .mb_1()
-                .w(px(if reasoning.is_some() { 554. } else { 362. }))
+                .w(px(554.))
                 .h(px(392.))
                 .rounded_md()
                 .border_1()
@@ -1274,7 +1573,27 @@ impl Root {
                                     .on_cancel(move |window, cx| cancel(window, cx)),
                             ),
                         )
-                        .children(reasoning_column),
+                        .child(reasoning_column.unwrap_or_else(|| {
+                            v_flex()
+                                .id("composer-no-effort")
+                                .w(px(192.))
+                                .h_full()
+                                .border_l_1()
+                                .border_color(theme.border.opacity(0.7))
+                                .p_2()
+                                .text_sm()
+                                .text_color(theme.muted_foreground)
+                                .child(div().h(px(34.)).px_1().child("Effort"))
+                                .child(
+                                    div()
+                                        .id("no-effort-levels")
+                                        .role(accesskit::Role::Label)
+                                        .aria_label("No effort levels")
+                                        .h(px(32.))
+                                        .px_2()
+                                        .child("No effort levels"),
+                                )
+                        })),
                 )
                 .child(
                     h_flex()
@@ -1405,7 +1724,32 @@ impl Root {
         div()
             .relative()
             .w_full()
-            .child(toolbar.child(self.composer_button(cx)))
+            .child(
+                toolbar
+                    .child(
+                        Button::new("dictation")
+                            .icon(IconName::Mic)
+                            .ghost()
+                            .size(px(28.))
+                            .accessibility_label(if self.dictation.recording.is_some() {
+                                "Stop dictation"
+                            } else {
+                                "Start dictation"
+                            })
+                            .tooltip(if self.dictation.recording.is_some() {
+                                "Stop dictation"
+                            } else {
+                                "Start dictation"
+                            })
+                            .disabled(self.dictation.busy)
+                            .on_click(
+                                cx.listener(|root, _, window, cx| {
+                                    root.toggle_dictation(window, cx)
+                                }),
+                            ),
+                    )
+                    .child(self.composer_button(cx)),
+            )
             .children(picker)
             .into_any_element()
     }
@@ -1491,6 +1835,9 @@ impl Root {
             )
         });
         let content = v_flex()
+            .children(self.render_queue_attachments(cx))
+            .children(self.render_force_stop(cx))
+            .children(self.render_prompt_stash(cx))
             .relative()
             .w_full()
             .max_w(px(736.))
@@ -1613,7 +1960,7 @@ impl Root {
                             .w_full()
                             .pb_4()
                             .px_4()
-                            .child(heading),
+                            .children((!self.prompts.open).then_some(heading)),
                     )
                     .children(self.render_message(cx))
                     .child(self.render_composer(cx))
@@ -1626,7 +1973,7 @@ impl Root {
                                 .px_2()
                                 .items_start()
                                 .pt_1()
-                                .child(self.render_workspace_mode(cx))
+                                .child(self.render_composer_context(cx))
                                 .child(div().flex_1())
                                 .when(self.workspace_status.is_repo(), |row| {
                                     row.child(
@@ -1644,7 +1991,7 @@ impl Root {
 }
 
 /// Uploads the composer's attachments in order and returns what a message refers to them by.
-async fn upload_all(
+pub(super) async fn upload_all(
     connection: &Connection,
     pending: &[attachments::Pending],
 ) -> anyhow::Result<Vec<Value>> {
@@ -1657,4 +2004,35 @@ async fn upload_all(
         );
     }
     Ok(uploaded)
+}
+
+#[cfg(test)]
+mod send_tests {
+    use super::delivery;
+    use serde_json::Value;
+    use t3_client::session::Delivery;
+    #[test]
+    fn dispatch_modes_match_reference() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/composer-dispatch.json"))
+                .unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let expected = match case["result"].as_str().unwrap() {
+                "auto" => Delivery::Start,
+                "steer" => Delivery::Steer,
+                "queue" => Delivery::Queue,
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                delivery(
+                    case["running"].as_bool().unwrap(),
+                    case["alternateModifier"].as_bool().unwrap(),
+                    case["activeTurnDefault"] == "steer",
+                    case["canSteer"].as_bool().unwrap()
+                ),
+                expected,
+                "{case}"
+            );
+        }
+    }
 }

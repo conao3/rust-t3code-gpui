@@ -14,6 +14,9 @@ use gpui_kit::*;
 
 use crate::timeline::{AssistantMetadata, Draft, Pending, Question, Row, RowKind};
 
+#[path = "row_images.rs"]
+mod images;
+
 const DETAIL_LINES: usize = 400;
 
 #[derive(Clone)]
@@ -84,6 +87,7 @@ pub enum RowEvent {
 }
 
 pub struct RowView {
+    images: images::Images,
     row: Row,
     summary: String,
     markdown: Option<Entity<TextViewState>>,
@@ -142,6 +146,7 @@ impl RowView {
             })
         });
         let mut view = Self {
+            images: images::Images::default(),
             row,
             summary,
             markdown,
@@ -743,7 +748,10 @@ impl Render for RowView {
             RowKind::User => base
                 .py_2()
                 .flex()
-                .justify_end()
+                .flex_col()
+                .items_end()
+                .gap_1()
+                .child(self.render_images())
                 .child(
                     div()
                         .id("user-bubble")
@@ -762,6 +770,9 @@ impl Render for RowView {
                         .p_3()
                         .rounded(px(16.))
                         .bg(crate::appearance::message(cx))
+                        .when(self.row.text.is_empty(), |bubble| {
+                            bubble.p_0().bg(gpui_kit::transparent_black())
+                        })
                         .when(self.row.detail == "agent", |bubble| {
                             bubble
                                 .cursor_pointer()

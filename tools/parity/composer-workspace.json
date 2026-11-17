@@ -1,0 +1,75 @@
+{
+  "name": "composer-workspace",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+x"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "option",
+        "name": "Current checkout"
+      },
+      "native": {
+        "role": "list item",
+        "name": "Current checkout"
+      }
+    },
+    {
+      "action": "press",
+      "value": "down"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText",
+        "name": "New worktree"
+      },
+      "native": {
+        "role": "combobox",
+        "name": "Workspace"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+x"
+    },
+    {
+      "action": "press",
+      "value": "up"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText",
+        "name": "Current checkout"
+      },
+      "native": {
+        "role": "combobox",
+        "name": "Workspace"
+      }
+    }
+  ]
+}

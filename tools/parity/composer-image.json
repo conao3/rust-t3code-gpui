@@ -1,0 +1,25 @@
+{
+  "name": "composer-image",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Composer image fixture, Done, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "image",
+        "name": "composer-fixture.png"
+      }
+    }
+  ]
+}

@@ -41,6 +41,14 @@ use crate::workspace;
 
 mod choice_select;
 mod composer;
+mod composer_controls;
+mod composer_dictation;
+mod composer_feedback;
+mod composer_images;
+mod composer_prompts;
+mod composer_queue;
+mod composer_scratch;
+mod composer_tokens;
 mod diff;
 mod diff_controls;
 mod files;
@@ -92,6 +100,21 @@ actions!(
     t3code_gpui,
     [
         Send,
+        Dictate,
+        NewWithoutProject,
+        SteerQueuedMessage,
+        EditQueuedMessage,
+        StashPrompt,
+        PreviousWorktree,
+        OpenComposerWorkspace,
+        DecreaseEffort,
+        IncreaseEffort,
+        OpenEffort,
+        CycleComposerHost,
+        OpenComposerHost,
+        SendAlternate,
+        SendBackground,
+        SendAndNewThread,
         NextDone,
         PreviousDone,
         ToggleSidebar,
@@ -144,6 +167,18 @@ actions!(
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
+        "composer.dictation" => Box::new(Dictate),
+        "chat.newWithoutProject" => Box::new(NewWithoutProject),
+        "thread.steerQueuedMessage" => Box::new(SteerQueuedMessage),
+        "thread.editQueuedMessage" => Box::new(EditQueuedMessage),
+        "composer.stash" => Box::new(StashPrompt),
+        "composer.previousWorktree" => Box::new(PreviousWorktree),
+        "composer.workspace" => Box::new(OpenComposerWorkspace),
+        "composer.decreaseEffort" => Box::new(DecreaseEffort),
+        "composer.increaseEffort" => Box::new(IncreaseEffort),
+        "composer.effort" => Box::new(OpenEffort),
+        "composer.cycleHost" => Box::new(CycleComposerHost),
+        "composer.host" => Box::new(OpenComposerHost),
         "terminal.toggle" => Box::new(ToggleTerminal),
         "terminal.split" => Box::new(SplitTerminal),
         "terminal.splitVertical" => Box::new(SplitTerminalVertical),
@@ -161,8 +196,10 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "navigation.back" => Box::new(HistoryBack),
         "navigation.forward" => Box::new(HistoryForward),
         "modelPicker.toggle" => Box::new(ToggleModelPicker),
+        "composer.sendAlternate" => Box::new(SendAlternate),
+        "composer.sendBackground" => Box::new(SendBackground),
+        "composer.sendAndNewThread" => Box::new(SendAndNewThread),
         "composer.mode" => Box::new(OpenPermissions),
-        "composer.effort" => Box::new(ToggleModelPicker),
         "sidebar.toggle" => Box::new(ToggleSidebar),
         "thread.pin" => Box::new(TogglePin),
         "chat.find" => Box::new(Find),
@@ -350,6 +387,10 @@ struct ComposerControlsStamp {
     current: Option<(String, String)>,
     draft: bool,
     status: Option<ThreadStatus>,
+    delivery: Delivery,
+    dictation: (bool, bool),
+    effort_cursor: Option<Value>,
+    queue_edit: Option<(String, bool)>,
     question: bool,
     empty: bool,
     attachments: bool,
@@ -462,6 +503,12 @@ pub struct Root {
     permissions_subscription: Option<Subscription>,
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
+    composer_sends: HashSet<String>,
+    dictation: composer_dictation::Dictation,
+    composer_attachments: HashMap<String, Vec<attachments::Pending>>,
+    queue_edit: Option<composer_queue::Edit>,
+    prompts: composer_prompts::Prompts,
+    composer_choices: composer_controls::Controls,
     queued: Vec<timeline::Queued>,
     thread_loading: bool,
     completion: Option<Completion>,
@@ -524,7 +571,11 @@ impl Root {
     fn new(
         (config, config_path): (Config, std::path::PathBuf),
         (settings, settings_path): (ClientSettings, std::path::PathBuf),
-        (drafts, drafts_path): (Drafts, std::path::PathBuf),
+        (drafts, drafts_path, prompt_store): (
+            Drafts,
+            std::path::PathBuf,
+            crate::prompt_store::Store,
+        ),
         runtime: Handle,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -752,6 +803,15 @@ impl Root {
             permissions_subscription: None,
             model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
+            composer_sends: HashSet::new(),
+            dictation: composer_dictation::Dictation::default(),
+            composer_attachments: HashMap::new(),
+            queue_edit: None,
+            prompts: composer_prompts::Prompts {
+                store: prompt_store,
+                ..Default::default()
+            },
+            composer_choices: composer_controls::Controls::new(cx),
             queued: Vec::new(),
             thread_loading: false,
             completion: None,
@@ -820,8 +880,14 @@ impl Root {
         if window.has_active_dialog(cx) {
             return false;
         }
+        if self.composer_composing(window, cx) {
+            return false;
+        }
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
+        if self.prompt_key(keystroke, window, cx) {
+            return true;
+        }
         if self.completion_key(keystroke, window, cx) {
             return true;
         }
@@ -948,6 +1014,9 @@ impl Root {
                         .iter()
                         .any(|input| input.read(cx).focus_handle(cx).is_focused(window))
             }
+            "composerRequiresModifier" => self
+                .settings
+                .requires_modifier(&self.composer.read(cx).value()),
             "draftThreadRoute" => self.draft.is_some(),
             "turnRunning" => self
                 .open_entry()
@@ -1205,14 +1274,23 @@ impl Render for Root {
             window.mark_view_dirty(self.details_pane.entity_id());
         }
         if let Some(text) = self.pending_composer.take() {
-            self.composer
-                .update(cx, |state, cx| state.set_value(text, window, cx));
+            self.composer.update(cx, |state, cx| {
+                state.set_value(composer_tokens::content(text), window, cx)
+            });
         }
+        self.sync_composer_controls(window, cx);
         let controls_stamp = ComposerControlsStamp {
             target: self.composer_target(),
             current: self.current(),
             draft: self.draft.is_some(),
             status: self.open_entry().map(|entry| entry.status),
+            delivery: self.composer_delivery(false),
+            dictation: (self.dictation.busy, self.dictation.recording.is_some()),
+            effort_cursor: self.composer_choices.effort_cursor.clone(),
+            queue_edit: self
+                .queue_edit
+                .as_ref()
+                .map(|edit| (edit.run_id.clone(), edit.saving)),
             question: self.pending_question().is_some(),
             empty: self.composer.read(cx).value().trim().is_empty(),
             attachments: !self.attachments.is_empty(),
@@ -1395,6 +1473,25 @@ impl Render for Root {
             }))
             .on_action(cx.listener(|root, _: &CycleRuntimeMode, _, cx| root.cycle_runtime_mode(cx)))
             .on_action(cx.listener(|root, _: &Send, window, cx| root.send(window, cx)))
+            .on_action(cx.listener(|root, _: &OpenComposerHost, window, cx| root.open_composer_select(true, window, cx)))
+            .on_action(cx.listener(|root, _: &CycleComposerHost, window, cx| root.cycle_composer_host(window, cx)))
+            .on_action(cx.listener(|root, _: &OpenEffort, window, cx| root.open_effort(window, cx)))
+            .on_action(cx.listener(|root, _: &IncreaseEffort, window, cx| root.step_effort(true, window, cx)))
+            .on_action(cx.listener(|root, _: &DecreaseEffort, window, cx| root.step_effort(false, window, cx)))
+            .on_action(cx.listener(|root, _: &OpenComposerWorkspace, window, cx| root.open_composer_select(false, window, cx)))
+            .on_action(cx.listener(|root, _: &PreviousWorktree, window, cx| root.use_previous_worktree(window, cx)))
+            .on_action(cx.listener(|root, _: &StashPrompt, window, cx| root.stash_prompt(window, cx)))
+            .on_action(cx.listener(|root, _: &EditQueuedMessage, window, cx| root.edit_latest_queued(window, cx)))
+            .on_action(cx.listener(|root, _: &SteerQueuedMessage, _, cx| root.steer_next_queued(cx)))
+            .on_action(cx.listener(|root, _: &NewWithoutProject, window, cx| root.new_without_project(window, cx)))
+            .on_action(cx.listener(|root, _: &Dictate, window, cx| root.toggle_dictation(window, cx)))
+            .on_action(cx.listener(|root, _: &SendAlternate, window, cx| root.send_intent(composer::SubmissionIntent::Alternate, window, cx)))
+            .on_action(cx.listener(|root, _: &SendBackground, window, cx| {
+                if root.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
+            }))
+            .on_action(cx.listener(|root, _: &SendAndNewThread, window, cx| {
+                if root.draft.is_none() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
+            }))
             .on_action(
                 cx.listener(|root, _: &NextUserMessage, _, cx| root.jump_user_message(true, cx)),
             )
@@ -1549,6 +1646,8 @@ pub fn run(
 ) -> anyhow::Result<()> {
     let drafts_path = drafts::default_path()?;
     let drafts = Drafts::load(&drafts_path)?;
+    let prompt_store =
+        crate::prompt_store::Store::load(&crate::prompt_store::Store::path(&drafts_path))?;
     let runtime = Runtime::new()?;
     let handle = runtime.handle().clone();
     gpui_kit::application()
@@ -1597,7 +1696,7 @@ pub fn run(
                     Root::new(
                         (config, config_path),
                         (settings.clone(), settings_path),
-                        (drafts, drafts_path),
+                        (drafts, drafts_path, prompt_store),
                         handle,
                         window,
                         cx,

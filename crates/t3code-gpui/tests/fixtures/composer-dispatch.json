@@ -1,0 +1,117 @@
+{
+  "source": "24e77473ecf41bc1f7142529c7911c1c1aae1d76/packages/client-runtime/src/state/composerDispatch.ts",
+  "cases": [
+    {
+      "running": false,
+      "alternateModifier": false,
+      "activeTurnDefault": "steer",
+      "canSteer": false,
+      "result": "auto"
+    },
+    {
+      "running": false,
+      "alternateModifier": false,
+      "activeTurnDefault": "steer",
+      "canSteer": true,
+      "result": "auto"
+    },
+    {
+      "running": false,
+      "alternateModifier": false,
+      "activeTurnDefault": "queue",
+      "canSteer": false,
+      "result": "auto"
+    },
+    {
+      "running": false,
+      "alternateModifier": false,
+      "activeTurnDefault": "queue",
+      "canSteer": true,
+      "result": "auto"
+    },
+    {
+      "running": false,
+      "alternateModifier": true,
+      "activeTurnDefault": "steer",
+      "canSteer": false,
+      "result": "auto"
+    },
+    {
+      "running": false,
+      "alternateModifier": true,
+      "activeTurnDefault": "steer",
+      "canSteer": true,
+      "result": "auto"
+    },
+    {
+      "running": false,
+      "alternateModifier": true,
+      "activeTurnDefault": "queue",
+      "canSteer": false,
+      "result": "auto"
+    },
+    {
+      "running": false,
+      "alternateModifier": true,
+      "activeTurnDefault": "queue",
+      "canSteer": true,
+      "result": "auto"
+    },
+    {
+      "running": true,
+      "alternateModifier": false,
+      "activeTurnDefault": "steer",
+      "canSteer": false,
+      "result": "queue"
+    },
+    {
+      "running": true,
+      "alternateModifier": false,
+      "activeTurnDefault": "steer",
+      "canSteer": true,
+      "result": "steer"
+    },
+    {
+      "running": true,
+      "alternateModifier": false,
+      "activeTurnDefault": "queue",
+      "canSteer": false,
+      "result": "queue"
+    },
+    {
+      "running": true,
+      "alternateModifier": false,
+      "activeTurnDefault": "queue",
+      "canSteer": true,
+      "result": "queue"
+    },
+    {
+      "running": true,
+      "alternateModifier": true,
+      "activeTurnDefault": "steer",
+      "canSteer": false,
+      "result": "queue"
+    },
+    {
+      "running": true,
+      "alternateModifier": true,
+      "activeTurnDefault": "steer",
+      "canSteer": true,
+      "result": "queue"
+    },
+    {
+      "running": true,
+      "alternateModifier": true,
+      "activeTurnDefault": "queue",
+      "canSteer": false,
+      "result": "queue"
+    },
+    {
+      "running": true,
+      "alternateModifier": true,
+      "activeTurnDefault": "queue",
+      "canSteer": true,
+      "result": "steer"
+    }
+  ]
+}

@@ -584,6 +584,9 @@ fn tool_detail(item: &Value) -> String {
 fn user_text(item: &Value) -> String {
     let mut out = text(item, "text").to_string();
     for attachment in array(item, "attachments") {
+        if text(attachment, "type") == "image" {
+            continue;
+        }
         if !out.is_empty() {
             out.push('\n');
         }
@@ -1639,7 +1642,7 @@ mod tests {
     fn user_rows_name_their_attachments() {
         let item = json!({"type": "user_message", "text": "look",
                           "attachments": [{"type": "image", "name": "shot.png"}, {"type": "file", "name": "a.md"}]});
-        assert_eq!(user_text(&item), "look\n[image] shot.png\n[file] a.md");
+        assert_eq!(user_text(&item), "look\n[file] a.md");
         assert_eq!(
             user_text(&json!({"type": "user_message", "text": "plain"})),
             "plain"
