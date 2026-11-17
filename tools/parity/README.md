@@ -1,5 +1,39 @@
 # T3 behavioral and visual comparison
 
+## Independent slots
+
+Run `env.py` inside `nix develop` on Linux. Build the native binary in the checkout that will run the comparison:
+
+```sh
+nix develop --command cargo build -j 4
+nix develop --command python3 tools/parity/env.py up --slot 1
+nix develop --command python3 tools/parity/env.py status --slot 1
+nix develop --command python3 tools/parity/env.py theme --slot 1 --theme light
+nix develop --command python3 tools/parity/env.py reset --slot 1
+nix develop --command python3 tools/parity/env.py down --slot 1
+```
+
+Slots 1–100 reserve ports `42000 + 10*N` (reference server), `42001 + 10*N` (native server), `42002 + 10*N` (CDP), and Xvfb display `:(100+N)`. Occupied ports or displays cause startup to fail. Every checkout of the repository shares the slot namespace under the main worktree's `.claude-dev/parity/slots/N/`; the slot control lock prevents concurrent changes to the same slot. `status` remains available during startup and shutdown. Different slots can start and run scenarios concurrently.
+
+`up` creates a fresh generation with separate server homes, databases, provider homes, Git workspaces, Electron profile, native client settings, private D-Bus sessions and Xvfb/xfwm4. Both server homes and workspaces are copied from one deterministic seed: an empty SQLite database and a Git repository with `main` and `feature/parity`. Each server initializes that database independently, then receives the same `UI parity` project (`11111111-1111-4111-8111-111111111111`) and mock model selection through the public API. The Electron desktop owns its reference server; the native server runs through `t3 serve`. Startup checks actual Electron origin, distinct environment IDs, independent credentials, authentication on both servers and native accessibility readiness.
+
+`--native-binary PATH` selects the executable (default: this checkout's `target/debug/t3code-gpui`). `--t3-binary` and `--reference-binary` default to the installed 0.1.9 Nix paths on helios. `--reference-source PATH` selects the pinned original source (`24e77473ecf41bc1f7142529c7911c1c1aae1d76`); its default is the main worktree's `.claude-dev/scratch/parity/reference`. Only its deterministic Codex transcript fixture is read. Each generation copies that transcript before launch. The local `replay_codex.py` provider uses it to implement the protocol and emits the deterministic `Fixture output 000:` through `199:` response. `--stream-ms` controls its duration (default 15000). Every slot has its own wrapper and provider state. The provider performs no paid requests.
+
+The final `up` result includes the path of `manifest.json`. The manifest contains the CDP endpoint, native session path, origins/IDs and workspace/configuration paths. Pass it directly to the runner:
+
+```sh
+nix develop --command python3 tools/parity/run.py \
+  --manifest /absolute/main-worktree/.claude-dev/parity/slots/1/manifest.json \
+  --scenario tools/parity/draft.json \
+  --output /absolute/main-worktree/.claude-dev/parity/slots/1/draft-dark-001
+```
+
+`draft.json` needs only the initial project and mock configuration. Use a scenario declaring the selected theme: `theme --theme light` changes both actual client settings through their Settings controls; it does not rewrite the scenario. `up --theme light` starts in light mode. `reset` stops the current generation and starts a new one from the initial seed, preserving launch options and the selected theme. It clears drafts, server changes and workspace changes by selecting new homes. Previous generations and reports remain available for inspection; use a fresh output directory for every scenario run.
+
+`down` signals only process groups carrying this generation's ownership marker, checking process start times before signalling. It also handles descendants whose original launcher has exited, waits for termination, escalates to SIGKILL if needed, and checks that the reserved ports/display are released. `status` reports the live supervisor and owned processes, including orphaned groups after a supervisor crash. `up` refuses a slot with surviving processes; use `down` to recover it. Configuration and manifest files are mode 600, directories are private, and tokens stay in configuration files. Startup failures report the stage and error class; subprocess stdout/stderr is discarded, and native diagnostics live in the generation's `desktop/` directory.
+
+`fixture_rpc.FixtureRpc` accepts one environment object read from the manifest's `configurations` paths. Scenario-specific fixture helpers can call the public RPC using that selected configuration. The working-transition seed/cleanup scripts remain scenario-specific: the generic slot seed provides an empty project, and `reset` restores that complete baseline. Token renewal, launch and restart preparation are handled by fresh slot generations. The scratch provider-theme style dump remains an investigation artifact; `theme` handles the reusable appearance change.
+
 Selectors can include `ancestor: {role, name}` to select a control inside a specific accessible container. Both drivers retain ancestry, and the runner resolves the selected control's global occurrence before sending real input. This scopes repeated row actions such as Settle thread to the intended thread instead of relying on sidebar position.
 
 `node tools/parity/snooze_oracle.mjs ORIGINAL_ROOT crates/t3code-gpui/tests/fixtures/snooze-oracle.json` executes the original Snooze state, scheduling, selection and custom-input functions. Its 407 states, 140 schedules with nested selections, and 2,100 custom inputs cover five IANA zones, spring/fall daylight-saving changes and the skipped Apia date. Preset labels use an explicit HH:mm adapter with en-US weekday labels. This calculation oracle does not certify native dialog controls or images.

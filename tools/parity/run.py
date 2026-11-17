@@ -222,13 +222,22 @@ def compare(reference, native, output):
 
 async def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--endpoint", required=True)
-    parser.add_argument("--session", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--endpoint")
+    parser.add_argument("--session", type=Path)
     parser.add_argument("--scenario", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--reference-workspace", type=Path)
     parser.add_argument("--native-workspace", type=Path)
     args = parser.parse_args()
+    if args.manifest:
+        if args.endpoint or args.session:
+            parser.error("Use --manifest or --endpoint/--session")
+        manifest = json.loads(args.manifest.read_text())
+        args.endpoint = manifest["endpoint"]
+        args.session = Path(manifest["session"])
+    elif not args.endpoint or not args.session:
+        parser.error("Provide --manifest or both --endpoint and --session")
     scenario = json.loads(args.scenario.read_text())
     if args.output.exists():
         raise RuntimeError(
