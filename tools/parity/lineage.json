@@ -53,6 +53,60 @@
         "name": "Message Fixture response fork"
       },
       "count": 1
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "button",
+        "name": "Open source conversation"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Open source conversation",
+        "focused": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Fixture response"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Fixture response fork, UI parity",
+        "index": 0
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "button",
+        "name": "Open source conversation"
+      }
+    },
+    {
+      "action": "press",
+      "value": "space"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Fixture response"
+      },
+      "count": 1
     }
   ]
 }

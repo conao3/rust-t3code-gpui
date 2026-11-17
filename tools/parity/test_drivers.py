@@ -323,6 +323,23 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
             await page.click("button", "Send")
         page.call.assert_not_called()
 
+    async def test_button_activation_includes_browser_character_events(self):
+        page = Cdp("http://127.0.0.1:1")
+        page.call = AsyncMock(return_value={})
+        for chord, text in [("enter", "\r"), ("space", " ")]:
+            page.call.reset_mock()
+            await page.press(chord)
+            events = [call.kwargs for call in page.call.await_args_list]
+            self.assertEqual(
+                [event["type"] for event in events], ["rawKeyDown", "char", "keyUp"]
+            )
+            self.assertEqual(events[1]["text"], text)
+        page.call.reset_mock()
+        await page.press("ctrl+enter")
+        self.assertNotIn(
+            "char", [call.kwargs["type"] for call in page.call.await_args_list]
+        )
+
     async def test_failed_key_dispatch_releases_held_modifiers(self):
         page = Cdp("http://127.0.0.1:1")
         events = []

@@ -277,6 +277,16 @@ class Cdp:
                     windowsVirtualKeyCode=vk,
                     modifiers=modifiers,
                 )
+                if kind == "rawKeyDown" and key in ["Enter", " "] and not modifiers & 7:
+                    await self.call(
+                        "Input.dispatchKeyEvent",
+                        type="char",
+                        text="\r" if key == "Enter" else " ",
+                        key=key,
+                        code=code,
+                        windowsVirtualKeyCode=vk,
+                        modifiers=modifiers,
+                    )
         finally:
             for modifier_key, modifier_code, modifier_vk, bit in reversed(held):
                 modifiers &= ~bit
