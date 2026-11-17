@@ -957,6 +957,7 @@ impl Root {
                 group = Some(rank);
                 list = list.child(
                     h_flex()
+                        .id(("pr-group", rank))
                         .gap_2()
                         .px_3()
                         .py_2()
@@ -2848,6 +2849,7 @@ impl Root {
                     }
                     body = body.child(
                         v_flex()
+                            .id(("pr-comment", index))
                             .gap_2()
                             .child(text!(
                                 comment["author"]["login"]
