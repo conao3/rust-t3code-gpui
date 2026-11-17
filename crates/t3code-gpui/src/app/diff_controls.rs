@@ -18,6 +18,7 @@ pub(super) struct State {
     pub ignore_whitespace: bool,
     pub collapsed: bool,
     pub loading: bool,
+    pub file_tree: bool,
     pub error: Option<String>,
     pub request: u64,
     pub commits: Vec<Value>,
@@ -36,6 +37,7 @@ impl Default for State {
             ignore_whitespace: true,
             collapsed: true,
             loading: false,
+            file_tree: false,
             error: None,
             request: 0,
             commits: Vec::new(),
@@ -298,8 +300,17 @@ impl Root {
             .gap_2()
             .text_xs()
             .text_color(cx.theme().muted_foreground)
-            .child(text!(head.to_string()))
-            .child(Icon::new(IconName::ArrowRight).size(px(12.)))
+            .when(
+                self.right_panel_width > 700. || self.right_panel.maximized,
+                |row| {
+                    row.child(text!(head.to_string()))
+                        .child(Icon::new(IconName::ArrowRight).size(px(12.)))
+                },
+            )
+            .when(
+                self.right_panel_width <= 700. && !self.right_panel.maximized,
+                |row| row.child("vs"),
+            )
             .child(popup)
             .into_any_element()
     }
@@ -429,12 +440,12 @@ impl Root {
                                 .child(
                                     div()
                                         .text_color(cx.theme().success)
-                                        .child(text!(format!("+{additions}"))),
+                                        .child(format!("+{additions}")),
                                 )
                                 .child(
                                     div()
                                         .text_color(cx.theme().danger)
-                                        .child(text!(format!("-{deletions}"))),
+                                        .child(format!("-{deletions}")),
                                 ),
                         )
                     })
@@ -450,6 +461,43 @@ impl Root {
                             .compact()
                             .disabled(self.diff_view.loading)
                             .on_click(cx.listener(|root, _, _, cx| root.refresh_diff(cx))),
+                    )
+                    .child(
+                        Button::new("collapse-diff-files")
+                            .icon(gpui_kit::assets::IconName::ChevronsUpDown)
+                            .when(
+                                self.file_panel.as_ref().is_none_or(|p| p.lines.is_empty()),
+                                |button| button.invisible(),
+                            )
+                            .accessibility_label(if self.diff_view.collapsed {
+                                "Expand all files"
+                            } else {
+                                "Collapse all files"
+                            })
+                            .ghost()
+                            .compact()
+                            .on_click(cx.listener(|root, _, _, cx| {
+                                root.diff_view.collapsed = !root.diff_view.collapsed;
+                                let collapsed = root.diff_view.collapsed;
+                                if let Some(FilePanel {
+                                    body: PanelBody::Diff(state),
+                                    ..
+                                }) = &root.file_panel
+                                {
+                                    state.update(cx, |state, cx| {
+                                        let paths = state
+                                            .files()
+                                            .iter()
+                                            .map(|file| file.path().to_string())
+                                            .collect::<Vec<_>>();
+                                        for path in paths {
+                                            state.set_file_collapsed(&path, collapsed, cx);
+                                        }
+                                    });
+                                }
+                                root.panel_revision += 1;
+                                cx.notify();
+                            })),
                     )
                     .child(
                         h_flex()
@@ -532,38 +580,18 @@ impl Root {
                             })),
                     )
                     .child(
-                        Button::new("collapse-diff-files")
-                            .icon(gpui_kit::assets::IconName::ChevronsUpDown)
-                            .when(
-                                self.file_panel.as_ref().is_none_or(|p| p.lines.is_empty()),
-                                |button| button.invisible(),
-                            )
-                            .accessibility_label(if self.diff_view.collapsed {
-                                "Expand all files"
-                            } else {
-                                "Collapse all files"
-                            })
+                        Button::new("diff-file-tree")
+                            .icon(gpui_kit::assets::IconName::ListTree)
                             .ghost()
                             .compact()
+                            .accessibility_label(if self.diff_view.file_tree {
+                                "Hide file tree"
+                            } else {
+                                "Show file tree"
+                            })
+                            .selected(self.diff_view.file_tree)
                             .on_click(cx.listener(|root, _, _, cx| {
-                                root.diff_view.collapsed = !root.diff_view.collapsed;
-                                let collapsed = root.diff_view.collapsed;
-                                if let Some(FilePanel {
-                                    body: PanelBody::Diff(state),
-                                    ..
-                                }) = &root.file_panel
-                                {
-                                    state.update(cx, |state, cx| {
-                                        let paths = state
-                                            .files()
-                                            .iter()
-                                            .map(|file| file.path().to_string())
-                                            .collect::<Vec<_>>();
-                                        for path in paths {
-                                            state.set_file_collapsed(&path, collapsed, cx);
-                                        }
-                                    });
-                                }
+                                root.diff_view.file_tree = !root.diff_view.file_tree;
                                 root.panel_revision += 1;
                                 cx.notify();
                             })),

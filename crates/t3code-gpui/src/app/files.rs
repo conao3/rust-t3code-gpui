@@ -366,28 +366,60 @@ impl Root {
                             .render_header(|file, _, cx| {
                                 use gpui_kit::component::diff::DiffFileStatus;
                                 let icon = match file.status() {
-                                    DiffFileStatus::Added => gpui_kit::assets::IconName::SquarePlus,
+                                    DiffFileStatus::Added => gpui_kit::assets::IconName::CirclePlus,
                                     DiffFileStatus::Deleted => {
-                                        gpui_kit::assets::IconName::SquareMinus
+                                        gpui_kit::assets::IconName::CircleMinus
                                     }
                                     _ => gpui_kit::assets::IconName::FileDiff,
                                 };
                                 h_flex()
+                                    .group("diff-file-header")
                                     .w_full()
                                     .gap_2()
-                                    .child(Icon::new(icon).size(px(16.)))
-                                    .child(div().flex_1().child(text!(file.path().to_string())))
+                                    .child(Icon::new(icon).size(px(16.)).text_color(
+                                        match file.status() {
+                                            DiffFileStatus::Added => cx.theme().success,
+                                            DiffFileStatus::Deleted => cx.theme().danger,
+                                            _ => cx.theme().muted_foreground,
+                                        },
+                                    ))
+                                    .child(div().child(text!(file.path().to_string())))
+                                    .child(
+                                        Button::new(SharedString::from(format!(
+                                            "copy-diff-path-{}",
+                                            file.path()
+                                        )))
+                                        .icon(IconName::Copy)
+                                        .accessibility_label("Copy file path")
+                                        .tooltip("Copy path")
+                                        .opacity(0.)
+                                        .group_hover("diff-file-header", |button| {
+                                            button.opacity(1.)
+                                        })
+                                        .ghost()
+                                        .size(px(16.))
+                                        .on_click({
+                                            let path = file.path().to_string();
+                                            move |_, _, cx| {
+                                                cx.stop_propagation();
+                                                cx.write_to_clipboard(ClipboardItem::new_string(
+                                                    path.clone(),
+                                                ));
+                                            }
+                                        }),
+                                    )
+                                    .child(div().flex_1())
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().success)
-                                            .child(text!(format!("+{}", file.additions()))),
+                                            .child(format!("+{}", file.additions())),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().danger)
-                                            .child(text!(format!("-{}", file.deletions()))),
+                                            .child(format!("-{}", file.deletions())),
                                     )
                             })
                             .soft_wrap(self.diff_view.wrap)

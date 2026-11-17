@@ -1391,16 +1391,7 @@ fn render_gutter(
                     .text_size(code.font_size)
                     .text_color(cx.theme().muted_foreground)
                     .hover(|this| this.text_color(cx.theme().foreground))
-                    .role(gpui::accesskit::Role::Button)
-                    .aria_label(
-                        t!(
-                            "Diff.SelectLine",
-                            side = side_label(side),
-                            line = position.line()
-                        )
-                        .to_string(),
-                    )
-                    .child(position.line().to_string())
+                    .child(gpui::text!(position.line().to_string()))
                     .on_mouse_down(MouseButton::Left, move |event, window, cx| {
                         down.update(cx, |state, cx| {
                             state.begin_line_selection(
@@ -1850,7 +1841,7 @@ fn code_line(
                     }
                 })
                 .role(gpui::accesskit::Role::Label)
-                .aria_label(source_line.text().clone())
+                .aria_value(source_line.text().clone())
                 .aria_description(
                     t!(
                         if changed {

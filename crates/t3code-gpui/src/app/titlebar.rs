@@ -123,7 +123,7 @@ impl Root {
                 |bar| {
                     bar.child(
                         Button::new("thread-details-toggle")
-                            .icon(gpui_kit::assets::IconName::PanelRight)
+                            .icon(gpui_kit::assets::IconName::SquareMenu)
                             .ghost()
                             .size(px(28.))
                             .accessibility_label("Toggle thread details panel")
@@ -159,6 +159,9 @@ impl Root {
                         .max(256.)))
                         .child(self.render_panel_tabs(cx)),
                 )
+            })
+            .when(!self.pr_state.page && !self.right_panel.open, |bar| {
+                bar.child(self.render_panel_layout_controls(cx))
             })
             .when(custom_controls, |bar| {
                 bar.child(
@@ -308,29 +311,6 @@ impl Root {
                     .text_sm()
                     .text_color(theme.muted_foreground)
                     .child(status.label()),
-            )
-            .child(
-                Button::new("files")
-                    .icon(gpui_kit::assets::IconName::FolderOpen)
-                    .size(px(24.))
-                    .tooltip("Toggle right panel")
-                    .accessibility_label("Toggle right panel")
-                    .ghost()
-                    .compact()
-                    .selected(self.right_panel.open)
-                    .on_click(
-                        cx.listener(|root, _, window, cx| root.toggle_right_panel(window, cx)),
-                    ),
-            )
-            .child(
-                Button::new("diff")
-                    .icon(gpui_kit::assets::IconName::PanelRight)
-                    .size(px(24.))
-                    .tooltip("Changes")
-                    .accessibility_label("Changes")
-                    .ghost()
-                    .compact()
-                    .on_click(cx.listener(|root, _, _, cx| root.toggle_diff(cx))),
             )
             .child(
                 Button::new("thread-actions")

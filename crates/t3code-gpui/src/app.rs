@@ -703,7 +703,6 @@ impl Root {
             Ok(saved) => (saved, None),
             Err(error) => (
                 right_panel::Saved {
-                    width: 540.,
                     threads: Vec::new(),
                 },
                 Some(format!("Could not load right panels: {error:#}")),
@@ -732,7 +731,7 @@ impl Root {
             right_panel: right_panel::State::default(),
             right_panel_threads: saved_panels.threads.into_iter().collect(),
             right_panel_target: None,
-            right_panel_width: saved_panels.width,
+            right_panel_width: 540.,
             panel_resizing: false,
             panel_revision: 0,
             panel_stamp: String::new(),
@@ -1564,6 +1563,7 @@ impl Render for Root {
                 }
                 if root.panel_resizing && event.pressed_button == Some(MouseButton::Left) {
                     root.right_panel_width = (f32::from(window.viewport_size().width) - f32::from(event.position.x)).max(360.);
+                    root.right_panel_width = root.panel_width(f32::from(window.viewport_size().width));
                     cx.notify();
                 }
                 if root.sidebar_resizing && event.pressed_button == Some(MouseButton::Left) {
