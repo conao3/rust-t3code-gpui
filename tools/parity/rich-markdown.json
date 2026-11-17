@@ -1,0 +1,50 @@
+{
+  "name": "math-mermaid-and-timeline-minimap",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "press",
+      "value": "ctrl+w"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Pane Alpha, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Expand diagram"
+      },
+      "count": 2
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Expand diagram",
+        "index": 1
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Expand diagram"
+      },
+      "count": 2
+    }
+  ]
+}

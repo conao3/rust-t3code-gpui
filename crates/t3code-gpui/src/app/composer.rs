@@ -19,11 +19,15 @@ fn delivery(running: bool, alternate: bool, steer: bool, can_steer: bool) -> Del
 
 pub(super) struct ComposerControlsPane {
     pub(super) root: WeakEntity<Root>,
+    pub(super) pane_id: u64,
 }
 impl Render for ComposerControlsPane {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
-            .update(cx, |root, cx| root.render_composer_controls(cx))
+            .update(cx, |root, cx| {
+                root.with_conversation(self.pane_id, |root| root.render_composer_controls(cx))
+                    .unwrap_or_else(|| div().into_any_element())
+            })
             .expect("composer root is alive")
     }
 }
@@ -34,10 +38,11 @@ impl Root {
     /// The directory a file mention searches: the open thread's worktree or its project, or the
     /// project the new thread starts in.
     pub(super) fn composer_cwd(&self) -> Option<(String, String)> {
-        if self.draft.is_some() {
+        if self.conversation.draft.is_some() {
             let (environment, project_id) = self.draft_project()?;
             let project = self.project_value(&environment, &project_id)?;
             let root = self
+                .conversation
                 .draft
                 .as_ref()
                 .and_then(|draft| draft.workspace_strategy.get("worktreePath"))
@@ -71,10 +76,13 @@ impl Root {
         };
         let mime = image.format.mime_type().to_string();
         let extension = mime.rsplit('/').next().unwrap_or("png").to_string();
-        let name = format!("pasted-{}.{extension}", self.attachments.len() + 1);
+        let name = format!(
+            "pasted-{}.{extension}",
+            self.conversation.attachments.len() + 1
+        );
         match attachments::Pending::new(name, mime, image.bytes) {
-            Ok(pending) => self.attachments.push(pending),
-            Err(error) => self.message = Some(format!("{error:#}")),
+            Ok(pending) => self.conversation.attachments.push(pending),
+            Err(error) => self.conversation.message = Some(format!("{error:#}")),
         }
         cx.notify();
         true
@@ -83,20 +91,20 @@ impl Root {
     fn attach_paths(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
         for path in paths.paths() {
             match attachments::Pending::from_path(path) {
-                Ok(pending) => self.attachments.push(pending),
-                Err(error) => self.message = Some(format!("{error:#}")),
+                Ok(pending) => self.conversation.attachments.push(pending),
+                Err(error) => self.conversation.message = Some(format!("{error:#}")),
             }
         }
         cx.notify();
     }
 
     pub(super) fn update_completion(&mut self, cx: &mut Context<Self>) {
-        let state = self.composer.read(cx);
+        let state = self.conversation.composer.read(cx);
         let text = state.value().to_string();
         let cursor = state.cursor();
-        self.completion_seq += 1;
+        self.conversation.completion_seq += 1;
         let Some(trigger) = completion::trigger(&text, cursor) else {
-            if self.completion.take().is_some() {
+            if self.conversation.completion.take().is_some() {
                 cx.notify();
             }
             return;
@@ -108,15 +116,15 @@ impl Root {
             let Some(connection) = self.connection(&environment) else {
                 return;
             };
-            let seq = self.completion_seq;
+            let seq = self.conversation.completion_seq;
             let runtime = self.runtime.clone();
             let query = trigger.query.clone();
-            cx.spawn(async move |this, cx| {
+            self.spawn_pane(cx, async move |this, cx| {
                 cx.background_executor()
                     .timer(Duration::from_millis(120))
                     .await;
                 if this
-                    .read_with(cx, |root, _| root.completion_seq != seq)
+                    .read_with(cx, |root, _| root.conversation.completion_seq != seq)
                     .unwrap_or(true)
                 {
                     return;
@@ -126,10 +134,10 @@ impl Root {
                 })
                 .await;
                 let _ = this.update(cx, |root, cx| {
-                    if root.completion_seq != seq {
+                    if root.conversation.completion_seq != seq {
                         return;
                     }
-                    root.completion = found.ok().map(|result| Completion {
+                    root.conversation.completion = found.ok().map(|result| Completion {
                         trigger,
                         suggestions: completion::path_suggestions(&result),
                         selected: 0,
@@ -153,7 +161,7 @@ impl Root {
         let suggestions = provider
             .map(|p| completion::provider_suggestions(&p, trigger.kind, &trigger.query))
             .unwrap_or_default();
-        self.completion = Some(Completion {
+        self.conversation.completion = Some(Completion {
             trigger,
             suggestions,
             selected: 0,
@@ -170,34 +178,41 @@ impl Root {
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(open) = self
+            .conversation
             .completion
             .as_mut()
             .filter(|c| !c.suggestions.is_empty())
         else {
             return false;
         };
-        if !self.composer.read(cx).focus_handle(cx).is_focused(window) {
+        if !self
+            .conversation
+            .composer
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
             return false;
         }
         let n = open.suggestions.len().min(8);
         match keystroke.key.as_str() {
             "down" => open.selected = (open.selected + 1) % n,
             "up" => open.selected = (open.selected + n - 1) % n,
-            "escape" => self.completion = None,
+            "escape" => self.conversation.completion = None,
             "enter" | "tab" if !keystroke.modifiers.control => {
                 let trigger = open.trigger.clone();
                 let suggestion = open.suggestions[open.selected].clone();
-                self.completion = None;
+                self.conversation.completion = None;
                 if self.accept_token(&trigger, &suggestion, window, cx) {
                     self.stash_composer(cx);
                     cx.notify();
                     return true;
                 }
-                let text = self.composer.read(cx).value().to_string();
+                let text = self.conversation.composer.read(cx).value().to_string();
                 let (value, at) = completion::apply(&text, &trigger, &suggestion);
                 let (line, column) = completion::line_column(&value, at);
-                self.completion = None;
-                self.composer.update(cx, |state, cx| {
+                self.conversation.completion = None;
+                self.conversation.composer.update(cx, |state, cx| {
                     state.set_value(value, window, cx);
                     state.set_cursor_position(Position::new(line, column), window, cx);
                 });
@@ -215,7 +230,7 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.picker_open {
+        if !self.conversation.picker_open {
             return false;
         }
         let jump = command
@@ -240,7 +255,7 @@ impl Root {
         if instances.is_empty() {
             return true;
         }
-        let current = self.picker_instance.as_deref().or_else(|| {
+        let current = self.conversation.picker_instance.as_deref().or_else(|| {
             selected
                 .as_ref()
                 .and_then(|model| model.get("instanceId")?.as_str())
@@ -255,12 +270,18 @@ impl Root {
             } else {
                 (at + instances.len() - 1) % instances.len()
             };
-            self.picker_instance = Some(instances[at].instance_id.clone());
-            self.model_picker
+            self.conversation.picker_instance = Some(instances[at].instance_id.clone());
+            self.conversation
+                .model_picker
                 .update(cx, |state, cx| state.set_query("", window, cx));
             cx.notify();
         } else if let Some(index) = jump {
-            let query = self.model_picker.read(cx).query(cx).to_lowercase();
+            let query = self
+                .conversation
+                .model_picker
+                .read(cx)
+                .query(cx)
+                .to_lowercase();
             let instance = &instances[at];
             if let Some(model) = instance
                 .models
@@ -269,7 +290,8 @@ impl Root {
                 .nth(index)
             {
                 self.pick_model(instance.instance_id.clone(), model.slug.clone(), cx);
-                self.composer
+                self.conversation
+                    .composer
                     .update(cx, |state, cx| state.focus(window, cx));
             }
         }
@@ -277,28 +299,39 @@ impl Root {
     }
 
     pub(super) fn composer_key(&self) -> Option<String> {
-        if self.draft.is_some() {
-            return Some(drafts::NEW_THREAD.to_string());
+        if self.conversation.draft.is_some() {
+            return Some(format!(
+                "pane:{}:{}",
+                self.conversation.id,
+                drafts::NEW_THREAD
+            ));
         }
-        self.current()
-            .map(|(environment, thread_id)| drafts::thread_key(&environment, &thread_id))
+        self.current().map(|(environment, thread_id)| {
+            format!(
+                "pane:{}:{}",
+                self.conversation.id,
+                drafts::thread_key(&environment, &thread_id)
+            )
+        })
     }
 
     /// Keeps the composer text as the draft of what the composer is for now. Call before the
     /// composer changes what it is for.
     pub(super) fn stash_composer(&mut self, cx: &mut Context<Self>) {
-        if self.queue_edit.is_some() {
+        if self.conversation.queue_edit.is_some() {
             return;
         }
         let Some(key) = self.composer_key() else {
             return;
         };
-        let text = self.composer.read(cx).value().to_string();
-        if self.attachments.is_empty() {
-            self.composer_attachments.remove(&key);
+        let text = self.conversation.composer.read(cx).value().to_string();
+        self.conversation.draft_text = text.clone();
+        if self.conversation.attachments.is_empty() {
+            self.conversation.composer_attachments.remove(&key);
         } else {
-            self.composer_attachments
-                .insert(key.clone(), self.attachments.clone());
+            self.conversation
+                .composer_attachments
+                .insert(key.clone(), self.conversation.attachments.clone());
         }
         if self.drafts.set(&key, &text) {
             self.schedule_drafts_save(cx);
@@ -307,21 +340,21 @@ impl Root {
 
     /// Puts the draft of what the composer is for now into it, at the next render.
     pub(super) fn load_composer(&mut self) {
-        self.picker_open = false;
+        self.conversation.picker_open = false;
         self.abandon_queue_edit();
-        self.attachments = self
+        self.conversation.attachments = self
             .composer_key()
-            .and_then(|key| self.composer_attachments.get(&key))
+            .and_then(|key| self.conversation.composer_attachments.get(&key))
             .cloned()
             .unwrap_or_default();
-        self.prompts.history = None;
-        self.prompts.open = false;
-        self.hovered_message = None;
+        self.conversation.prompts.history = None;
+        self.conversation.prompts.open = false;
+        self.conversation.hovered_message = None;
         let text = self
             .composer_key()
             .and_then(|key| self.drafts.get(&key).map(str::to_string))
             .unwrap_or_default();
-        self.pending_composer = Some(text);
+        self.conversation.pending_composer = Some(text);
     }
 
     fn schedule_drafts_save(&mut self, cx: &mut Context<Self>) {
@@ -333,8 +366,9 @@ impl Root {
             cx.background_executor().timer(Duration::from_secs(1)).await;
             let _ = this.update(cx, |root, cx| {
                 root.drafts_save_scheduled = false;
+                root.save_conversations();
                 if let Err(error) = root.drafts.save(&root.drafts_path) {
-                    root.message = Some(format!("Saving drafts failed: {error:#}"));
+                    root.conversation.message = Some(format!("Saving drafts failed: {error:#}"));
                     cx.notify();
                 }
             });
@@ -343,7 +377,7 @@ impl Root {
     }
 
     pub(super) fn composer_composing(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        self.composer.update(cx, |state, cx| {
+        self.conversation.composer.update(cx, |state, cx| {
             state.marked_text_range(window, cx).is_some()
         })
     }
@@ -358,7 +392,7 @@ impl Root {
         let approval = self
             .open_entry()
             .is_some_and(|entry| entry.status == ThreadStatus::Approval);
-        let compacting = self.open.as_ref().is_some_and(|open| {
+        let compacting = self.conversation.open.as_ref().is_some_and(|open| {
             let state = open.watch.state();
             let state = state.lock().expect("thread state");
             state
@@ -392,11 +426,11 @@ impl Root {
         if self.composer_composing(window, cx) {
             return;
         }
-        if self.queue_edit.is_some() {
+        if self.conversation.queue_edit.is_some() {
             self.save_queue_edit(window, cx);
             return;
         }
-        if self.draft.is_some() {
+        if self.conversation.draft.is_some() {
             self.launch(intent, window, cx);
             return;
         }
@@ -407,8 +441,14 @@ impl Root {
         let Some((environment, thread_id)) = self.current() else {
             return;
         };
-        let text = self.composer.read(cx).value().trim().to_string();
-        if text.is_empty() && self.attachments.is_empty() {
+        let text = self
+            .conversation
+            .composer
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        if text.is_empty() && self.conversation.attachments.is_empty() {
             return;
         }
         let Some(connection) = self.connection(&environment) else {
@@ -417,6 +457,7 @@ impl Root {
         let background_thread = thread_id.clone();
         let delivery = self.composer_delivery(intent == SubmissionIntent::Alternate);
         let approvals: Vec<String> = self
+            .conversation
             .rows
             .iter()
             .filter_map(|row| match &row.pending {
@@ -427,15 +468,16 @@ impl Root {
         let Some(origin) = self.composer_key() else {
             return;
         };
-        if !self.composer_sends.insert(origin.clone()) {
+        if !self.conversation.composer_sends.insert(origin.clone()) {
             return;
         }
         let runtime = self.runtime.clone();
-        let pending = std::mem::take(&mut self.attachments);
-        self.composer
+        let pending = std::mem::take(&mut self.conversation.attachments);
+        self.conversation
+            .composer
             .update(cx, |state, cx| state.set_value("", window, cx));
         self.stash_composer(cx);
-        cx.spawn_in(window, async move |this, cx| {
+        self.spawn_pane_in(window, cx, async move |this, cx| {
             let sent = on_runtime(&runtime, {
                 let text = text.clone();
                 let pending = pending.clone();
@@ -453,8 +495,9 @@ impl Root {
             })
             .await;
             let _ = this.update_in(cx, |root, window, cx| {
-                root.composer_sends.remove(&origin);
-                root.message = sent.as_ref().err().map(|e| format!("Send failed: {e:#}"));
+                root.conversation.composer_sends.remove(&origin);
+                root.conversation.message =
+                    sent.as_ref().err().map(|e| format!("Send failed: {e:#}"));
                 if sent.is_ok()
                     && intent == SubmissionIntent::Background
                     && root.composer_key().as_ref() == Some(&origin)
@@ -463,10 +506,11 @@ impl Root {
                     root.background_started(environment.clone(), background_thread, window, cx);
                 }
                 if sent.is_err() {
-                    root.composer
+                    root.conversation
+                        .composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
                     root.stash_composer(cx);
-                    root.attachments = pending;
+                    root.conversation.attachments = pending;
                 }
                 cx.notify();
             });
@@ -482,14 +526,14 @@ impl Root {
             return;
         };
         let runtime = self.runtime.clone();
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             let stopped = on_runtime(
                 &runtime,
                 async move { connection.stop_thread(&thread_id).await },
             )
             .await;
             let _ = this.update(cx, |root, cx| {
-                root.message = stopped.err().map(|e| format!("Stop failed: {e:#}"));
+                root.conversation.message = stopped.err().map(|e| format!("Stop failed: {e:#}"));
                 cx.notify();
             });
         })
@@ -512,7 +556,7 @@ impl Root {
 
     /// The environment and project of the new thread.
     pub(super) fn draft_project(&self) -> Option<(String, String)> {
-        let draft = self.draft.as_ref()?;
+        let draft = self.conversation.draft.as_ref()?;
         let groups = self.project_groups();
         let group = groups
             .iter()
@@ -532,7 +576,7 @@ impl Root {
     }
 
     pub(super) fn draft_target(&self) -> Option<(String, String, Option<Value>, String)> {
-        let draft = self.draft.as_ref()?;
+        let draft = self.conversation.draft.as_ref()?;
         let (environment, project_id) = self.draft_project()?;
         let project = self.project_value(&environment, &project_id)?;
         let config = self.config_of(&environment);
@@ -551,7 +595,8 @@ impl Root {
 
     pub(super) fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.begin_new_thread(cx);
-        self.composer
+        self.conversation
+            .composer
             .update(cx, |state, cx| state.focus(window, cx));
     }
 
@@ -569,7 +614,7 @@ impl Root {
             .and_then(|(env, id)| self.thread_value(&env, &id))
             .and_then(|t| t.get("modelSelection").cloned())
             .filter(|m| !m.is_null());
-        self.draft = Some(NewThreadDraft {
+        self.conversation.draft = Some(NewThreadDraft {
             id: uuid::Uuid::new_v4().to_string(),
             environment: None,
             workspace_strategy: json!({"type":"root"}),
@@ -579,58 +624,69 @@ impl Root {
             runtime_mode: None,
             interaction_mode: "default".into(),
         });
-        self.message = None;
-        self.picker_open = false;
-        self.branch_anchor = None;
-        self.branch_request += 1;
+        self.conversation.message = None;
+        self.conversation.picker_open = false;
+        self.conversation.branch_anchor = None;
+        self.conversation.branch_request += 1;
         self.close_thread(cx);
         self.load_composer();
         cx.notify();
     }
 
     pub(super) fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.queue_edit.is_some() {
+        if self.conversation.queue_edit.is_some() {
             self.cancel_queue_edit(window, cx);
             return;
         }
-        if self.branch_anchor.take().is_some() {
-            self.composer
+        if self.conversation.branch_anchor.take().is_some() {
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
             return;
         }
-        if self.permissions_menu.take().is_some() {
-            self.permissions_subscription = None;
-            if self.picker_open {
-                self.model_picker
+        if self.conversation.permissions_menu.take().is_some() {
+            self.conversation.permissions_subscription = None;
+            if self.conversation.picker_open {
+                self.conversation
+                    .model_picker
                     .update(cx, |state, cx| state.focus(window, cx));
             } else {
-                self.composer
+                self.conversation
+                    .composer
                     .update(cx, |state, cx| state.focus(window, cx));
             }
             cx.notify();
             return;
         }
-        if self.picker_open {
-            self.picker_open = false;
-            self.composer
+        if self.conversation.picker_open {
+            self.conversation.picker_open = false;
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
             cx.notify();
         }
     }
 
     fn launch(&mut self, intent: SubmissionIntent, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self.composer.read(cx).value().trim().to_string();
-        if text.is_empty() && self.attachments.is_empty() {
+        let text = self
+            .conversation
+            .composer
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        if text.is_empty() && self.conversation.attachments.is_empty() {
             return;
         }
         let Some((environment, project_id, model, runtime_mode)) = self.draft_target() else {
-            self.message = Some("Pick a project first.".into());
+            self.conversation.message = Some("Pick a project first.".into());
             cx.notify();
             return;
         };
         let Some(model) = model else {
-            self.message = Some("No model is available on this host. Pick one first.".into());
+            self.conversation.message =
+                Some("No model is available on this host. Pick one first.".into());
             cx.notify();
             return;
         };
@@ -638,16 +694,19 @@ impl Root {
             return;
         };
         let interaction_mode = self
+            .conversation
             .draft
             .as_ref()
             .map(|d| d.interaction_mode.clone())
             .unwrap_or_else(|| "default".into());
         let workspace_strategy = self
+            .conversation
             .draft
             .as_ref()
             .map(|draft| draft.workspace_strategy.clone())
             .unwrap_or_else(|| json!({"type":"root"}));
         let thread_id = self
+            .conversation
             .draft
             .as_ref()
             .map(|draft| draft.id.clone())
@@ -659,12 +718,14 @@ impl Root {
         self.rebuild_entries();
         self.schedule_wake(window, cx);
         let title = projects::title_seed(&text);
-        self.composer
+        self.conversation
+            .composer
             .update(cx, |state, cx| state.set_value("", window, cx));
         self.stash_composer(cx);
         let runtime = self.runtime.clone();
-        let pending = std::mem::take(&mut self.attachments);
-        cx.spawn_in(window, async move |this, cx| {
+        let pending = std::mem::take(&mut self.conversation.attachments);
+        let root = cx.entity().downgrade();
+        self.spawn_pane_in(window, cx, async move |this, cx| {
             let launched = on_runtime(&runtime, {
                 let text = text.clone();
                 let pending = pending.clone();
@@ -686,30 +747,33 @@ impl Root {
                 }
             })
             .await;
-            let _ = this.update_in(cx, |root, window, cx| {
+            let _ = root.update_in(cx, |root, window, cx| {
                 root.promoting.remove(&promoting);
                 root.rebuild_entries();
                 root.schedule_wake(window, cx);
-                match launched {
-                    Ok(thread_id) => {
-                        if root.draft.as_ref().map(|draft| &draft.id) != Some(&promoting.1) {
-                            return;
-                        }
-                        if intent == SubmissionIntent::Background {
-                            root.new_thread(window, cx);
-                            root.background_started(environment, thread_id, window, cx);
-                        } else {
-                            root.open_thread(environment, thread_id, cx);
-                        }
+                cx.notify();
+            });
+            let _ = this.update_in(cx, |root, window, cx| match launched {
+                Ok(thread_id) => {
+                    if root.conversation.draft.as_ref().map(|draft| &draft.id) != Some(&promoting.1)
+                    {
+                        return;
                     }
-                    Err(error) => {
-                        root.message = Some(format!("New thread failed: {error:#}"));
-                        root.composer
-                            .update(cx, |state, cx| state.set_value(text, window, cx));
-                        root.stash_composer(cx);
-                        root.attachments = pending;
-                        cx.notify();
+                    if intent == SubmissionIntent::Background {
+                        root.new_thread(window, cx);
+                        root.background_started(environment, thread_id, window, cx);
+                    } else {
+                        root.open_thread(environment, thread_id, cx);
                     }
+                }
+                Err(error) => {
+                    root.conversation.message = Some(format!("New thread failed: {error:#}"));
+                    root.conversation
+                        .composer
+                        .update(cx, |state, cx| state.set_value(text, window, cx));
+                    root.stash_composer(cx);
+                    root.conversation.attachments = pending;
+                    cx.notify();
                 }
             });
         })
@@ -719,7 +783,7 @@ impl Root {
     /// The host, model, runtime mode and interaction mode the composer acts on: the open thread's,
     /// or the draft's.
     pub(super) fn composer_target(&self) -> Option<(String, Option<Value>, String, String)> {
-        if let Some(draft) = &self.draft {
+        if let Some(draft) = &self.conversation.draft {
             let (environment, _, model, runtime_mode) = self.draft_target()?;
             return Some((
                 environment,
@@ -763,10 +827,10 @@ impl Root {
         };
         let runtime = self.runtime.clone();
         let future = command(connection, thread_id);
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             if let Err(error) = on_runtime(&runtime, future).await {
                 let _ = this.update(cx, |root, cx| {
-                    root.message = Some(format!("{what} failed: {error:#}"));
+                    root.conversation.message = Some(format!("{what} failed: {error:#}"));
                     cx.notify();
                 });
             }
@@ -775,22 +839,23 @@ impl Root {
     }
 
     pub(super) fn toggle_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.picker_open = !self.picker_open;
-        if self.picker_open {
-            self.picker_instance =
-                self.composer_target()
-                    .and_then(|(_, m, _, _)| m)
-                    .and_then(|m| {
-                        m.get("instanceId")
-                            .and_then(Value::as_str)
-                            .map(str::to_string)
-                    });
-            self.model_picker.update(cx, |state, cx| {
+        self.conversation.picker_open = !self.conversation.picker_open;
+        if self.conversation.picker_open {
+            self.conversation.picker_instance = self
+                .composer_target()
+                .and_then(|(_, m, _, _)| m)
+                .and_then(|m| {
+                    m.get("instanceId")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                });
+            self.conversation.model_picker.update(cx, |state, cx| {
                 state.set_query("", window, cx);
                 state.focus(window, cx);
             });
         } else {
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
         }
         cx.notify();
@@ -802,7 +867,7 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Entity<permissions::Menu>> {
-        if let Some(menu) = &self.permissions_menu {
+        if let Some(menu) = &self.conversation.permissions_menu {
             return Some(menu.clone());
         }
         let (environment, model, current, _) = self.composer_target()?;
@@ -816,30 +881,35 @@ impl Root {
             .runtime_modes
             .clone();
         let menu = cx.new(|cx| permissions::Menu::new(modes, current, keyboard, window, cx));
-        self.permissions_subscription = Some(cx.subscribe_in(
+        let pane_id = self.conversation.id;
+        self.conversation.permissions_subscription = Some(cx.subscribe_in(
             &menu,
             window,
-            |root, _, event: &permissions::Event, window, cx| {
-                if let permissions::Event::Select(mode) = event
-                    && root
-                        .composer_target()
-                        .is_some_and(|(_, _, current, _)| current != *mode)
-                {
-                    root.set_runtime_mode(mode.clone(), cx);
-                }
-                root.permissions_menu = None;
-                root.permissions_subscription = None;
-                if root.picker_open {
-                    root.model_picker
-                        .update(cx, |state, cx| state.focus(window, cx));
-                } else {
-                    root.composer
-                        .update(cx, |state, cx| state.focus(window, cx));
-                }
-                cx.notify();
+            move |root, _, event: &permissions::Event, window, cx| {
+                root.with_conversation(pane_id, |root| {
+                    if let permissions::Event::Select(mode) = event
+                        && root
+                            .composer_target()
+                            .is_some_and(|(_, _, current, _)| current != *mode)
+                    {
+                        root.set_runtime_mode(mode.clone(), cx);
+                    }
+                    root.conversation.permissions_menu = None;
+                    root.conversation.permissions_subscription = None;
+                    if root.conversation.picker_open {
+                        root.conversation
+                            .model_picker
+                            .update(cx, |state, cx| state.focus(window, cx));
+                    } else {
+                        root.conversation
+                            .composer
+                            .update(cx, |state, cx| state.focus(window, cx));
+                    }
+                    cx.notify();
+                });
             },
         ));
-        self.permissions_menu = Some(menu.clone());
+        self.conversation.permissions_menu = Some(menu.clone());
         let focus = menu.focus_handle(cx);
         window.on_next_frame(move |window, cx| focus.focus(window, cx));
         Some(menu)
@@ -854,17 +924,19 @@ impl Root {
         if self.composer_target().is_none() {
             return;
         }
-        if self.permissions_menu.take().is_some() {
-            self.permissions_subscription = None;
-            if self.picker_open {
-                self.model_picker
+        if self.conversation.permissions_menu.take().is_some() {
+            self.conversation.permissions_subscription = None;
+            if self.conversation.picker_open {
+                self.conversation
+                    .model_picker
                     .update(cx, |state, cx| state.focus(window, cx));
             } else {
-                self.composer
+                self.conversation
+                    .composer
                     .update(cx, |state, cx| state.focus(window, cx));
             }
         } else {
-            if keyboard && !self.picker_open {
+            if keyboard && !self.conversation.picker_open {
                 self.toggle_model_picker(window, cx);
             }
             self.ensure_permissions_menu(keyboard, window, cx);
@@ -879,7 +951,7 @@ impl Root {
             multiple: true,
             prompt: Some("Attach files".into()),
         });
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             let result = selected.await;
             let _ = this.update(cx, |root, cx| {
                 match result {
@@ -888,10 +960,12 @@ impl Root {
                     }
                     Ok(Ok(None)) => {}
                     Ok(Err(error)) => {
-                        root.message = Some(format!("Choosing attachments failed: {error:#}"))
+                        root.conversation.message =
+                            Some(format!("Choosing attachments failed: {error:#}"))
                     }
                     Err(error) => {
-                        root.message = Some(format!("Choosing attachments failed: {error}"))
+                        root.conversation.message =
+                            Some(format!("Choosing attachments failed: {error}"))
                     }
                 }
                 cx.notify();
@@ -901,7 +975,7 @@ impl Root {
     }
 
     fn set_runtime_mode(&mut self, mode: String, cx: &mut Context<Self>) {
-        if let Some(draft) = self.draft.as_mut() {
+        if let Some(draft) = self.conversation.draft.as_mut() {
             draft.runtime_mode = Some(mode);
             cx.notify();
         } else {
@@ -916,11 +990,11 @@ impl Root {
             return;
         };
         let Some(chosen) = models::with_option(&current, id, value) else {
-            self.message = Some("The model's option selection is malformed".into());
+            self.conversation.message = Some("The model's option selection is malformed".into());
             cx.notify();
             return;
         };
-        if let Some(draft) = self.draft.as_mut() {
+        if let Some(draft) = self.conversation.draft.as_mut() {
             draft.model = Some(chosen);
             cx.notify();
         } else {
@@ -931,9 +1005,9 @@ impl Root {
     }
 
     pub(super) fn pick_model(&mut self, instance_id: String, slug: String, cx: &mut Context<Self>) {
-        self.picker_open = false;
+        self.conversation.picker_open = false;
         let chosen = models::selection(&instance_id, &slug);
-        if let Some(draft) = self.draft.as_mut() {
+        if let Some(draft) = self.conversation.draft.as_mut() {
             draft.model = Some(chosen);
             cx.notify();
             return;
@@ -979,7 +1053,7 @@ impl Root {
         let Some(next) = modes.get(next).cloned() else {
             return;
         };
-        if let Some(draft) = self.draft.as_mut() {
+        if let Some(draft) = self.conversation.draft.as_mut() {
             draft.runtime_mode = Some(next);
             cx.notify();
             return;
@@ -994,7 +1068,7 @@ impl Root {
             return;
         };
         let next = if current == "plan" { "default" } else { "plan" };
-        if let Some(draft) = self.draft.as_mut() {
+        if let Some(draft) = self.conversation.draft.as_mut() {
             draft.interaction_mode = next.into();
             cx.notify();
             return;
@@ -1005,94 +1079,102 @@ impl Root {
     }
 
     pub(super) fn render_queue(&self, cx: &Context<Self>) -> Option<AnyElement> {
-        if self.queued.is_empty() {
+        if self.conversation.queued.is_empty() {
             return None;
         }
         let theme = cx.theme();
-        let rows = self.queued.iter().enumerate().map(|(i, queued)| {
-            let steer_run = queued.run_id.clone();
-            let cancel_run = queued.run_id.clone();
-            let edit_run = queued.run_id.clone();
-            let editing = self
-                .queue_edit
-                .as_ref()
-                .is_some_and(|edit| edit.run_id == queued.run_id);
-            h_flex()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.muted_foreground)
-                        .child("Queued"),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_sm()
-                        .child(queued.text.clone()),
-                )
-                .child(
-                    Button::new(("queue-steer", i))
-                        .disabled(editing)
-                        .label("Send now")
-                        .compact()
-                        .outline()
-                        .on_click(cx.listener(move |root, _, _, cx| {
-                            root.steer_queued(steer_run.clone(), cx)
-                        })),
-                )
-                .child(
-                    Button::new(("queue-edit", i))
-                        .icon(gpui_kit::assets::IconName::Pencil)
-                        .ghost()
-                        .compact()
-                        .accessibility_label(if editing {
-                            "Cancel editing queued message"
-                        } else {
-                            "Edit queued message"
-                        })
-                        .on_click(cx.listener(move |root, _, window, cx| {
-                            if editing {
-                                root.cancel_queue_edit(window, cx);
+        let rows = self
+            .conversation
+            .queued
+            .iter()
+            .enumerate()
+            .map(|(i, queued)| {
+                let steer_run = queued.run_id.clone();
+                let cancel_run = queued.run_id.clone();
+                let edit_run = queued.run_id.clone();
+                let editing = self
+                    .conversation
+                    .queue_edit
+                    .as_ref()
+                    .is_some_and(|edit| edit.run_id == queued.run_id);
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child("Queued"),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .child(queued.text.clone()),
+                    )
+                    .child(
+                        Button::new(("queue-steer", i))
+                            .disabled(editing)
+                            .label("Send now")
+                            .compact()
+                            .outline()
+                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
+                                root.steer_queued(steer_run.clone(), cx)
+                            })),
+                    )
+                    .child(
+                        Button::new(("queue-edit", i))
+                            .icon(gpui_kit::assets::IconName::Pencil)
+                            .ghost()
+                            .compact()
+                            .accessibility_label(if editing {
+                                "Cancel editing queued message"
                             } else {
-                                root.edit_queued(edit_run.clone(), window, cx);
-                            }
-                        })),
-                )
-                .child(
-                    Button::new(("queue-up", i))
-                        .icon(IconName::ArrowUp)
-                        .ghost()
-                        .compact()
-                        .disabled(i == 0)
-                        .accessibility_label("Move queued message up")
-                        .on_click(
-                            cx.listener(move |root, _, _, cx| root.move_queued(i, false, cx)),
-                        ),
-                )
-                .child(
-                    Button::new(("queue-down", i))
-                        .icon(IconName::ArrowDown)
-                        .ghost()
-                        .compact()
-                        .disabled(i + 1 == self.queued.len())
-                        .accessibility_label("Move queued message down")
-                        .on_click(cx.listener(move |root, _, _, cx| root.move_queued(i, true, cx))),
-                )
-                .child(
-                    Button::new(("queue-cancel", i))
-                        .label("Cancel")
-                        .accessibility_label("Remove queued message")
-                        .disabled(editing)
-                        .compact()
-                        .outline()
-                        .on_click(cx.listener(move |root, _, _, cx| {
-                            root.cancel_queued(cancel_run.clone(), cx)
-                        })),
-                )
-        });
+                                "Edit queued message"
+                            })
+                            .on_click(self.pane_listener(cx, move |root, _, window, cx| {
+                                if editing {
+                                    root.cancel_queue_edit(window, cx);
+                                } else {
+                                    root.edit_queued(edit_run.clone(), window, cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        Button::new(("queue-up", i))
+                            .icon(IconName::ArrowUp)
+                            .ghost()
+                            .compact()
+                            .disabled(i == 0)
+                            .accessibility_label("Move queued message up")
+                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
+                                root.move_queued(i, false, cx)
+                            })),
+                    )
+                    .child(
+                        Button::new(("queue-down", i))
+                            .icon(IconName::ArrowDown)
+                            .ghost()
+                            .compact()
+                            .disabled(i + 1 == self.conversation.queued.len())
+                            .accessibility_label("Move queued message down")
+                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
+                                root.move_queued(i, true, cx)
+                            })),
+                    )
+                    .child(
+                        Button::new(("queue-cancel", i))
+                            .label("Cancel")
+                            .accessibility_label("Remove queued message")
+                            .disabled(editing)
+                            .compact()
+                            .outline()
+                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
+                                root.cancel_queued(cancel_run.clone(), cx)
+                            })),
+                    )
+            });
         Some(
             v_flex()
                 .px_3()
@@ -1133,7 +1215,7 @@ impl Root {
     }
 
     pub(super) fn render_message(&self, cx: &App) -> Option<Div> {
-        self.message.clone().map(|message| {
+        self.conversation.message.clone().map(|message| {
             div()
                 .px_4()
                 .py_1()
@@ -1144,7 +1226,7 @@ impl Root {
     }
 
     fn composer_button(&self, cx: &Context<Self>) -> Button {
-        if let Some(edit) = &self.queue_edit {
+        if let Some(edit) = &self.conversation.queue_edit {
             return Button::new("save-queued-message")
                 .icon(IconName::Check)
                 .size(px(32.))
@@ -1152,18 +1234,32 @@ impl Root {
                 .accessibility_label("Update queued message")
                 .tooltip("Update queued message")
                 .disabled(edit.saving)
-                .on_click(cx.listener(|root, _, window, cx| root.save_queue_edit(window, cx)));
+                .on_click(
+                    self.pane_listener(cx, |root, _, window, cx| root.save_queue_edit(window, cx)),
+                );
         }
-        if self.draft.is_some() {
+        if self.conversation.draft.is_some() {
             return Button::new("launch")
                 .icon(IconName::ArrowUp)
                 .size(px(32.))
                 .rounded(px(16.))
                 .disabled(
-                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                    self.conversation
+                        .composer
+                        .read(cx)
+                        .value()
+                        .trim()
+                        .is_empty()
+                        && self.conversation.attachments.is_empty(),
                 )
                 .when(
-                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                    self.conversation
+                        .composer
+                        .read(cx)
+                        .value()
+                        .trim()
+                        .is_empty()
+                        && self.conversation.attachments.is_empty(),
                     |button| {
                         button
                             .bg(cx.theme().foreground.opacity(0.12))
@@ -1173,7 +1269,7 @@ impl Root {
                 .tooltip("Send")
                 .accessibility_label("Submit message")
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| {
+                .on_click(self.pane_listener(cx, |root, _, window, cx| {
                     root.launch(SubmissionIntent::Foreground, window, cx)
                 }));
         }
@@ -1187,7 +1283,7 @@ impl Root {
             Button::new("answer")
                 .label("Answer")
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| {
+                .on_click(self.pane_listener(cx, |root, _, window, cx| {
                     let alternate = window.modifiers().control || window.modifiers().platform;
                     root.send_intent(
                         if alternate {
@@ -1200,8 +1296,14 @@ impl Root {
                     );
                 }))
         } else if working
-            && self.composer.read(cx).value().trim().is_empty()
-            && self.attachments.is_empty()
+            && self
+                .conversation
+                .composer
+                .read(cx)
+                .value()
+                .trim()
+                .is_empty()
+            && self.conversation.attachments.is_empty()
         {
             Button::new("stop")
                 .icon(Icon::empty().path("icons/t3-stop.svg"))
@@ -1210,7 +1312,7 @@ impl Root {
                 .size(px(32.))
                 .rounded(px(16.))
                 .danger()
-                .on_click(cx.listener(|root, _, _, cx| root.stop(cx)))
+                .on_click(self.pane_listener(cx, |root, _, _, cx| root.stop(cx)))
         } else {
             Button::new("send")
                 .icon(Icon::empty().path(match self.composer_delivery(false) {
@@ -1219,10 +1321,22 @@ impl Root {
                     Delivery::Queue => "icons/t3-queue.svg",
                 }))
                 .disabled(
-                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                    self.conversation
+                        .composer
+                        .read(cx)
+                        .value()
+                        .trim()
+                        .is_empty()
+                        && self.conversation.attachments.is_empty(),
                 )
                 .when(
-                    self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
+                    self.conversation
+                        .composer
+                        .read(cx)
+                        .value()
+                        .trim()
+                        .is_empty()
+                        && self.conversation.attachments.is_empty(),
                     |button| {
                         button
                             .bg(cx.theme().foreground.opacity(0.12))
@@ -1238,7 +1352,7 @@ impl Root {
                 .size(px(32.))
                 .rounded(px(16.))
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| {
+                .on_click(self.pane_listener(cx, |root, _, window, cx| {
                     let alternate = window.modifiers().control || window.modifiers().platform;
                     root.send_intent(
                         if alternate {
@@ -1301,7 +1415,7 @@ impl Root {
                     .size(px(32.))
                     .tooltip("Attach files")
                     .accessibility_label("Attach files")
-                    .on_click(cx.listener(|root, _, _, cx| root.choose_attachments(cx))),
+                    .on_click(self.pane_listener(cx, |root, _, _, cx| root.choose_attachments(cx))),
             )
             .child(div().flex_1())
             .child(
@@ -1337,15 +1451,15 @@ impl Root {
                             })
                             .unwrap_or_else(|| "Choose model and permissions".into()),
                     )
-                    .selected(self.picker_open)
-                    .on_click(
-                        cx.listener(|root, _, window, cx| root.toggle_model_picker(window, cx)),
-                    ),
+                    .selected(self.conversation.picker_open)
+                    .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                        root.toggle_model_picker(window, cx)
+                    })),
             );
-        let picker = self.picker_open.then(|| {
+        let picker = self.conversation.picker_open.then(|| {
             let shown = instances
                 .iter()
-                .find(|i| Some(&i.instance_id) == self.picker_instance.as_ref())
+                .find(|i| Some(&i.instance_id) == self.conversation.picker_instance.as_ref())
                 .or(selected_instance);
             let group = CommandGroup::new().items(shown.into_iter().flat_map(|instance| {
                 instance.models.iter().map(|model| {
@@ -1364,11 +1478,12 @@ impl Root {
                 .as_ref()
                 .map(|(_, _, _, mode)| mode.as_str())
                 .unwrap_or_default();
-            let weak = cx.entity().downgrade();
+            let weak = self.pane_root(cx);
             let close = move |window: &mut Window, cx: &mut App| {
                 let _ = weak.update(cx, |root, cx| {
-                    root.picker_open = false;
-                    root.composer
+                    root.conversation.picker_open = false;
+                    root.conversation
+                        .composer
                         .update(cx, |state, cx| state.focus(window, cx));
                     cx.notify();
                 });
@@ -1396,6 +1511,7 @@ impl Root {
                     .map(|option| option["id"].clone())
                     .collect();
                 let focused = self
+                    .conversation
                     .composer_choices
                     .effort_cursor
                     .as_ref()
@@ -1446,9 +1562,12 @@ impl Root {
                                         accesskit::Toggled::False
                                     })
                                     .when(tracked, |row| {
-                                        row.track_focus(&self.composer_choices.effort_focus)
+                                        row.track_focus(
+                                            &self.conversation.composer_choices.effort_focus,
+                                        )
                                     })
-                                    .on_key_down(cx.listener(
+                                    .on_key_down(self.pane_listener(
+                                        cx,
                                         move |root, event: &KeyDownEvent, window, cx| {
                                             match event.keystroke.key.as_str() {
                                                 "up" | "down" => {
@@ -1463,7 +1582,9 @@ impl Root {
                                                             (index + choices.len() - 1)
                                                                 % choices.len()
                                                         };
-                                                        root.composer_choices.effort_cursor =
+                                                        root.conversation
+                                                            .composer_choices
+                                                            .effort_cursor =
                                                             Some(choices[next].clone());
                                                         cx.notify();
                                                     }
@@ -1473,16 +1594,19 @@ impl Root {
                                                     key_value.clone(),
                                                     cx,
                                                 ),
-                                                "left" => {
-                                                    root.model_picker.update(cx, |state, cx| {
+                                                "left" => root
+                                                    .conversation
+                                                    .model_picker
+                                                    .update(cx, |state, cx| {
                                                         state.focus(window, cx)
-                                                    })
-                                                }
+                                                    }),
                                                 "escape" => {
-                                                    root.picker_open = false;
-                                                    root.composer.update(cx, |state, cx| {
-                                                        state.focus(window, cx)
-                                                    });
+                                                    root.conversation.picker_open = false;
+                                                    root.conversation
+                                                        .composer
+                                                        .update(cx, |state, cx| {
+                                                            state.focus(window, cx)
+                                                        });
                                                     cx.notify();
                                                 }
                                                 _ => return,
@@ -1508,7 +1632,7 @@ impl Root {
                                     .when(checked, |row| {
                                         row.child(Icon::new(IconName::Check).size(px(14.)))
                                     })
-                                    .on_click(cx.listener(move |root, _, _, cx| {
+                                    .on_click(self.pane_listener(cx, move |root, _, _, cx| {
                                         root.set_model_option(&id, value.clone(), cx)
                                     }))
                             }),
@@ -1553,19 +1677,26 @@ impl Root {
                                         .size(px(36.))
                                         .tooltip(instance.name.clone())
                                         .selected(shown.is_some_and(|i| i.instance_id == id))
-                                        .on_click(cx.listener(move |root, _, window, cx| {
-                                            root.picker_instance = Some(id.clone());
-                                            root.model_picker.update(cx, |state, cx| {
-                                                state.set_query("", window, cx);
-                                                state.focus(window, cx);
-                                            });
-                                            cx.notify();
-                                        }))
+                                        .on_click(self.pane_listener(
+                                            cx,
+                                            move |root, _, window, cx| {
+                                                root.conversation.picker_instance =
+                                                    Some(id.clone());
+                                                root.conversation.model_picker.update(
+                                                    cx,
+                                                    |state, cx| {
+                                                        state.set_query("", window, cx);
+                                                        state.focus(window, cx);
+                                                    },
+                                                );
+                                                cx.notify();
+                                            },
+                                        ))
                                 })),
                         )
                         .child(
                             div().flex_1().min_w_0().h_full().child(
-                                Command::new(&self.model_picker)
+                                Command::new(&self.conversation.model_picker)
                                     .placeholder("Search models...")
                                     .max_h(px(300.))
                                     .group(group)
@@ -1633,13 +1764,16 @@ impl Root {
                                                 .ghost()
                                                 .compact()
                                                 .selected(checked)
-                                                .on_click(cx.listener(move |root, _, _, cx| {
-                                                    root.set_model_option(
-                                                        &id,
-                                                        Value::Bool(!checked),
-                                                        cx,
-                                                    )
-                                                })),
+                                                .on_click(self.pane_listener(
+                                                    cx,
+                                                    move |root, _, _, cx| {
+                                                        root.set_model_option(
+                                                            &id,
+                                                            Value::Bool(!checked),
+                                                            cx,
+                                                        )
+                                                    },
+                                                )),
                                             ),
                                         );
                                     }
@@ -1681,7 +1815,8 @@ impl Root {
                                                             },
                                                         )
                                                         .selected(Some(&value) == selected.as_ref())
-                                                        .on_click(cx.listener(
+                                                        .on_click(self.pane_listener(
+                                                            cx,
                                                             move |root, _, _, cx| {
                                                                 root.set_model_option(
                                                                     &id,
@@ -1712,9 +1847,9 @@ impl Root {
                                         .ghost()
                                         .text_size(px(12.))
                                         .selected(interaction_mode == "plan")
-                                        .on_click(
-                                            cx.listener(|root, _, _, cx| root.toggle_plan(cx)),
-                                        ),
+                                        .on_click(self.pane_listener(cx, |root, _, _, cx| {
+                                            root.toggle_plan(cx)
+                                        })),
                                 )
                             },
                         )
@@ -1731,22 +1866,22 @@ impl Root {
                             .icon(IconName::Mic)
                             .ghost()
                             .size(px(28.))
-                            .accessibility_label(if self.dictation.recording.is_some() {
+                            .accessibility_label(
+                                if self.conversation.dictation.recording.is_some() {
+                                    "Stop dictation"
+                                } else {
+                                    "Start dictation"
+                                },
+                            )
+                            .tooltip(if self.conversation.dictation.recording.is_some() {
                                 "Stop dictation"
                             } else {
                                 "Start dictation"
                             })
-                            .tooltip(if self.dictation.recording.is_some() {
-                                "Stop dictation"
-                            } else {
-                                "Start dictation"
-                            })
-                            .disabled(self.dictation.busy)
-                            .on_click(
-                                cx.listener(|root, _, window, cx| {
-                                    root.toggle_dictation(window, cx)
-                                }),
-                            ),
+                            .disabled(self.conversation.dictation.busy)
+                            .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                                root.toggle_dictation(window, cx)
+                            })),
                     )
                     .child(self.composer_button(cx)),
             )
@@ -1770,15 +1905,18 @@ impl Root {
             .ghost()
             .text_size(px(12.))
             .text_color(theme.muted_foreground)
-            .selected(self.permissions_menu.is_some())
-            .on_click(cx.listener(|root, _, window, cx| root.open_permissions(false, window, cx)));
+            .selected(self.conversation.permissions_menu.is_some())
+            .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                root.open_permissions(false, window, cx)
+            }));
         gpui_kit::base::Popup::new("permissions-popover", trigger)
             .anchor(Anchor::BottomRight)
             .offset(px(4.))
             .when_some(
-                self.permissions_menu
+                self.conversation
+                    .permissions_menu
                     .clone()
-                    .filter(|_| inside_picker == self.picker_open),
+                    .filter(|_| inside_picker == self.conversation.picker_open),
                 |popup, menu| popup.content(menu),
             )
             .into_any_element()
@@ -1787,6 +1925,7 @@ impl Root {
     pub(super) fn render_composer(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let suggestions = self
+            .conversation
             .completion
             .as_ref()
             .filter(|c| !c.suggestions.is_empty())
@@ -1817,21 +1956,25 @@ impl Root {
                             )
                     }))
             });
-        let chips = (!self.attachments.is_empty()).then(|| {
+        let chips = (!self.conversation.attachments.is_empty()).then(|| {
             h_flex().px_3().pt_2().gap_1().flex_wrap().children(
-                self.attachments.iter().enumerate().map(|(i, file)| {
-                    Button::new(("attachment", i))
-                        .label(format!("{} ×", file.name))
-                        .compact()
-                        .outline()
-                        .tooltip("Remove")
-                        .on_click(cx.listener(move |root, _, _, cx| {
-                            if i < root.attachments.len() {
-                                root.attachments.remove(i);
-                            }
-                            cx.notify();
-                        }))
-                }),
+                self.conversation
+                    .attachments
+                    .iter()
+                    .enumerate()
+                    .map(|(i, file)| {
+                        Button::new(("attachment", i))
+                            .label(format!("{} ×", file.name))
+                            .compact()
+                            .outline()
+                            .tooltip("Remove")
+                            .on_click(self.pane_listener(cx, move |root, _, _, cx| {
+                                if i < root.conversation.attachments.len() {
+                                    root.conversation.attachments.remove(i);
+                                }
+                                cx.notify();
+                            }))
+                    }),
             )
         });
         let content = v_flex()
@@ -1841,12 +1984,16 @@ impl Root {
             .relative()
             .w_full()
             .max_w(px(736.))
-            .when(self.draft.is_none(), |content| content.mb_5())
+            .when(self.conversation.draft.is_none(), |content| content.mb_5())
             .rounded(px(16.))
             .border_1()
             .border_color(theme.border)
             .bg(crate::appearance::composer(cx))
-            .on_drop(cx.listener(|root, paths: &ExternalPaths, _, cx| root.attach_paths(paths, cx)))
+            .on_drop(
+                self.pane_listener(cx, |root, paths: &ExternalPaths, _, cx| {
+                    root.attach_paths(paths, cx)
+                }),
+            )
             .children(suggestions)
             .children(chips)
             .child(
@@ -1855,7 +2002,7 @@ impl Root {
                         .flex_1()
                         .text_size(px(self.settings.font_size_prompt))
                         .child(
-                            Textarea::new(&self.composer)
+                            Textarea::new(&self.conversation.composer)
                                 .aria_label(format!(
                                     "Message {}",
                                     self.open_entry()
@@ -1867,10 +2014,14 @@ impl Root {
                         ),
                 ),
             )
-            .child(if self.picker_open {
-                self.composer_controls.clone().into_any_element()
+            .child(if self.conversation.picker_open {
+                self.conversation
+                    .composer_controls
+                    .clone()
+                    .into_any_element()
             } else {
-                self.composer_controls
+                self.conversation
+                    .composer_controls
                     .clone()
                     .cached(StyleRefinement::default().w_full().h(px(40.)))
                     .into_any_element()
@@ -1960,7 +2111,7 @@ impl Root {
                             .w_full()
                             .pb_4()
                             .px_4()
-                            .children((!self.prompts.open).then_some(heading)),
+                            .children((!self.conversation.prompts.open).then_some(heading)),
                     )
                     .children(self.render_message(cx))
                     .child(self.render_composer(cx))
@@ -1975,7 +2126,7 @@ impl Root {
                                 .pt_1()
                                 .child(self.render_composer_context(cx))
                                 .child(div().flex_1())
-                                .when(self.workspace_status.is_repo(), |row| {
+                                .when(self.conversation.workspace_status.is_repo(), |row| {
                                     row.child(
                                         div().w(px(140.)).child(
                                             self.render_branch_control("composer-branch", cx),

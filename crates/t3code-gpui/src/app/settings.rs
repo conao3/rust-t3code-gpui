@@ -19,7 +19,7 @@ impl Root {
                     && let Err(error) =
                         crate::timestamp::change_format(self.settings.timestamp_format, cx)
                 {
-                    self.message = Some(format!("Timestamp format failed: {error:#}"));
+                    self.conversation.message = Some(format!("Timestamp format failed: {error:#}"));
                 }
                 if key == "gpuiAppearance" {
                     crate::appearance::apply(self.settings.light_theme, cx);
@@ -29,7 +29,9 @@ impl Root {
                     theme.mono_font_size = px(code);
                 });
             }
-            Err(error) => self.message = Some(format!("Saving the settings failed: {error:#}")),
+            Err(error) => {
+                self.conversation.message = Some(format!("Saving the settings failed: {error:#}"))
+            }
         }
         cx.notify();
     }
@@ -64,7 +66,7 @@ impl Root {
         }
         let patch = if let Some(project) = project {
             if !settings_catalog::project_scoped(definition.key) {
-                self.message =
+                self.conversation.message =
                     Some("Select All projects to change this environment setting.".into());
                 cx.notify();
                 return;
@@ -99,7 +101,8 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         let Some(connection) = self.connection(environment) else {
-            self.message = Some("Connect an environment to change its settings.".into());
+            self.conversation.message =
+                Some("Connect an environment to change its settings.".into());
             cx.notify();
             return;
         };
@@ -110,7 +113,7 @@ impl Root {
             })
             .await;
             let _ = this.update(cx, |root, cx| {
-                root.message = result
+                root.conversation.message = result
                     .err()
                     .map(|error| format!("Setting not saved: {error:#}"));
                 cx.notify();
@@ -184,7 +187,13 @@ impl Root {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         use gpui_kit::component::select::{Select, SelectEvent};
-        if self.composer.read(cx).focus_handle(cx).is_focused(window) {
+        if self
+            .conversation
+            .composer
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
             self.settings_focus.focus(window, cx);
         }
         let search_root = cx.entity().downgrade();
@@ -368,7 +377,7 @@ impl Root {
                     .w(px(260.)),
             );
         }
-        if let Some(error) = &self.message {
+        if let Some(error) = &self.conversation.message {
             content = content.child(
                 div()
                     .id("settings-error")
@@ -956,9 +965,11 @@ impl Root {
                                             .compact()
                                             .on_click(cx.listener(|root, _, window, cx| {
                                                 root.settings_open = false;
-                                                root.composer.update(cx, |input, cx| {
-                                                    input.focus(window, cx)
-                                                });
+                                                root.conversation
+                                                    .composer
+                                                    .update(cx, |input, cx| {
+                                                        input.focus(window, cx)
+                                                    });
                                                 cx.notify();
                                             })),
                                     ),

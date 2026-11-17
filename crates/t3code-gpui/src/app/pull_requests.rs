@@ -675,7 +675,7 @@ impl Root {
                     Err(error) => view.error = Some(format!("{error:#}")),
                 }
                 root.panel_revision += 1;
-                root.workspace_revision += 1;
+                root.conversation.workspace_revision += 1;
                 cx.notify();
             });
         })

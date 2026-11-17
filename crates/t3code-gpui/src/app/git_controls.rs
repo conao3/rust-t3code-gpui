@@ -30,8 +30,8 @@ impl Root {
             "refresh" | "pull" => self.run_git_request(&action.kind, cx),
             "push" | "commit_push" | "commit_push_pr" | "create_pr" => {
                 let action = action.kind.clone();
-                let on_default =
-                    self.workspace_status.local["isDefaultRef"].as_bool() == Some(true);
+                let on_default = self.conversation.workspace_status.local["isDefaultRef"].as_bool()
+                    == Some(true);
                 if on_default {
                     let weak = cx.entity().downgrade();
                     window.open_dialog(cx, move |dialog, _, _| {
@@ -157,7 +157,7 @@ impl Root {
         };
         input["cwd"] = json!(cwd);
         self.git_state.busy = true;
-        self.workspace_revision += 1;
+        self.conversation.workspace_revision += 1;
         let runtime = self.runtime.clone();
         cx.spawn(async move |this, cx| {
             let result = on_runtime(
@@ -171,7 +171,7 @@ impl Root {
                     Ok(value) => value["status"].as_str().unwrap_or("Refreshed").to_string(),
                     Err(error) => format!("{error:#}"),
                 });
-                root.workspace_revision += 1;
+                root.conversation.workspace_revision += 1;
                 cx.notify();
             });
         })
@@ -215,7 +215,7 @@ impl Root {
         self.git_state.busy = true;
         self.git_state.result = None;
         self.git_state.progress.clear();
-        self.workspace_revision += 1;
+        self.conversation.workspace_revision += 1;
         let runtime = self.runtime.clone();
         let (sender, receiver) = async_channel::bounded(32);
         let task = runtime.spawn(async move {
@@ -281,7 +281,7 @@ impl Root {
                             },
                             Err(error) => root.git_state.result = Some(error),
                         }
-                        root.workspace_revision += 1;
+                        root.conversation.workspace_revision += 1;
                         cx.notify();
                     })
                     .is_err()
@@ -292,7 +292,7 @@ impl Root {
             }
             let _ = this.update(cx, |root, cx| {
                 root.git_state.busy = false;
-                root.workspace_revision += 1;
+                root.conversation.workspace_revision += 1;
                 cx.notify();
             });
         })
@@ -301,7 +301,10 @@ impl Root {
     }
 
     pub(super) fn current_project(&self) -> Option<(String, Value)> {
-        if let Some((environment, id)) = self.draft_project().filter(|_| self.draft.is_some()) {
+        if let Some((environment, id)) = self
+            .draft_project()
+            .filter(|_| self.conversation.draft.is_some())
+        {
             return Some((environment.clone(), self.project_value(&environment, &id)?));
         }
         let (environment, id) = self.current()?;
@@ -347,7 +350,7 @@ impl Root {
                         root.save_terminal_layout(cx);
                         root.sync_terminal_drawers(window, cx);
                     }
-                    Err(error) => root.message = Some(format!("Script failed: {error:#}")),
+                    Err(error) => root.conversation.message = Some(format!("Script failed: {error:#}")),
                 }
                 cx.notify();
             });
@@ -359,8 +362,8 @@ impl Root {
         let focus = self.focus.clone();
         let busy = self.git_state.busy;
         let (label, action, enabled) = quick_action(
-            &self.workspace_status.local,
-            &self.workspace_status.remote,
+            &self.conversation.workspace_status.local,
+            &self.conversation.workspace_status.remote,
             busy,
         );
         let scripts = self
@@ -369,8 +372,8 @@ impl Root {
             .unwrap_or_default();
         let script_focus = focus.clone();
         let primary_script = scripts.first().cloned();
-        let local = self.workspace_status.local.clone();
-        let remote = self.workspace_status.remote.clone();
+        let local = self.conversation.workspace_status.local.clone();
+        let remote = self.conversation.workspace_status.remote.clone();
         v_flex()
             .gap_1()
             .child(

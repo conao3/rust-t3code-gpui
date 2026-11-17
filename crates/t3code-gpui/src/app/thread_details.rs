@@ -3,7 +3,7 @@ use super::*;
 impl Root {
     pub(super) fn follow_context_usage(&mut self) {
         let stamp = self.current().and_then(|(environment, id)| {
-            self.open.as_ref().map(|open| {
+            self.conversation.open.as_ref().map(|open| {
                 (
                     environment,
                     id,
@@ -46,7 +46,7 @@ impl Root {
     }
 
     pub(super) fn thread_context_usage(&self) -> Option<Value> {
-        let state = self.open.as_ref()?.watch.state();
+        let state = self.conversation.open.as_ref()?.watch.state();
         let state = state.lock().expect("thread lock");
         let projection = &state.projection;
         let current = projection.get("thread")?["activeProviderThreadId"].as_str();

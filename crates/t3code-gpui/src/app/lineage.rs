@@ -493,7 +493,7 @@ impl Root {
                     root.lineage_revision += 1;
                 }
                 if let Err(error) = result {
-                    root.message = Some(format!("Could not stop subagent: {error:#}"));
+                    root.conversation.message = Some(format!("Could not stop subagent: {error:#}"));
                 }
                 cx.notify();
             });
@@ -551,7 +551,7 @@ impl Root {
                 match result {
                     Ok(()) if action == "merge" => {if let Some(target) = next {root.open_thread(environment,target,cx);}},
                     Ok(()) => {},
-                    Err(error) => root.message = Some(format!("Could not {action} agent session: {error:#}")),
+                    Err(error) => root.conversation.message = Some(format!("Could not {action} agent session: {error:#}")),
                 }
                 cx.notify();
             });

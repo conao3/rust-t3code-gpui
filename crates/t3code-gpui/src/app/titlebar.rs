@@ -66,17 +66,13 @@ impl Root {
                         .child(label)
                         .child("/")
                 }))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .child(if self.draft.is_some() {
-                            "New thread"
-                        } else {
-                            APP_NAME
-                        }),
-                )
+                .child(div().flex_1().min_w_0().truncate().child(
+                    if self.conversation.draft.is_some() {
+                        "New thread"
+                    } else {
+                        APP_NAME
+                    },
+                ))
                 .into_any_element()
         } else {
             self.render_thread_header(cx)

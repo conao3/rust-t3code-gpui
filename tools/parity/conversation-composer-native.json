@@ -1,0 +1,387 @@
+{
+  "name": "independent-pane-stash-queue-send",
+  "viewport": [
+    1600,
+    1000
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Pane Alpha, UI parity"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Split conversation horizontally"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Pane Beta, UI parity"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Stash Alpha"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "value": ""
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Stash Beta"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "value": ""
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Close side chat",
+        "index": 1
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "count": 0
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+t"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "count": 1
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "value": "Stash Alpha"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "value": "Stash Beta"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "value": "Stash Alpha"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "value": "Stash Beta"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "value": "",
+      "screenshot": false
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "value": "",
+      "screenshot": false
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Queue Alpha"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "value": "",
+      "screenshot": false
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Queue Beta"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "value": "",
+      "screenshot": false
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Edit queued message"
+      },
+      "count": 2,
+      "screenshot": false
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      }
+    },
+    {
+      "action": "press",
+      "value": "alt+up"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "value": "Queue Alpha",
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "type",
+      "value": "Queue Alpha edited"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      }
+    },
+    {
+      "action": "press",
+      "value": "alt+up"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "value": "Queue Beta",
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "type",
+      "value": "Queue Beta edited"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "value": "Queue Alpha edited",
+      "screenshot": false
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "value": "Queue Beta edited",
+      "screenshot": false
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "value": "",
+      "screenshot": false
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Beta"
+      },
+      "value": "",
+      "screenshot": false
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Edit queued message"
+      },
+      "count": 2,
+      "screenshot": false
+    }
+  ]
+}

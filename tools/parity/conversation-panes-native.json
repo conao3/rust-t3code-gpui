@@ -1,0 +1,146 @@
+{
+  "name": "native-conversation-split-focus-close-reopen",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      }
+    },
+    {
+      "action": "type",
+      "value": "First pane draft"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Split conversation horizontally"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "count": 2
+    },
+    {
+      "action": "type",
+      "value": "Second pane draft"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 1
+      },
+      "value": "Second pane draft"
+    },
+    {
+      "action": "press",
+      "value": "shift+F6"
+    },
+    {
+      "action": "press",
+      "value": "shift+F6"
+    },
+    {
+      "action": "type",
+      "value": " retained"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 0
+      },
+      "value": "First pane draft retained"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Close side chat",
+        "index": 1
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+t"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 1
+      },
+      "value": "Second pane draft"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Split conversation vertically",
+        "index": 1
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "count": 3
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Close side chat",
+        "index": 2
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "count": 2
+    }
+  ]
+}

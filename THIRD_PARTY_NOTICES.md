@@ -117,3 +117,13 @@ The display rules in `crates/t3code-gpui/src/provider_display.rs` derive from T3
 The native Snooze state, preset scheduling, custom date/duration input and editor behavior follow `packages/client-runtime/src/state/threadSettled.ts` and `apps/web/src/components/{CustomSnoozeDialog,settings/SnoozePresetsSettings}.tsx` in T3 Code at revision `24e77473ecf41bc1f7142529c7911c1c1aae1d76`. Sidebar status, receding and unread logic follow `apps/web/src/components/Sidebar.logic.ts`, and work timers follow `packages/client-runtime/src/state/models.ts`, at the same revision, under the T3 Tools Inc. MIT notice retained above. Generated oracle fixtures retain source hashes.
 
 `vendor/gpui-base/` is GPUI Kit 0.9.1, distributed under Apache-2.0 with its original license retained. The local number-input patch leaves keyboard/accessibility focus with a supplied editable input, so the outer spinbutton and inner editor do not both claim the same focus. `AlertDialog` forwards its accessible label to the dialog root.
+
+The thread cleanup undo plans, hosted reference escaping and current pull request selection in `crates/t3code-gpui/src/app/thread_commands.rs` derive from T3 Code at revision `24e77473ecf41bc1f7142529c7911c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.
+
+The minimap geometry in `crates/t3code-gpui/src/app/minimap.rs` follows T3 Code `MessagesTimeline.logic.ts` at revision `24e77473ecf41bc1f7142529c7911c1aae1d76`, under the T3 Tools Inc. MIT License reproduced above.
+
+## Mathematical and Mermaid diagrams
+
+RaTeX 0.1.16 (`ratex-parser`, `ratex-layout`, `ratex-types`, and `ratex-svg`) renders equations with embedded KaTeX glyph outlines. Its MIT license is retained in `crates/t3code-gpui/assets/licenses/RaTeX-MIT.txt`; the font notices and SIL Open Font License 1.1 are retained alongside it as `KaTeX-fonts-NOTICE.txt` and `SIL-OFL-1.1.txt`.
+
+Pelago 0.1.0 at revision `12676af43b6e9cd5046f5af0403a3666329eb001` renders Mermaid diagrams in Rust. It derives from Obsidian Pele; both copyright notices and its MIT license are retained in `crates/t3code-gpui/assets/licenses/Pelago-MIT.txt`.

@@ -1,0 +1,38 @@
+{
+  "name": "native-regenerate-thread-title",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 300,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Pane Alpha, UI parity"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+k"
+    },
+    {
+      "action": "type",
+      "value": "Regenerate thread title"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Fixture response, UI parity"
+      },
+      "count": 1
+    }
+  ]
+}

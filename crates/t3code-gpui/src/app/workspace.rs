@@ -22,26 +22,33 @@ impl Root {
                     && workspace::layout(self.canvas_width, true).details_inline
                     || self.details_popover,
             });
-        if self.workspace_watch.as_ref().map(|watch| &watch.target) == target.as_ref() {
+        if self
+            .conversation
+            .workspace_watch
+            .as_ref()
+            .map(|watch| &watch.target)
+            == target.as_ref()
+        {
             return;
         }
         let same_directory = self
+            .conversation
             .workspace_watch
             .as_ref()
             .zip(target.as_ref())
             .is_some_and(|(watch, target)| {
                 watch.target.environment == target.environment && watch.target.cwd == target.cwd
             });
-        self.workspace_watch = None;
+        self.conversation.workspace_watch = None;
         if !same_directory {
-            self.branch_request += 1;
-            self.workspace_status = workspace::Status::default();
-            self.branch_anchor = None;
+            self.conversation.branch_request += 1;
+            self.conversation.workspace_status = workspace::Status::default();
+            self.conversation.branch_anchor = None;
         }
         if let Some(target) = target
             && let Some(connection) = self.connection(&target.environment)
         {
-            self.workspace_watch = Some(workspace::Watch::new(
+            self.conversation.workspace_watch = Some(workspace::Watch::new(
                 connection,
                 target,
                 &self.runtime,
@@ -64,12 +71,12 @@ impl Root {
             } else {
                 0.
             }
-            + if self.workspace_status.is_repo() {
+            + if self.conversation.workspace_status.is_repo() {
                 180.
             } else {
                 0.
             }
-            + if self.workspace_status.error.is_some() {
+            + if self.conversation.workspace_status.error.is_some() {
                 32.
             } else {
                 0.
@@ -82,7 +89,7 @@ impl Root {
             .min_w_0()
             .child(div().h_full().pr(px(layout.inset_end)).child(pane))
             .when(
-                self.workspace_watch.is_some()
+                self.conversation.workspace_watch.is_some()
                     && (layout.details_inline && self.details_open
                         || !layout.details_inline && self.details_popover),
                 |canvas| {
@@ -93,16 +100,20 @@ impl Root {
                             .right(px(12.))
                             .w(px(280.))
                             .h(px(card_height))
-                            .child(if self.branch_anchor == Some("details-branch") {
-                                self.details_pane.clone().into_any_element()
-                            } else {
-                                self.details_pane
-                                    .clone()
-                                    .cached(
-                                        StyleRefinement::default().w(px(280.)).h(px(card_height)),
-                                    )
-                                    .into_any_element()
-                            }),
+                            .child(
+                                if self.conversation.branch_anchor == Some("details-branch") {
+                                    self.details_pane.clone().into_any_element()
+                                } else {
+                                    self.details_pane
+                                        .clone()
+                                        .cached(
+                                            StyleRefinement::default()
+                                                .w(px(280.))
+                                                .h(px(card_height)),
+                                        )
+                                        .into_any_element()
+                                },
+                            ),
                     )
                 },
             )
@@ -140,6 +151,7 @@ impl Root {
         let label = environment.clone();
         let groups = self.project_groups();
         let members = self
+            .conversation
             .draft
             .as_ref()
             .and_then(|draft| {
@@ -276,7 +288,7 @@ impl Root {
                         .px_2p5()
                         .rounded(px(8.))
                         .accessibility_label(label)
-                        .on_click(cx.listener(move |root, _, window, cx| {
+                        .on_click(self.pane_listener(cx, move |root, _, window, cx| {
                             root.workspace_action(
                                 &WorkspaceAction {
                                     kind: "editor".into(),
@@ -308,8 +320,8 @@ impl Root {
                     .child(host)
                     .children(editor_button),
             )
-            .when(self.workspace_status.is_repo(), |card| {
-                let changes = &self.workspace_status.local["workingTree"];
+            .when(self.conversation.workspace_status.is_repo(), |card| {
+                let changes = &self.conversation.workspace_status.local["workingTree"];
                 card.child(
                     v_flex()
                         .px_2()
@@ -358,23 +370,28 @@ impl Root {
                                 .px_2p5()
                                 .rounded(px(8.))
                                 .accessibility_label("Open changes")
-                                .on_click(cx.listener(|root, _, _, cx| root.toggle_diff(cx))),
+                                .on_click(
+                                    self.pane_listener(cx, |root, _, _, cx| root.toggle_diff(cx)),
+                                ),
                         )
                         .child(self.render_git_controls(cx)),
                 )
             })
-            .when_some(self.workspace_status.error.clone(), |card, error| {
-                card.child(
-                    div()
-                        .h(px(32.))
-                        .px_3()
-                        .pb_2()
-                        .text_xs()
-                        .truncate()
-                        .text_color(theme.danger)
-                        .child(error),
-                )
-            })
+            .when_some(
+                self.conversation.workspace_status.error.clone(),
+                |card, error| {
+                    card.child(
+                        div()
+                            .h(px(32.))
+                            .px_3()
+                            .pb_2()
+                            .text_xs()
+                            .truncate()
+                            .text_color(theme.danger)
+                            .child(error),
+                    )
+                },
+            )
             .child(self.render_thread_pull_requests(cx))
             .child(self.render_lineage(cx))
             .child(self.render_thread_usage(cx))
@@ -386,7 +403,12 @@ impl Root {
     }
 
     pub(super) fn workspace_editor(&self) -> Option<String> {
-        let environment = &self.workspace_watch.as_ref()?.target.environment;
+        let environment = &self
+            .conversation
+            .workspace_watch
+            .as_ref()?
+            .target
+            .environment;
         let config = &self.model_catalogs.get(environment)?.0;
         workspace::preferred_editor(
             config.get("availableEditors")?.as_array()?,
@@ -396,6 +418,7 @@ impl Root {
 
     pub(super) fn render_branch_control(&self, id: &'static str, cx: &Context<Self>) -> AnyElement {
         let branch = self
+            .conversation
             .draft
             .as_ref()
             .and_then(|draft| {
@@ -405,7 +428,7 @@ impl Root {
                     .or_else(|| draft.workspace_strategy.get("branch"))
             })
             .and_then(Value::as_str)
-            .or_else(|| self.workspace_status.branch())
+            .or_else(|| self.conversation.workspace_status.branch())
             .unwrap_or("Select branch")
             .to_string();
         let button = Button::new(id)
@@ -423,9 +446,9 @@ impl Root {
             .rounded(px(8.))
             .accessibility_label("Select branch")
             .role(accesskit::Role::ComboBox)
-            .on_click(
-                cx.listener(move |root, _, window, cx| root.open_branch_picker(id, window, cx)),
-            );
+            .on_click(self.pane_listener(cx, move |root, _, window, cx| {
+                root.open_branch_picker(id, window, cx)
+            }));
         let mut popup = gpui_kit::base::Popup::new(id, button)
             .anchor(if id == "details-branch" {
                 Anchor::TopRight
@@ -433,11 +456,12 @@ impl Root {
                 Anchor::BottomRight
             })
             .offset(px(4.));
-        if self.branch_anchor == Some(id) {
-            let weak = cx.entity().downgrade();
+        if self.conversation.branch_anchor == Some(id) {
+            let weak = self.pane_root(cx);
             let search = weak.clone();
             let cancel = weak.clone();
             let mut items = self
+                .conversation
                 .branch_refs
                 .iter()
                 .map(|reference| {
@@ -450,7 +474,7 @@ impl Root {
                         }))
                 })
                 .collect::<Vec<_>>();
-            if self.branch_cursor.is_some() {
+            if self.conversation.branch_cursor.is_some() {
                 items.push(
                     CommandItem::new()
                         .label("Load more branches")
@@ -468,7 +492,7 @@ impl Root {
                     .border_color(cx.theme().border)
                     .bg(cx.theme().popover)
                     .child(
-                        Command::new(&self.branch_picker)
+                        Command::new(&self.conversation.branch_picker)
                             .placeholder("Search refs...")
                             .filterable(false)
                             .max_h(px(224.))
@@ -480,15 +504,16 @@ impl Root {
                             })
                             .on_cancel(move |window, cx| {
                                 let _ = cancel.update(cx, |root, cx| {
-                                    root.branch_anchor = None;
-                                    root.composer
+                                    root.conversation.branch_anchor = None;
+                                    root.conversation
+                                        .composer
                                         .update(cx, |state, cx| state.focus(window, cx));
                                     cx.notify();
                                 });
                             }),
                     )
                     .when(
-                        self.draft.as_ref().is_some_and(|draft| {
+                        self.conversation.draft.as_ref().is_some_and(|draft| {
                             draft.workspace_strategy["type"].as_str() == Some("worktree")
                         }),
                         |popup| {
@@ -511,13 +536,18 @@ impl Root {
                                         )
                                         .small()
                                         .accessibility_label("Start worktree from remote")
-                                        .checked(self.draft.as_ref().is_some_and(|draft| {
-                                            draft.workspace_strategy["startFromOrigin"].as_bool()
-                                                == Some(true)
-                                        }))
+                                        .checked(self.conversation.draft.as_ref().is_some_and(
+                                            |draft| {
+                                                draft.workspace_strategy["startFromOrigin"]
+                                                    .as_bool()
+                                                    == Some(true)
+                                            },
+                                        ))
                                         .on_change(
-                                            cx.listener(|root, checked, _, cx| {
-                                                if let Some(draft) = root.draft.as_mut() {
+                                            self.pane_listener(cx, |root, checked, _, cx| {
+                                                if let Some(draft) =
+                                                    root.conversation.draft.as_mut()
+                                                {
                                                     draft.workspace_strategy["startFromOrigin"] =
                                                         json!(*checked);
                                                 }
@@ -539,20 +569,22 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.workspace_status.is_repo() {
+        if !self.conversation.workspace_status.is_repo() {
             return;
         }
-        self.branch_anchor = (self.branch_anchor != Some(id)).then_some(id);
-        if self.branch_anchor.is_some() {
-            self.branch_request += 1;
-            self.branch_loading = false;
-            self.branch_picker.update(cx, |state, cx| {
+        self.conversation.branch_anchor =
+            (self.conversation.branch_anchor != Some(id)).then_some(id);
+        if self.conversation.branch_anchor.is_some() {
+            self.conversation.branch_request += 1;
+            self.conversation.branch_loading = false;
+            self.conversation.branch_picker.update(cx, |state, cx| {
                 state.set_query("", window, cx);
                 state.focus(window, cx);
             });
             self.search_branches(String::new(), false, cx);
         } else {
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
         }
         cx.notify();
@@ -565,22 +597,26 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
-        self.branch_query = query.clone();
-        if self.branch_loading {
+        self.conversation.branch_query = query.clone();
+        if self.conversation.branch_loading {
             cx.notify();
             return;
         }
-        self.branch_request += 1;
-        let request = self.branch_request;
-        self.branch_loading = true;
-        let cursor = if more { self.branch_cursor } else { None };
+        self.conversation.branch_request += 1;
+        let request = self.conversation.branch_request;
+        self.conversation.branch_loading = true;
+        let cursor = if more {
+            self.conversation.branch_cursor
+        } else {
+            None
+        };
         if !more {
-            self.branch_refs.clear();
-            self.branch_cursor = None;
+            self.conversation.branch_refs.clear();
+            self.conversation.branch_cursor = None;
         }
         let runtime = self.runtime.clone();
         let requested_query = query.clone();
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx, async move |this, cx| {
             let result = on_runtime(&runtime, async move {
                 let mut input = json!({"cwd":cwd,"limit":200});
                 if query.is_empty() && !more {
@@ -599,22 +635,26 @@ impl Root {
             })
             .await;
             let _ = this.update(cx, |root, cx| {
-                if root.branch_request != request || root.branch_anchor.is_none() {
+                if root.conversation.branch_request != request
+                    || root.conversation.branch_anchor.is_none()
+                {
                     return;
                 }
-                root.branch_loading = false;
-                if root.branch_query != requested_query {
-                    root.search_branches(root.branch_query.clone(), false, cx);
+                root.conversation.branch_loading = false;
+                if root.conversation.branch_query != requested_query {
+                    root.search_branches(root.conversation.branch_query.clone(), false, cx);
                     return;
                 }
                 match result {
                     Ok(result) => {
-                        root.branch_refs
+                        root.conversation
+                            .branch_refs
                             .extend(result["refs"].as_array().cloned().unwrap_or_default());
-                        root.branch_cursor = result["nextCursor"].as_u64();
+                        root.conversation.branch_cursor = result["nextCursor"].as_u64();
                     }
                     Err(error) => {
-                        root.message = Some(format!("Could not load branches: {error:#}"))
+                        root.conversation.message =
+                            Some(format!("Could not load branches: {error:#}"))
                     }
                 }
                 cx.notify();
@@ -647,7 +687,7 @@ impl Root {
                 return;
             }
             "host" => {
-                if let Some(draft) = self.draft.as_mut() {
+                if let Some(draft) = self.conversation.draft.as_mut() {
                     draft.environment = action.value.as_str().map(str::to_string);
                     draft.workspace_strategy = json!({"type":"root"});
                     draft.model = None;
@@ -668,14 +708,15 @@ impl Root {
                     let input = json!({"cwd":target,"editor":editor});
                     self.change_setting("gpuiPreferredEditor", editor, cx);
                     let runtime = self.runtime.clone();
-                    cx.spawn(async move |this, cx| {
+                    self.spawn_pane(cx, async move |this, cx| {
                         let result = on_runtime(&runtime, async move {
                             connection.request("shell.openInEditor", input).await
                         })
                         .await;
                         if let Err(error) = result {
                             let _ = this.update(cx, |root, cx| {
-                                root.message = Some(format!("Could not open editor: {error:#}"));
+                                root.conversation.message =
+                                    Some(format!("Could not open editor: {error:#}"));
                                 cx.notify();
                             });
                         }
@@ -685,24 +726,25 @@ impl Root {
                 return;
             }
             "mode" => {
-                if let Some(draft) = self.draft.as_mut() {
+                if let Some(draft) = self.conversation.draft.as_mut() {
                     draft.workspace_strategy = if action.value.as_str() == Some("worktree") {
-                        json!({"type":"worktree","baseRef":self.workspace_status.branch().unwrap_or("HEAD"),"startFromOrigin":false})
+                        json!({"type":"worktree","baseRef":self.conversation.workspace_status.branch().unwrap_or("HEAD"),"startFromOrigin":false})
                     } else {
                         json!({"type":"root"})
                     };
                 }
             }
             "more-branches" => {
-                self.search_branches(self.branch_query.clone(), true, cx);
+                self.search_branches(self.conversation.branch_query.clone(), true, cx);
                 return;
             }
             "branch" => self.select_workspace_branch(action.value.clone(), cx),
             _ => return,
         }
         if action.kind != "more-branches" {
-            self.branch_anchor = None;
-            self.composer
+            self.conversation.branch_anchor = None;
+            self.conversation
+                .composer
                 .update(cx, |state, cx| state.focus(window, cx));
         }
         cx.notify();
@@ -712,7 +754,7 @@ impl Root {
         let Some(name) = reference["name"].as_str().map(str::to_string) else {
             return;
         };
-        if let Some(draft) = self.draft.as_mut()
+        if let Some(draft) = self.conversation.draft.as_mut()
             && draft.workspace_strategy["type"].as_str() == Some("worktree")
         {
             draft.workspace_strategy["baseRef"] = json!(name);
@@ -725,9 +767,14 @@ impl Root {
             return;
         };
         let thread_id = self.current().map(|(_, id)| id);
-        let draft_id = self.draft.as_ref().map(|draft| draft.id.clone());
-        let project = if let Some((_, project_id, ..)) =
-            self.draft_target().filter(|_| self.draft.is_some())
+        let draft_id = self
+            .conversation
+            .draft
+            .as_ref()
+            .map(|draft| draft.id.clone());
+        let project = if let Some((_, project_id, ..)) = self
+            .draft_target()
+            .filter(|_| self.conversation.draft.is_some())
         {
             self.project_value(&environment, &project_id)
         } else {
@@ -746,6 +793,7 @@ impl Root {
             return;
         };
         let current_worktree = self
+            .conversation
             .draft
             .as_ref()
             .and_then(|draft| draft.workspace_strategy["worktreePath"].as_str());
@@ -759,7 +807,8 @@ impl Root {
         });
         let target = workspace::branch_target(
             project_root,
-            self.workspace_status
+            self.conversation
+                .workspace_status
                 .local
                 .pointer("/workingTree/rootPath")
                 .and_then(Value::as_str)
@@ -768,7 +817,8 @@ impl Root {
             &reference,
         );
         let sessions = if current_worktree != target.worktree.as_deref() {
-            self.open
+            self.conversation
+                .open
                 .as_ref()
                 .map(|open| {
                     open.watch
@@ -786,7 +836,7 @@ impl Root {
             Vec::new()
         };
         let runtime = self.runtime.clone();
-        cx.spawn(async move |this, cx| {
+        self.spawn_pane(cx,async move |this, cx| {
             let result = on_runtime(&runtime, async move {
                 let branch = if target.reuse {
                     name
@@ -819,13 +869,13 @@ impl Root {
             }).await;
             let _ = this.update(cx, |root, cx| {
                 match result {
-                    Ok((branch, existing)) => if let Some(draft) = root.draft.as_mut().filter(|draft| Some(&draft.id) == draft_id.as_ref()) {
+                    Ok((branch, existing)) => if let Some(draft) = root.conversation.draft.as_mut().filter(|draft| Some(&draft.id) == draft_id.as_ref()) {
                         draft.workspace_strategy = match existing {
                             Some(path) => json!({"type":"existing_worktree","worktreePath":path,"branch":branch}),
                             None => json!({"type":"root","branch":branch})
                         };
                     },
-                    Err(error) => root.message = Some(format!("Could not switch branch: {error:#}")),
+                    Err(error) => root.conversation.message = Some(format!("Could not switch branch: {error:#}")),
                 }
                 cx.notify();
             });

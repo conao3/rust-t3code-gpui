@@ -1606,7 +1606,7 @@ impl WindowSelectionState {
             order.refresh_requested = false;
             false
         } else {
-            let refresh = order.dirty && !order.refresh_requested;
+            let refresh = self.is_active() && order.dirty && !order.refresh_requested;
             order.refresh_requested |= refresh;
             order.painted.clear();
             refresh
@@ -3704,6 +3704,50 @@ mod tests {
                 cx,
             );
         }
+    }
+
+    #[gpui::test]
+    fn inactive_topology_changes_wait_for_selection_before_repainting(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let mut state = WindowSelectionState::default();
+            let first = FakeParticipant::new("first", cx);
+            let second = FakeParticipant::new("second", cx);
+            let inserted = FakeParticipant::new("inserted", cx);
+            let register = |state: &WindowSelectionState, participant: &FakeParticipant, y| {
+                let bounds = Bounds::new(point(px(0.), px(y)), size(px(100.), px(10.)));
+                state.register_quietly(
+                    &participant.selection,
+                    TextSelectionRegistration::new(
+                        Hitbox {
+                            id: HitboxId::placeholder(),
+                            bounds,
+                            content_mask: ContentMask { bounds },
+                            behavior: HitboxBehavior::Normal,
+                        },
+                        bounds,
+                    )
+                    .with_text_bounds(vec![bounds])
+                    .in_paint_order(),
+                );
+            };
+            register(&state, &first, 0.);
+            register(&state, &second, 40.);
+            assert!(!state.finish_registrations());
+            register(&state, &first, 0.);
+            register(&state, &inserted, 20.);
+            assert!(!state.finish_registrations());
+            assert!(state.paint_order.borrow().dirty);
+            assert!(!state.paint_order.borrow().refresh_requested);
+            state.begin(point(px(1.), px(1.)), false, cx);
+            assert!(state.finish_registrations());
+            register(&state, &first, 0.);
+            register(&state, &inserted, 20.);
+            register(&state, &second, 40.);
+            assert!(!state.finish_registrations());
+            state.update(point(px(90.), px(41.)), cx);
+            state.end(cx);
+            assert_eq!(state.selected_text(cx), "first\ninserted\nsecond");
+        });
     }
 
     fn laid_out_runs(texts: &[&str], cx: &mut TestAppContext) -> Vec<(SharedString, TextLayout)> {

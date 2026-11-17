@@ -208,7 +208,9 @@ impl Root {
     }
 
     pub(super) fn visit_if_done(&self) {
-        let Some(open) = &self.open else { return };
+        let Some(open) = &self.conversation.open else {
+            return;
+        };
         let done = self.entries.iter().any(|e| {
             e.is(&open.environment, open.watch.thread_id()) && e.status == ThreadStatus::Done
         });
@@ -236,17 +238,19 @@ impl Root {
         self.history.visit((environment.clone(), thread_id.clone()));
         self.stash_composer(cx);
         let watch = connection.watch_thread(&self.runtime, &thread_id);
-        self.open = Some(OpenThread { environment, watch });
-        self.draft = None;
+        self.conversation.open = Some(OpenThread { environment, watch });
+        self.conversation.draft = None;
         self.sync_lineage();
-        self.rows.clear();
-        self.row_views.clear();
-        self.row_subscriptions.clear();
-        self.list_state.reset(0);
-        self.thread_loading = true;
-        self.user_cursor = None;
-        self.list_state.set_follow_mode(FollowMode::Tail);
-        self.message = None;
+        self.conversation.rows.clear();
+        self.conversation.row_views.clear();
+        self.conversation.row_subscriptions.clear();
+        self.conversation.list_state.reset(0);
+        self.conversation.thread_loading = true;
+        self.conversation.user_cursor = None;
+        self.conversation
+            .list_state
+            .set_follow_mode(FollowMode::Tail);
+        self.conversation.message = None;
         self.runtime.spawn({
             let thread_id = thread_id.clone();
             async move {
@@ -254,22 +258,23 @@ impl Root {
             }
         });
         self.load_composer();
+        self.save_conversations();
         cx.notify();
     }
 
     pub(super) fn close_thread(&mut self, cx: &mut Context<Self>) {
-        self.open = None;
+        self.conversation.open = None;
         self.sync_lineage();
-        self.rows.clear();
-        self.row_views.clear();
-        self.row_subscriptions.clear();
-        self.list_state.reset(0);
-        self.user_cursor = None;
+        self.conversation.rows.clear();
+        self.conversation.row_views.clear();
+        self.conversation.row_subscriptions.clear();
+        self.conversation.list_state.reset(0);
+        self.conversation.user_cursor = None;
         cx.notify();
     }
 
     pub(super) fn open_entry(&self) -> Option<&ThreadEntry> {
-        let open = self.open.as_ref()?;
+        let open = self.conversation.open.as_ref()?;
         self.entries
             .iter()
             .find(|e| e.is(&open.environment, open.watch.thread_id()))
@@ -322,7 +327,7 @@ impl Root {
                     self.open_thread(environment, thread, cx);
                 } else {
                     self.begin_new_thread(cx);
-                    if let Some(draft) = &mut self.draft {
+                    if let Some(draft) = &mut self.conversation.draft {
                         draft.environment = Some(plan.target.0);
                     }
                 }
@@ -376,6 +381,18 @@ impl Root {
         } else {
             None
         };
+        let undo = self
+            .thread_value(&menu.environment, &menu.thread_id)
+            .and_then(|thread| thread_commands::undo_plan(&menu.op, &thread, &menu.thread_id))
+            .map(|(kind, commands)| thread_commands::UndoEntry {
+                environment: menu.environment.clone(),
+                thread: menu.thread_id.clone(),
+                kind,
+                commands,
+            });
+        self.thread_undos.retain(|entry| {
+            entry.environment != menu.environment || entry.thread != menu.thread_id
+        });
         let runtime = self.runtime.clone();
         let thread_id = menu.thread_id.clone();
         let op = menu.op.clone();
@@ -397,8 +414,13 @@ impl Root {
             let _ = this.update(cx, |root, cx| {
                 root.parking.remove(&parking_key);
                 match result {
-                    Err(error) => root.message = Some(format!("Thread update failed: {error:#}")),
+                    Err(error) => {
+                        root.conversation.message = Some(format!("Thread update failed: {error:#}"))
+                    }
                     Ok(sequence) => {
+                        if let Some(undo) = undo {
+                            root.remember_thread_undo(undo, cx);
+                        }
                         if let Some(mut plan) = plan {
                             plan.sequence = sequence;
                             root.park_plans.push(plan);
@@ -422,7 +444,7 @@ impl Root {
         match url {
             Some(url) => cx.open_url(&url),
             None => {
-                self.message = Some("The environment id is not known yet.".into());
+                self.conversation.message = Some("The environment id is not known yet.".into());
                 cx.notify();
             }
         }

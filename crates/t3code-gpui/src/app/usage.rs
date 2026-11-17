@@ -1257,7 +1257,8 @@ impl Render for UsagePage {
                             .on_click(cx.listener(|view, _, window, cx| {
                                 let _ = view.root.update(cx, |root, cx| {
                                     root.usage_page = None;
-                                    root.composer
+                                    root.conversation
+                                        .composer
                                         .update(cx, |input, cx| input.focus(window, cx));
                                     cx.notify();
                                 });

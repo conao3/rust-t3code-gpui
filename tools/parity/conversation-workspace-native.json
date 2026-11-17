@@ -1,0 +1,157 @@
+{
+  "name": "independent-pane-workspace-selection",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Split conversation horizontally"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 0
+      }
+    },
+    {
+      "action": "type",
+      "value": "Draft Alpha"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 1
+      }
+    },
+    {
+      "action": "type",
+      "value": "Draft Beta"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 0
+      },
+      "value": "Draft Alpha"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 1
+      },
+      "value": "Draft Beta"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 0
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+x"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "New worktree"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "New worktree"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "New worktree"
+      },
+      "count": 1
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Current checkout"
+      },
+      "count": 1
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread",
+        "index": 1
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+x"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Current checkout"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "New worktree"
+      },
+      "count": 1
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Current checkout"
+      },
+      "count": 1
+    }
+  ]
+}

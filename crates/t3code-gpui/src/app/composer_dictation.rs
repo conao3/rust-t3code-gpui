@@ -10,7 +10,7 @@ pub(super) struct Dictation {
 
 impl Root {
     pub(super) fn toggle_dictation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.dictation.busy || self.composer_composing(window, cx) {
+        if self.conversation.dictation.busy || self.composer_composing(window, cx) {
             return;
         }
         let Some((environment, ..)) = self.composer_target() else {
@@ -30,10 +30,11 @@ impl Root {
         let api = Api::new(&config.http_base_url, &config.token);
         let runtime = self.runtime.clone();
         let target = self.composer_key();
-        if let Some(recording) = self.dictation.recording.take() {
-            if self.dictation.target != target {
+        if let Some(recording) = self.conversation.dictation.recording.take() {
+            if self.conversation.dictation.target != target {
                 drop(recording);
-                self.message = Some("Dictation cancelled because the composer changed.".into());
+                self.conversation.message =
+                    Some("Dictation cancelled because the composer changed.".into());
                 cx.notify();
                 return;
             }
@@ -45,12 +46,13 @@ impl Root {
             let settings = match settings {
                 Ok(settings) => settings,
                 Err(error) => {
-                    self.message = Some(format!("Could not read speech preferences: {error:#}"));
+                    self.conversation.message =
+                        Some(format!("Could not read speech preferences: {error:#}"));
                     cx.notify();
                     return;
                 }
             };
-            self.dictation.busy = true;
+            self.conversation.dictation.busy = true;
             let mut options = json!({
                 "speechLanguage": settings["speechLanguage"].as_str().unwrap_or("auto"),
                 "speechTranslateToEnglish": settings["speechTranslateToEnglish"].as_bool().unwrap_or(false),
@@ -64,7 +66,7 @@ impl Root {
             {
                 options["speechCorrectionWord"] = cue.clone();
             }
-            cx.spawn_in(window, async move |this, cx| {
+            self.spawn_pane_in(window, cx, async move |this, cx| {
                 let result = on_runtime(&runtime, async move {
                     let pcm = tokio::task::spawn_blocking(move || recording.finish()).await??;
                     let body = crate::dictation::encode(&pcm, &options)?;
@@ -72,33 +74,36 @@ impl Root {
                 })
                 .await;
                 let _ = this.update_in(cx, |root, window, cx| {
-                    root.dictation.busy = false;
+                    root.conversation.dictation.busy = false;
                     match result {
                         Ok(result) => {
                             if let Some(text) = result["text"].as_str() {
                                 if root.composer_key() == target {
-                                    root.composer.update(cx, |state, cx| {
+                                    root.conversation.composer.update(cx, |state, cx| {
                                         state.replace_text_in_range(None, text, window, cx)
                                     });
                                     root.stash_composer(cx);
                                 } else {
-                                    root.message = Some(format!(
+                                    root.conversation.message = Some(format!(
                                         "Dictation completed for another composer: {text}"
                                     ));
                                 }
                             } else {
-                                root.message = Some("Speech server returned no transcript.".into());
+                                root.conversation.message =
+                                    Some("Speech server returned no transcript.".into());
                             }
                         }
-                        Err(error) => root.message = Some(format!("Dictation failed: {error:#}")),
+                        Err(error) => {
+                            root.conversation.message = Some(format!("Dictation failed: {error:#}"))
+                        }
                     }
                     cx.notify();
                 });
             })
             .detach();
         } else {
-            self.dictation.busy = true;
-            cx.spawn(async move |this, cx| {
+            self.conversation.dictation.busy = true;
+            self.spawn_pane(cx, async move |this, cx| {
                 let result = on_runtime(&runtime, async move {
                     let status = api.get("/api/voice/status").await?;
                     anyhow::ensure!(
@@ -110,14 +115,16 @@ impl Root {
                 })
                 .await;
                 let _ = this.update(cx, |root, cx| {
-                    root.dictation.busy = false;
+                    root.conversation.dictation.busy = false;
                     match result {
                         Ok(recording) if root.composer_key() != target => drop(recording),
                         Ok(recording) => {
-                            root.dictation.recording = Some(recording);
-                            root.dictation.target = target;
+                            root.conversation.dictation.recording = Some(recording);
+                            root.conversation.dictation.target = target;
                         }
-                        Err(error) => root.message = Some(format!("Dictation failed: {error:#}")),
+                        Err(error) => {
+                            root.conversation.message = Some(format!("Dictation failed: {error:#}"))
+                        }
                     }
                     cx.notify();
                 });

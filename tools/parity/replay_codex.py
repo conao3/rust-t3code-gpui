@@ -66,10 +66,8 @@ notifications = [
 ]
 old_thread = responses["thread/start"]["thread"]["id"]
 old_turn = responses["turn/start"]["turn"]["id"]
-thread_id = str(uuid.uuid4())
 lock = threading.Lock()
-interrupted = threading.Event()
-active_turn = None
+active_turns = {}
 
 
 def write(value):
@@ -92,7 +90,7 @@ def replace(value, mapping):
     return value
 
 
-def stream(turn_id, cwd):
+def stream(thread_id, turn_id, cwd, interrupted):
     mapping = {
         old_thread: thread_id,
         old_turn: turn_id,
@@ -151,6 +149,7 @@ def stream(turn_id, cwd):
             if interrupted.is_set():
                 params["turn"]["status"] = "interrupted"
         write(frame)
+    del active_turns[(thread_id, turn_id)]
 
 
 for line in sys.stdin:
@@ -196,7 +195,9 @@ for line in sys.stdin:
             "accountId": None,
         }
     elif method in ["thread/start", "thread/resume"]:
-        thread_id = params.get("threadId", thread_id)
+        thread_id = (
+            str(uuid.uuid4()) if method == "thread/start" else params["threadId"]
+        )
         result = replace(
             copy.deepcopy(responses["thread/start"]),
             {
@@ -207,20 +208,23 @@ for line in sys.stdin:
             },
         )
     elif method == "turn/start":
-        interrupted.clear()
+        thread_id = params["threadId"]
+        interrupted = threading.Event()
         active_turn = str(uuid.uuid4())
+        active_turns[(thread_id, active_turn)] = interrupted
         result = replace(
             copy.deepcopy(responses["turn/start"]), {old_turn: active_turn}
         )
         write({"id": request, "result": result})
         threading.Thread(
             target=stream,
-            args=(active_turn, params.get("cwd", os.getcwd())),
+            args=(thread_id, active_turn, params.get("cwd", os.getcwd()), interrupted),
             daemon=True,
         ).start()
         continue
     elif method == "turn/interrupt":
-        interrupted.set()
+        if interrupted := active_turns.get((params["threadId"], params["turnId"])):
+            interrupted.set()
         result = {}
     elif request is not None:
         write(
