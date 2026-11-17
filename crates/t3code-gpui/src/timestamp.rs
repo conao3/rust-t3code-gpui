@@ -2,7 +2,7 @@ use anyhow::{Context as _, Result};
 use chrono::{DateTime, Datelike, Local, TimeZone, Timelike};
 use gpui_kit::{App, Global};
 use icu_calendar::Date;
-use icu_datetime::fieldsets::{M, MD, T, YMD};
+use icu_datetime::fieldsets::{E, M, MD, T, YMD};
 use icu_datetime::input::Time;
 use icu_datetime::options::YearStyle;
 use icu_datetime::preferences::HourCycle;
@@ -71,6 +71,7 @@ pub struct Formatter {
     date: DateTimeFormatter<MD>,
     year_date: DateTimeFormatter<YMD>,
     english_month: FixedCalendarDateTimeFormatter<icu_calendar::cal::Gregorian, M>,
+    weekday: FixedCalendarDateTimeFormatter<icu_calendar::cal::Gregorian, E>,
 }
 
 impl Formatter {
@@ -83,6 +84,8 @@ impl Formatter {
         };
         Ok(Self {
             locale: locale.clone(),
+            weekday: FixedCalendarDateTimeFormatter::try_new(locale.clone().into(), E::short())
+                .context("load weekday format")?,
             time: NoCalendarFormatter::try_new(preferences, T::hm())
                 .context("load timestamp time format")?,
             date: DateTimeFormatter::try_new(locale.clone().into(), MD::short())
@@ -149,6 +152,30 @@ impl Formatter {
         );
         Some((label, tooltip))
     }
+
+    pub fn short_in<Tz: TimeZone>(&self, value: &DateTime<Tz>) -> String {
+        Time::try_new(
+            value.hour() as u8,
+            value.minute() as u8,
+            value.second() as u8,
+            0,
+        )
+        .ok()
+        .map(|time| {
+            self.time
+                .format(&time)
+                .to_string()
+                .replace(['\u{202f}', '\u{2009}'], " ")
+        })
+        .unwrap_or_default()
+    }
+
+    pub fn weekday_in<Tz: TimeZone>(&self, value: &DateTime<Tz>) -> String {
+        Date::try_new_gregorian(value.year(), value.month() as u8, value.day() as u8)
+            .ok()
+            .map(|date| self.weekday.format(&date).to_string())
+            .unwrap_or_default()
+    }
 }
 
 impl Global for Formatter {}
@@ -169,6 +196,14 @@ pub fn display(source: &str, cx: &App) -> (String, String) {
     cx.global::<Formatter>()
         .display_in(source, &Local::now())
         .unwrap_or_default()
+}
+
+pub fn short<Tz: TimeZone>(value: &DateTime<Tz>, cx: &App) -> String {
+    cx.global::<Formatter>().short_in(value)
+}
+
+pub fn weekday<Tz: TimeZone>(value: &DateTime<Tz>, cx: &App) -> String {
+    cx.global::<Formatter>().weekday_in(value)
 }
 
 #[cfg(test)]

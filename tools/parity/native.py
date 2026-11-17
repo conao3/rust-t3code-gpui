@@ -215,6 +215,12 @@ class Native:
             "down": "Down",
             "left": "Left",
             "right": "Right",
+            "home": "Home",
+            "end": "End",
+            "pageup": "Prior",
+            "pagedown": "Next",
+            "delete": "Delete",
+            "space": "space",
         }
         parts = chord.lower().split("+")
         parts[-1] = keys.get(parts[-1], parts[-1])

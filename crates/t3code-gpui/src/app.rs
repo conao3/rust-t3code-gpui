@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, IconName, Selectable as _, Sizable as _, Theme,
+    WindowExt as _,
     button::{Button, ButtonVariants as _},
     command::{Command, CommandGroup, CommandItem, CommandState},
     diff::{Diff, DiffFile, DiffMode, DiffParseOptions, DiffState},
@@ -38,9 +39,12 @@ use crate::tables;
 use crate::timeline::{self, Pending, Row, RowKind};
 use crate::workspace;
 
+mod choice_select;
 mod lineage;
 mod sidebar_branding;
 mod sidebar_controls;
+mod snooze_controls;
+mod snooze_options;
 
 type CommandFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<u64>> + std::marker::Send>>;
@@ -139,6 +143,7 @@ enum ThreadOp {
     Pin,
     Unpin,
     Snooze(u64),
+    SnoozeUntil(String),
     Unsnooze,
     Settle,
     Unsettle,
@@ -362,14 +367,23 @@ struct SidebarStamp {
     minute: u64,
 }
 
+struct ParkPlan {
+    target: (String, String),
+    next: Option<(String, String)>,
+    snooze: bool,
+    sequence: u64,
+}
+
 struct SidebarPane {
     root: WeakEntity<Root>,
 }
 
 impl Render for SidebarPane {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
-            .update(cx, |root, cx| root.render_sidebar(cx).into_any_element())
+            .update(cx, |root, cx| {
+                root.render_sidebar(window, cx).into_any_element()
+            })
             .expect("sidebar root is alive")
     }
 }
@@ -526,7 +540,10 @@ pub struct Root {
     settings_path: std::path::PathBuf,
     settings_open: bool,
     sidebar_hidden: bool,
-    wake_scheduled: bool,
+    wake_task: Option<Task<()>>,
+    parking: HashSet<(String, String, bool)>,
+    park_plans: Vec<ParkPlan>,
+    focus_after_park: bool,
     collapsed: HashSet<sidebar::Section>,
     collapsed_families: HashSet<(String, String)>,
     window_active: bool,
@@ -776,7 +793,10 @@ impl Root {
             settings_path,
             settings_open: false,
             sidebar_hidden: false,
-            wake_scheduled: false,
+            wake_task: None,
+            parking: HashSet::new(),
+            park_plans: vec![],
+            focus_after_park: false,
             collapsed,
             collapsed_families: HashSet::new(),
             window_active: window.is_window_active(),
@@ -974,6 +994,9 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        if window.has_active_dialog(cx) {
+            return false;
+        }
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
         if self.completion_key(keystroke, window, cx) {
@@ -1364,18 +1387,23 @@ impl Root {
     }
 
     fn ordered_entries(&self) -> Vec<ThreadEntry> {
+        let open = self.current();
         self.shelves_of(&self.visible_entries())
             .into_iter()
-            .filter(|shelf| {
-                !self.collapsed.contains(&shelf.section)
-                    || matches!(
+            .flat_map(|shelf| {
+                let collapsed = self.collapsed.contains(&shelf.section)
+                    && !matches!(
                         shelf.section,
                         sidebar::Section::Pinned | sidebar::Section::Active
-                    )
-            })
-            .flat_map(|shelf| {
+                    );
                 sidebar::visible_rows(&shelf.rows, &self.collapsed_families)
                     .into_iter()
+                    .filter(|(entry, _, _)| {
+                        !collapsed
+                            || open
+                                .as_ref()
+                                .is_some_and(|(environment, thread)| entry.is(environment, thread))
+                    })
                     .map(|(entry, _, _)| entry.clone())
                     .collect::<Vec<_>>()
             })
@@ -1495,6 +1523,7 @@ impl Root {
         if std::mem::take(&mut self.thread_dirty) {
             self.rebuild_rows(window, cx);
         }
+        self.finish_parks(cx);
         self.sync_lineage();
     }
 
@@ -1513,29 +1542,55 @@ impl Root {
         }
     }
 
-    /// Rebuilds the shelves a minute later while a thread is snoozed, so it wakes on time.
     fn schedule_wake(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let now = now_iso();
-        let snoozed = self.entries.iter().any(|e| {
-            e.snoozed_until
-                .as_deref()
-                .is_some_and(|until| until > now.as_str())
-        });
-        if !snoozed || self.wake_scheduled {
+        self.wake_task = None;
+        if self.entries.is_empty() {
             return;
         }
-        self.wake_scheduled = true;
-        cx.spawn_in(window, async move |this, cx| {
+        let now = chrono::Utc::now().timestamp_millis();
+        let working = self.entries.iter().any(|entry| {
+            matches!(
+                sidebar::display_status(&entry.presentation),
+                sidebar::DisplayStatus::Preparing
+                    | sidebar::DisplayStatus::Working
+                    | sidebar::DisplayStatus::Waiting
+            )
+        });
+        let interval = if working { 1000 } else { 60000 };
+        let mut delay = interval - now.rem_euclid(interval);
+        for entry in &self.entries {
+            if let Some(wake) = entry
+                .snoozed_until
+                .as_deref()
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+            {
+                let expiry = wake.timestamp_millis() - now;
+                if expiry > 0 {
+                    delay = delay.min(expiry);
+                }
+            }
+
+            if let Some(message) = entry.presentation["latestUserMessageAt"]
+                .as_str()
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+            {
+                let expiry = message.timestamp_millis() + 120050 - now;
+                if expiry > 0 {
+                    delay = delay.min(expiry);
+                }
+            }
+        }
+        self.wake_task = Some(cx.spawn_in(window, async move |this, cx| {
             cx.background_executor()
-                .timer(Duration::from_secs(60))
+                .timer(Duration::from_millis(delay as u64))
                 .await;
             let _ = this.update_in(cx, |root, window, cx| {
-                root.wake_scheduled = false;
-                root.shell_dirty = true;
-                root.refresh(window, cx);
+                root.wake_task = None;
+                window.mark_view_dirty(root.sidebar_pane.entity_id());
+                root.schedule_wake(window, cx);
+                cx.notify();
             });
-        })
-        .detach();
+        }));
     }
 
     fn label_of(&self, environment_id: &str) -> Option<String> {
@@ -2060,8 +2115,25 @@ impl Root {
         cx.notify();
     }
 
-    fn render_settings(&self, cx: &Context<Self>) -> AnyElement {
-        let theme = cx.theme();
+    fn render_settings(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let root = cx.entity().downgrade();
+        let environment = self
+            .current()
+            .map(|(environment, _)| environment)
+            .or_else(|| {
+                self.connections
+                    .first()
+                    .map(|connection| connection.label().to_string())
+            })
+            .unwrap_or_default();
+        let saved = self.snooze_settings(&environment);
+        let snooze_options = window.use_keyed_state(
+            SharedString::from(format!("settings-snooze-options:{environment}")),
+            cx,
+            |window, cx| snooze_options::SnoozeOptions::new(root, environment, saved, window, cx),
+        );
+        let theme = cx.theme().colors;
+        let cx: &Context<Self> = cx;
         let s = &self.settings;
         let row =
             |name: &'static str, key: &'static str, options: Vec<(SharedString, Value, bool)>| {
@@ -2113,6 +2185,11 @@ impl Root {
             .justify_center()
             .child(
                 v_flex()
+                    .id("settings-scroll")
+                    .max_h(px(
+                        (f32::from(window.viewport_size().height) - 120.).max(200.)
+                    ))
+                    .overflow_y_scroll()
                     .w(px(720.))
                     .p_4()
                     .gap_3()
@@ -2211,6 +2288,7 @@ impl Root {
                         s.font_size_prompt,
                     ))
                     .child(size("Code text size", "fontSizeCode", s.font_size_code))
+                    .child(snooze_options)
                     .child(
                         div()
                             .text_xs()
@@ -3416,60 +3494,105 @@ impl Root {
     }
 
     fn settle(&mut self, cx: &mut Context<Self>) {
-        let Some(entry) = self.open_entry().cloned() else {
-            return;
-        };
-        let Some(connection) = self.connection(&entry.environment) else {
-            return;
-        };
-        let settled = entry.status != ThreadStatus::Settled;
-        if settled {
-            let visible = self.visible_entries();
-            let next = sidebar::next_with(
-                &visible,
-                Some((&entry.environment, &entry.thread_id)),
-                true,
-                |e| e.status != ThreadStatus::Settled,
-            )
-            .map(ThreadEntry::key);
-            match next {
-                Some((environment, thread_id)) => self.open_thread(environment, thread_id, cx),
-                None => {
-                    self.stash_composer(cx);
-                    self.close_thread(cx);
-                    self.load_composer();
+        if let Some(entry) = self.open_entry().cloned() {
+            let op = if entry.presentation["settledOverride"] == "settled" {
+                ThreadOp::Unsettle
+            } else {
+                ThreadOp::Settle
+            };
+            self.thread_op(
+                ThreadMenu {
+                    environment: entry.environment,
+                    thread_id: entry.thread_id,
+                    op,
+                },
+                cx,
+            );
+        }
+    }
+
+    fn finish_parks(&mut self, cx: &mut Context<Self>) {
+        let plans = std::mem::take(&mut self.park_plans);
+        for plan in plans {
+            let Some(connection) = self.connection(&plan.target.0) else {
+                continue;
+            };
+            if connection.shell().lock().expect("shell lock").sequence < plan.sequence {
+                self.park_plans.push(plan);
+                continue;
+            }
+            if self.current().as_ref() != Some(&plan.target) {
+                continue;
+            }
+            let Some(thread) = self.thread_value(&plan.target.0, &plan.target.1) else {
+                continue;
+            };
+            let presented = crate::shell_presentation::present(&thread, None);
+            let parked = if plan.snooze {
+                crate::snooze::effective(&presented, &now_iso())
+            } else {
+                presented["settledOverride"] == "settled"
+            };
+            if parked {
+                self.focus_after_park = true;
+                cx.notify();
+                if let Some((environment, thread)) = plan.next {
+                    self.open_thread(environment, thread, cx);
+                } else {
+                    self.begin_new_thread(cx);
+                    if let Some(draft) = &mut self.draft {
+                        draft.environment = Some(plan.target.0);
+                    }
                 }
             }
         }
-        let runtime = self.runtime.clone();
-        let thread_id = entry.thread_id.clone();
-        cx.spawn(async move |this, cx| {
-            let result = on_runtime(&runtime, async move {
-                connection.settle_thread(&thread_id, settled).await
-            })
-            .await;
-            if let Err(error) = result {
-                let _ = this.update(cx, |root, cx| {
-                    root.message = Some(format!("Settle failed: {error:#}"));
-                    cx.notify();
-                });
-            }
-        })
-        .detach();
     }
 
     fn thread_op(&mut self, menu: ThreadMenu, cx: &mut Context<Self>) {
         let Some(connection) = self.connection(&menu.environment) else {
             return;
         };
-        let until = match menu.op {
+        let until = match &menu.op {
             ThreadOp::Snooze(hours) => Some(
                 humantime::format_rfc3339_millis(
                     SystemTime::now() + Duration::from_secs(hours * 3600),
                 )
                 .to_string(),
             ),
+            ThreadOp::SnoozeUntil(until) => Some(until.clone()),
             _ => None,
+        };
+        let snooze = matches!(menu.op, ThreadOp::Snooze(_) | ThreadOp::SnoozeUntil(_));
+        let parking = snooze || matches!(menu.op, ThreadOp::Settle);
+        let parking_key = (menu.environment.clone(), menu.thread_id.clone(), snooze);
+        if parking && !self.parking.insert(parking_key.clone()) {
+            return;
+        }
+        let plan = if parking
+            && self.current().as_ref() == Some(&(menu.environment.clone(), menu.thread_id.clone()))
+        {
+            let visible = self.ordered_entries();
+            let now = now_iso();
+            let next = sidebar::next_with(
+                &visible,
+                Some((&menu.environment, &menu.thread_id)),
+                true,
+                |entry| {
+                    !matches!(
+                        sidebar::section_of(entry, &now),
+                        sidebar::Section::Snoozed | sidebar::Section::Settled
+                    )
+                },
+            )
+            .map(ThreadEntry::key);
+            Some(ParkPlan {
+                target: (menu.environment.clone(), menu.thread_id.clone()),
+                next,
+                snooze,
+                sequence: 0,
+            })
+        } else {
+            None
         };
         let runtime = self.runtime.clone();
         let thread_id = menu.thread_id.clone();
@@ -3479,7 +3602,7 @@ impl Root {
                 match op {
                     ThreadOp::Pin => connection.pin_thread(&thread_id, true).await,
                     ThreadOp::Unpin => connection.pin_thread(&thread_id, false).await,
-                    ThreadOp::Snooze(_) => {
+                    ThreadOp::Snooze(_) | ThreadOp::SnoozeUntil(_) => {
                         connection.snooze_thread(&thread_id, until.as_deref()).await
                     }
                     ThreadOp::Unsnooze => connection.snooze_thread(&thread_id, None).await,
@@ -3489,12 +3612,20 @@ impl Root {
                 }
             })
             .await;
-            if let Err(error) = result {
-                let _ = this.update(cx, |root, cx| {
-                    root.message = Some(format!("Thread update failed: {error:#}"));
-                    cx.notify();
-                });
-            }
+            let _ = this.update(cx, |root, cx| {
+                root.parking.remove(&parking_key);
+                match result {
+                    Err(error) => root.message = Some(format!("Thread update failed: {error:#}")),
+                    Ok(sequence) => {
+                        if let Some(mut plan) = plan {
+                            plan.sequence = sequence;
+                            root.park_plans.push(plan);
+                            root.finish_parks(cx);
+                        }
+                    }
+                }
+                cx.notify();
+            });
         })
         .detach();
     }
@@ -3655,6 +3786,12 @@ impl Root {
     }
 
     fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.begin_new_thread(cx);
+        self.composer
+            .update(cx, |state, cx| state.focus(window, cx));
+    }
+
+    fn begin_new_thread(&mut self, cx: &mut Context<Self>) {
         self.stash_composer(cx);
         let groups = self.project_groups();
         let from_open = self.open_entry().and_then(|entry| {
@@ -3684,8 +3821,7 @@ impl Root {
         self.branch_request += 1;
         self.close_thread(cx);
         self.load_composer();
-        self.composer
-            .update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
     }
 
     fn cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -4074,8 +4210,8 @@ impl Root {
         });
     }
 
-    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.theme();
+    fn render_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme().colors;
         let sidebar_active = crate::appearance::sidebar_active(cx);
         let sidebar_hover = crate::appearance::sidebar_hover(cx);
         let sidebar_muted = crate::appearance::sidebar_muted(cx);
@@ -4154,13 +4290,17 @@ impl Root {
                     cx,
                 ));
             }
-            if collapsed && !matches!(section, sidebar::Section::Pinned | sidebar::Section::Active)
-            {
-                continue;
-            }
             for (entry, depth, family) in
                 sidebar::visible_rows(&shelf.rows, &self.collapsed_families)
             {
+                if lower
+                    && collapsed
+                    && !open
+                        .as_ref()
+                        .is_some_and(|(environment, thread)| entry.is(environment, thread))
+                {
+                    continue;
+                }
                 index += 1;
                 let jump_label = self
                     .sidebar_stamp
@@ -4169,23 +4309,57 @@ impl Root {
                     .cloned()
                     .flatten();
                 let family_key = entry.key();
+                let focus_state = window.use_keyed_state(
+                    SharedString::from(format!(
+                        "sidebar-row-focus:{}:{}",
+                        entry.environment, entry.thread_id
+                    )),
+                    cx,
+                    |_, cx| sidebar_controls::RowFocus::new(cx),
+                );
+                let row_focus = focus_state.read(cx).clone();
+                let row_focused =
+                    window.last_input_was_keyboard() && row_focus.row.is_focused(window);
+                let row_key_focus = row_focus.row.clone();
+                let actions_focused = window.last_input_was_keyboard()
+                    && (row_focus.snooze.is_focused(window) || row_focus.settle.is_focused(window));
+                let actions_visible = actions_focused || row_focus.menu_open;
                 let selected = open.as_ref().is_some_and(|(env, id)| entry.is(env, id));
-                let receded =
-                    !selected && matches!(entry.status, ThreadStatus::Idle | ThreadStatus::Working);
-                let dot = match entry.status {
-                    ThreadStatus::Approval | ThreadStatus::Input => Some(theme.warning),
-                    ThreadStatus::Working => Some(theme.primary),
-                    ThreadStatus::Failed => Some(theme.danger),
-                    ThreadStatus::Done => Some(theme.success),
-                    ThreadStatus::Idle | ThreadStatus::Settled => None,
-                };
+                let woke = crate::snooze::woke_at(&entry.presentation, &now_iso());
+                let woke = crate::snooze::woke_unseen(
+                    woke.as_deref(),
+                    entry.presentation["settledOverride"] == "settled",
+                    entry.presentation["lastVisitedAt"].as_str(),
+                    None,
+                );
+                let receded = sidebar::should_recede(
+                    sidebar::display_status(&entry.presentation),
+                    sidebar::unseen_completion(&entry.presentation),
+                    woke,
+                    selected,
+                    false,
+                );
                 let remote = primary.as_ref() != Some(&entry.environment);
                 let (environment, thread_id) = entry.key();
                 let menu_target = (environment.clone(), thread_id.clone());
                 let key_target = menu_target.clone();
-                let status_label = match entry.status {
-                    ThreadStatus::Idle | ThreadStatus::Settled => "",
-                    status => status.label(),
+                let display = sidebar::display_status(&entry.presentation);
+                let status_label = if display == sidebar::DisplayStatus::Working
+                    && entry
+                        .presentation
+                        .pointer("/goal/status")
+                        .and_then(Value::as_str)
+                        == Some("active")
+                {
+                    "Goal"
+                } else if display != sidebar::DisplayStatus::Ready {
+                    display.label()
+                } else if woke {
+                    "Woke"
+                } else if sidebar::unseen_completion(&entry.presentation) {
+                    "Done"
+                } else {
+                    ""
                 };
                 let accessible_label = [
                     entry.title.as_str(),
@@ -4198,7 +4372,8 @@ impl Root {
                 .join(", ");
                 let pinned = entry.pin_order.is_some();
                 let snoozed = section == sidebar::Section::Snoozed;
-                let settled = entry.status == ThreadStatus::Settled;
+                let settled = section == sidebar::Section::Settled;
+                let slim = settled || snoozed;
                 let scroll = self.sidebar_scroll.clone();
                 let child_index = rows.len();
                 rows.push(
@@ -4214,7 +4389,7 @@ impl Root {
                         } else {
                             accesskit::AriaCurrent::False
                         })
-                        .focusable()
+                        .track_focus(&row_focus.row)
                         .on_a11y_action(accesskit::Action::ScrollIntoView, move |_, window, _| {
                             scroll.scroll_to_item(child_index);
                             window.refresh();
@@ -4225,7 +4400,18 @@ impl Root {
                         .my(px(2.))
                         .py_2()
                         .gap_1()
+                        .when(slim, |row| row.py_0().gap_0().h(px(36.)))
                         .rounded_md()
+                        .when(row_focused, |row| {
+                            row.relative().child(
+                                div()
+                                    .absolute()
+                                    .inset_0()
+                                    .rounded_md()
+                                    .border(px(2.))
+                                    .border_color(theme.ring.opacity(0.7)),
+                            )
+                        })
                         .when(selected, |row| row.bg(sidebar_active))
                         .when(selected && self.settings.light_theme, |row| {
                             row.relative().child(
@@ -4254,10 +4440,11 @@ impl Root {
                             })
                         })
                         .on_click(cx.listener(move |root, _, _, cx| {
-                            root.open_thread(environment.clone(), thread_id.clone(), cx)
+                            root.open_thread(environment.clone(), thread_id.clone(), cx);
                         }))
                         .on_key_down(cx.listener(move |root, event: &KeyDownEvent, window, cx| {
-                            if matches!(event.keystroke.key.as_str(), "enter" | "space")
+                            if row_key_focus.is_focused(window)
+                                && matches!(event.keystroke.key.as_str(), "enter" | "space")
                                 && event.keystroke.modifiers.is_subset_of(&Modifiers::shift())
                             {
                                 window.prevent_default();
@@ -4265,55 +4452,28 @@ impl Root {
                                 root.open_thread(key_target.0.clone(), key_target.1.clone(), cx);
                             }
                         }))
+                        .when(!slim, |row| {
+                            row.child(
+                                h_flex()
+                                    .w_full()
+                                    .h(px(20.))
+                                    .gap(px(6.))
+                                    .child(self.render_host_chip(&entry.environment, remote, cx))
+                                    .child(div().flex_1())
+                                    .child(self.render_row_metadata(
+                                        &entry,
+                                        section,
+                                        &focus_state,
+                                        actions_visible,
+                                        jump_label.clone(),
+                                        cx,
+                                    )),
+                            )
+                        })
                         .child(
                             h_flex()
+                                .h(px(if slim { 36. } else { 20. }))
                                 .w_full()
-                                .h(px(20.))
-                                .gap(px(6.))
-                                .child(self.render_host_chip(&entry.environment, remote, cx))
-                                .child(div().flex_1())
-                                .when_some(jump_label.clone(), |row, label| {
-                                    row.child(
-                                        div()
-                                            .px_1()
-                                            .h(px(20.))
-                                            .min_w(px(20.))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .rounded_sm()
-                                            .bg(theme.foreground.opacity(0.07))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_xs()
-                                            .text_color(theme.muted_foreground)
-                                            .child(label),
-                                    )
-                                })
-                                .child(
-                                    div()
-                                        .when(jump_label.is_some(), |status| {
-                                            status.absolute().opacity(0.)
-                                        })
-                                        .text_xs()
-                                        .text_color(
-                                            dot.unwrap_or(crate::appearance::secondary_label(cx)),
-                                        )
-                                        .child(if entry.status == ThreadStatus::Idle {
-                                            entry
-                                                .activity_timestamp
-                                                .as_deref()
-                                                .map(|time| {
-                                                    sidebar::relative_label(time, SystemTime::now())
-                                                })
-                                                .unwrap_or_default()
-                                        } else {
-                                            entry.status.label().to_string()
-                                        }),
-                                ),
-                        )
-                        .child(
-                            h_flex()
-                                .h(px(20.))
                                 .min_w_0()
                                 .gap_1()
                                 .text_sm()
@@ -4333,12 +4493,27 @@ impl Root {
                                         } else {
                                             FontWeight::MEDIUM
                                         })
+                                        .when(row_focused, |title| {
+                                            title.text_color(theme.sidebar_foreground)
+                                        })
                                         .group_hover("sidebar-row", |title| {
                                             title.text_color(theme.sidebar_foreground)
                                         })
                                         .child(entry.title.clone()),
                                 )
-                                .children(self.render_sidebar_provider_stack(&entry, cx)),
+                                .when(!slim, |row| {
+                                    row.children(self.render_sidebar_provider_stack(&entry, cx))
+                                })
+                                .when(slim, |row| {
+                                    row.child(self.render_row_metadata(
+                                        &entry,
+                                        section,
+                                        &focus_state,
+                                        actions_visible,
+                                        jump_label.clone(),
+                                        cx,
+                                    ))
+                                }),
                         )
                         .when_some(family, |row, family| {
                             let label = match (family.collapsed, family.working) {
@@ -6530,6 +6705,10 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if std::mem::take(&mut self.focus_after_park) {
+            self.composer
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
         self.sync_terminal_drawers(window, cx);
         if self.draft.is_none() && !self.picker_open {
             self.permissions_menu = None;
@@ -6673,6 +6852,8 @@ impl Render for Root {
             .on_action(
                 cx.listener(|root, menu: &ThreadMenu, _, cx| root.thread_op(menu.clone(), cx)),
             )
+            .on_action(cx.listener(|root,action:&snooze_controls::SnoozeChoice,_,cx| root.choose_snooze(action,cx)))
+            .on_action(cx.listener(|root,action:&snooze_controls::CustomSnooze,window,cx| root.open_custom_snooze(action,window,cx)))
             .on_action(cx.listener(|root, _: &Find, window, cx| {
                 let in_file = root.panel_focus.contains_focused(window, cx)
                     || (root.open.is_none() && root.file_panel.is_some());
@@ -6900,7 +7081,7 @@ impl Render for Root {
                 root_el.child(self.render_hosts(cx))
             })
             .when(self.settings_open, |root_el| {
-                root_el.child(self.render_settings(cx))
+                root_el.child(self.render_settings(window,cx))
             })
             .when(self.file_picker_open, |root_el| {
                 root_el.child(self.render_file_picker(cx))

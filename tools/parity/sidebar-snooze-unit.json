@@ -1,0 +1,124 @@
+{
+  "name": "custom-snooze-select-keyboard-commits-the-duration-unit",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Snooze interaction fixture, UI parity"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "button",
+        "name": "Snooze thread",
+        "index": 0
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Custom\u2026"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Custom\u2026"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Duration"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Duration"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Unit"
+      },
+      "count": 1
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "combobox",
+        "name": "Unit"
+      }
+    },
+    {
+      "action": "press",
+      "value": "space"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "option",
+        "name": "Minutes"
+      },
+      "count": 1,
+      "native": {
+        "role": "list item",
+        "name": "Minutes"
+      }
+    },
+    {
+      "action": "press",
+      "value": "up"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Unit",
+        "expanded": false
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Snooze"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Next interaction fixture",
+        "focused": true
+      },
+      "count": 1
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Snoozed 1"
+      },
+      "count": 1
+    }
+  ]
+}

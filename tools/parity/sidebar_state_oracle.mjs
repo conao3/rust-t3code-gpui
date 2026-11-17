@@ -28,7 +28,7 @@ const code = [adapter,
   ...["toSortableTimestamp", "resolveThreadActivityTimestamp"].map(name => fn(sources.sort, name)),
 ].join("\n");
 const original = await import("data:text/javascript;base64," + Buffer.from(stripTypeScriptTypes(code)).toString("base64"));
-const keys = ["runtime", "latestRun", "hasPendingApprovals", "hasPendingUserInput", "pendingUserInputAt", "pendingSubagentRequest", "pendingGuestMessageCount", "latestUserMessageAt", "snoozedUntil", "snoozedAt", "settledAt", "providerInstanceHistory", "modelSelection", "updatedAt", "lastVisitedAt"];
+const keys = ["runtime", "latestRun", "hasPendingApprovals", "hasPendingUserInput", "pendingUserInputAt", "pendingSubagentRequest", "pendingGuestMessageCount", "latestUserMessageAt", "snoozedUntil", "snoozedAt", "settledAt", "settledOverride", "goal", "blockedOnThreadWait", "providerInstanceHistory", "modelSelection", "updatedAt", "lastVisitedAt"];
 const base = {
   id:"fixture",projectId:"project",title:"Fixture",createdAt:"2026-11-17T00:00:00.000Z",updatedAt:"2026-11-17T12:00:00.000Z",
   lineage:{relationshipToParent:"root"},status:"idle",latestRunId:null,activeRunId:null,activeProviderThreadId:null,
@@ -59,6 +59,7 @@ for (const activityRunStatus of [undefined,null,"idle","running","error"]) for (
   add({status:"waiting",latestRunId:"run",...(activityRunStatus===undefined?{}:{activityRunStatus}),...(activityRunStartedAt===undefined?{}:{activityRunStartedAt})});
 }
 add({latestRunId:"run",updatedAt:"2026-11-17T07:00:00-05:00",lastVisitedAt:"2026-11-17T06:00:00-05:00",latestRunStartedAt:"2026-11-17T07:30:00-05:00"});
+for (const settledOverride of [null,"active","settled"]) for (const blockedOnThreadWait of [false,true]) for (const goal of [null,{status:"active"}]) add({settledOverride,blockedOnThreadWait,goal});
 const negativeRawWiring = {stack:presentation.filter(value=>JSON.stringify(original.resolveThreadProviderStack(value.input))!==JSON.stringify(value.stack)).length,activity:presentation.filter(value=>original.resolveThreadActivityTimestamp(value.input)!==value.activity).length};
 fs.writeFileSync(destination,JSON.stringify({sourceRevision:"24e77473ecf41bc1f7142529c7911c1c1aae1d76",sources:Object.fromEntries(Object.entries(paths).map(([name,file])=>[file,createHash("sha256").update(sources[name]).digest("hex")])),adapter:"UTC Effect dates use JS Date conversion. Empty PR lists and root titles have identity adapters; neither is an asserted field. Original presentation, background hold, provider stack and activity functions execute unchanged.",negativeRawWiring,presentation},null,2)+"\n");
 console.log(JSON.stringify({presentation:presentation.length,negativeRawWiring}));

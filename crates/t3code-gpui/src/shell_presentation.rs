@@ -79,10 +79,15 @@ pub fn present(thread: &Value, pending_subagent: Option<&str>) -> Value {
         "latestUserMessageAt":iso(&thread["latestUserMessageAt"]),
         "snoozedUntil":iso(&thread["snoozedUntil"]),"snoozedAt":iso(&thread["snoozedAt"]),
         "settledAt":iso(&thread["settledAt"]),
+        "blockedOnThreadWait":thread.get("blockedOnThreadWait").filter(|value| !value.is_null()).unwrap_or(&json!(false)),
+        "goal":thread.get("goal").unwrap_or(&Value::Null),
         "providerInstanceHistory":thread.get("providerInstanceHistory").filter(|value| !value.is_null()).unwrap_or(&json!([])),
         "modelSelection":thread["modelSelection"],"updatedAt":updated,
         "source":{"pendingRuntimeRequest":request},
     });
+    if let Some(settled) = thread.get("settledOverride") {
+        state["settledOverride"] = settled.clone();
+    }
     if let Some(visited) = thread.get("lastVisitedAt") {
         state["lastVisitedAt"] = iso(visited);
     }

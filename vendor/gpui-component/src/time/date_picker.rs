@@ -540,6 +540,7 @@ impl DatePickerState {
 /// A DatePicker element.
 #[derive(IntoElement)]
 pub struct DatePicker {
+    accessibility_label: Option<SharedString>,
     id: ElementId,
     style: StyleRefinement,
     state: Entity<DatePickerState>,
@@ -600,6 +601,7 @@ impl DatePicker {
     pub fn new(state: &Entity<DatePickerState>) -> Self {
         Self {
             id: ("date-picker", state.entity_id()).into(),
+            accessibility_label: None,
             state: state.clone(),
             cleanable: false,
             placeholder: None,
@@ -616,6 +618,11 @@ impl DatePicker {
     /// Set the placeholder of the date picker, default: "".
     pub fn placeholder(mut self, placeholder: impl Into<SharedString>) -> Self {
         self.placeholder = Some(placeholder.into());
+        self
+    }
+
+    pub fn accessibility_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label = Some(label.into());
         self
     }
 
@@ -695,6 +702,9 @@ impl RenderOnce for DatePicker {
         let picker_state = self.state.clone();
 
         BaseDatePicker::new(self.id, &state.focus_handle)
+            .when_some(self.accessibility_label, |this, label| {
+                this.aria_label(label)
+            })
             .open(state.open)
             .when(state.date.is_some(), |this| {
                 this.aria_value(display_title.clone())

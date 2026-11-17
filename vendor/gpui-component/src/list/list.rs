@@ -502,6 +502,10 @@ where
         div()
             .id(id)
             .role(Role::ListItem)
+            .when_some(
+                self.delegate.item_accessibility_label(ix, cx),
+                |row, label| row.aria_label(label),
+            )
             .aria_position_in_set(ix.row + 1)
             .aria_size_of_set(total_items)
             .aria_selected(selected)

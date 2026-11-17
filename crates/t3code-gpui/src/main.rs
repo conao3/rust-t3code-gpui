@@ -16,6 +16,7 @@ mod provider_display;
 mod row_view;
 mod shell_presentation;
 mod sidebar;
+mod snooze;
 mod tables;
 mod terminal;
 mod terminal_paint;

@@ -1,0 +1,81 @@
+{
+  "name": "snooze-custom-dialog-keyboard-and-duration",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Snooze interaction fixture, UI parity"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "button",
+        "name": "Snooze thread",
+        "index": 0
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitem",
+        "name": "Custom\u2026"
+      },
+      "count": 1,
+      "native": {
+        "role": "menu item",
+        "name": "Custom\u2026"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Custom\u2026"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Custom\u2026"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Custom snooze"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Duration"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Duration"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Snooze for"
+      },
+      "value": "2",
+      "count": 1
+    }
+  ]
+}

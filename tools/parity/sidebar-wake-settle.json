@@ -1,0 +1,17 @@
+{
+  "name":"wake-background-thread-and-settle-current-thread",
+  "viewport":[1400,900],
+  "theme":"dark",
+  "settle_ms":700,
+  "steps":[
+    {"action":"focus","selector":{"role":"button","name":"Wake thread now"}},
+    {"action":"press","value":"enter"},
+    {"action":"checkpoint","selector":{"role":"button","name":"Snoozed 1"},"count":0},
+    {"action":"checkpoint","selector":{"role":"textbox","name":"Message Next interaction fixture"},"count":1},
+    {"action":"click","selector":{"role":"button","name":"Snooze interaction fixture, UI parity"}},
+    {"action":"focus","selector":{"role":"button","name":"Settle thread","index":0}},
+    {"action":"press","value":"enter"},
+    {"action":"checkpoint","selector":{"role":"textbox","name":"Message Next interaction fixture","focused":true},"count":1},
+    {"action":"checkpoint","selector":{"role":"button","name":"Settled 1"},"count":1}
+  ]
+}

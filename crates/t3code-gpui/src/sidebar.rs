@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
@@ -44,6 +45,136 @@ pub struct ThreadEntry {
     pub launched_from: Option<(String, String)>,
     pub provider_stack: Vec<String>,
     pub activity_timestamp: Option<String>,
+    pub presentation: Arc<Value>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DisplayStatus {
+    Approval,
+    Input,
+    Request,
+    Preparing,
+    Working,
+    Waiting,
+    Limited,
+    Failed,
+    Ready,
+}
+
+impl DisplayStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Approval => "Approval",
+            Self::Input => "Input",
+            Self::Request => "Request",
+            Self::Preparing => "Setting up",
+            Self::Working => "Working",
+            Self::Waiting => "Waiting",
+            Self::Limited => "Limited",
+            Self::Failed => "Failed",
+            Self::Ready => "",
+        }
+    }
+}
+
+pub fn display_status(thread: &Value) -> DisplayStatus {
+    if thread["hasPendingApprovals"] == true || thread["pendingSubagentRequest"] == "approval" {
+        return DisplayStatus::Approval;
+    }
+    if thread["hasPendingUserInput"] == true || thread["pendingSubagentRequest"] == "user_input" {
+        return DisplayStatus::Input;
+    }
+    if thread["pendingGuestMessageCount"]
+        .as_f64()
+        .unwrap_or_default()
+        > 0.
+    {
+        return DisplayStatus::Request;
+    }
+    let runtime = &thread["runtime"];
+    match runtime["status"].as_str() {
+        Some("running") if thread["blockedOnThreadWait"] == true => DisplayStatus::Waiting,
+        Some("preparing") => DisplayStatus::Preparing,
+        Some("queued" | "starting" | "running" | "waiting") => DisplayStatus::Working,
+        Some("idle") => DisplayStatus::Waiting,
+        Some("failed") if runtime["lastErrorClass"] == "usage_limit" => DisplayStatus::Limited,
+        Some("failed") => DisplayStatus::Failed,
+        _ => DisplayStatus::Ready,
+    }
+}
+
+pub fn unseen_completion(thread: &Value) -> bool {
+    let Some(completed) = thread
+        .pointer("/latestRun/completedAt")
+        .and_then(Value::as_str)
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+    else {
+        return false;
+    };
+    let Some(visited) = thread["lastVisitedAt"]
+        .as_str()
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+    chrono::DateTime::parse_from_rfc3339(visited).map_or(true, |visited| completed > visited)
+}
+
+pub fn should_recede(
+    status: DisplayStatus,
+    unread: bool,
+    woke: bool,
+    active: bool,
+    selected: bool,
+) -> bool {
+    if active || selected || matches!(status, DisplayStatus::Input | DisplayStatus::Request) {
+        return false;
+    }
+    match status {
+        DisplayStatus::Preparing | DisplayStatus::Working | DisplayStatus::Waiting => true,
+        DisplayStatus::Ready | DisplayStatus::Approval => !unread && !woke,
+        _ => false,
+    }
+}
+
+pub fn working_started_at(thread: &Value) -> Option<&str> {
+    fn valid(value: &Value) -> Option<&str> {
+        value
+            .as_str()
+            .filter(|value| chrono::DateTime::parse_from_rfc3339(value).is_ok())
+    }
+    let runtime = &thread["runtime"];
+    if let Some(value) = runtime.get("activityStartedAt") {
+        return valid(value);
+    }
+    let run = &thread["latestRun"];
+    if run.get("completedAt") == Some(&Value::Null)
+        && run.get("runId").is_some()
+        && run["runId"] == runtime["activeRunId"]
+    {
+        valid(&run["startedAt"]).or_else(|| valid(&run["requestedAt"]))
+    } else {
+        None
+    }
+}
+
+pub fn duration_label(elapsed_ms: f64) -> String {
+    let seconds = if elapsed_ms.is_finite() {
+        (elapsed_ms / 1000.).floor().max(0.)
+    } else {
+        0.
+    };
+    if seconds < 60. {
+        format!("{seconds:.0}s")
+    } else {
+        let minutes = (seconds / 60.).floor();
+        if minutes < 60. {
+            format!("{minutes:.0}m")
+        } else {
+            format!("{:.0}h {:.0}m", (minutes / 60.).floor(), minutes % 60.)
+        }
+    }
 }
 
 pub fn activity_timestamp(thread: &Value) -> Option<String> {
@@ -184,6 +315,7 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
                 }),
                 provider_stack: crate::provider_display::stack(&presentation),
                 activity_timestamp: activity_timestamp(&presentation),
+                presentation: Arc::new(presentation),
             }
         })
         .collect()
@@ -213,14 +345,10 @@ impl Section {
 /// The shelf a thread sits on, as T3's sidebar places it: snoozed before settled before pinned,
 /// and a working thread on the Working shelf unless it is snoozed, settled or pinned.
 pub fn section_of(entry: &ThreadEntry, now: &str) -> Section {
-    if entry
-        .snoozed_until
-        .as_deref()
-        .is_some_and(|until| until > now)
-    {
+    if crate::snooze::effective(&entry.presentation, now) {
         return Section::Snoozed;
     }
-    if entry.status == ThreadStatus::Settled {
+    if entry.presentation["settledOverride"] == "settled" {
         return Section::Settled;
     }
     if entry.pin_order.is_some() {
@@ -414,6 +542,69 @@ mod tests {
     use super::*;
 
     #[test]
+    fn explicit_settlement_parks_an_active_run() {
+        let shell = ShellState {
+            threads: vec![
+                serde_json::json!({"id":"thread","projectId":"project","title":"Working parking fixture","status":"running","activeRunId":"run","latestRunId":"run","settledOverride":"settled","updatedAt":"2026-11-17T12:00:00Z"}),
+            ],
+            ..Default::default()
+        };
+        let entries = entries("fixture", &shell);
+        assert_eq!(entries[0].status, ThreadStatus::Working);
+        assert_eq!(
+            section_of(&entries[0], "2026-11-17T12:00:00Z"),
+            Section::Settled
+        );
+    }
+
+    #[test]
+    fn display_state_and_receding_match_original() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/sidebar-status-oracle.json"))
+                .unwrap();
+        for case in fixture["statuses"].as_array().unwrap() {
+            let expected: DisplayStatus = serde_json::from_value(case["expected"].clone()).unwrap();
+            assert_eq!(display_status(&case["input"]), expected, "{case}");
+        }
+        for case in fixture["receding"].as_array().unwrap() {
+            let input = &case["input"];
+            let status = serde_json::from_value(input["status"].clone()).unwrap();
+            assert_eq!(
+                should_recede(
+                    status,
+                    input["isUnread"] == true,
+                    input["isWoke"] == true,
+                    input["isActive"] == true,
+                    input["isSelected"] == true
+                ),
+                case["expected"] == true,
+                "{case}"
+            );
+        }
+        for case in fixture["starts"].as_array().unwrap() {
+            assert_eq!(
+                working_started_at(&case["input"]),
+                case["expected"].as_str(),
+                "{case}"
+            );
+        }
+        for case in fixture["durations"].as_array().unwrap() {
+            assert_eq!(
+                duration_label(case["input"].as_f64().unwrap()),
+                case["expected"].as_str().unwrap(),
+                "{case}"
+            );
+        }
+        for case in fixture["unread"].as_array().unwrap() {
+            assert_eq!(
+                unseen_completion(&case["input"]),
+                case["expected"] == true,
+                "{case}"
+            );
+        }
+    }
+
+    #[test]
     fn activity_and_compact_time_match_the_original() {
         let fixture: Value = serde_json::from_str(include_str!(
             "../tests/fixtures/provider-display-oracle.json"
@@ -518,7 +709,7 @@ mod tests {
             threads: vec![
                 thread(json!({"id": "old", "updatedAt": "2026-11-11T00:00:00.000Z"})),
                 thread(
-                    json!({"id": "settled", "settledAt": "2026-11-12T03:00:00.000Z", "updatedAt": "2026-11-12T03:00:00.000Z"}),
+                    json!({"id": "settled", "settledOverride": "settled", "settledAt": "2026-11-12T03:00:00.000Z", "updatedAt": "2026-11-12T03:00:00.000Z"}),
                 ),
                 thread(json!({"id": "new", "updatedAt": "2026-11-12T02:00:00.000Z"})),
             ],
@@ -561,6 +752,9 @@ mod tests {
             launched_from: None,
             provider_stack: Vec::new(),
             activity_timestamp: None,
+            presentation: Arc::new(
+                serde_json::json!({"settledOverride":if status==ThreadStatus::Settled {"settled"} else {"active"}}),
+            ),
         }
     }
 
@@ -628,8 +822,10 @@ mod tests {
         pinned_a.pin_order = Some("a".into());
         let mut snoozed = at("snoozed", ThreadStatus::Settled, "9");
         snoozed.snoozed_until = Some("2026-11-12T06:00:00.000Z".into());
+        snoozed.presentation = Arc::new(json!({"snoozedUntil":snoozed.snoozed_until}));
         let mut woke = at("woke", ThreadStatus::Idle, "2");
         woke.snoozed_until = Some("2026-11-12T04:00:00.000Z".into());
+        woke.presentation = Arc::new(json!({"snoozedUntil":woke.snoozed_until}));
         let parent = at("parent", ThreadStatus::Idle, "3");
         let mut child = at("child", ThreadStatus::Done, "8");
         child.launched_from = Some(("env-eos".into(), "parent".into()));

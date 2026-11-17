@@ -1,0 +1,40 @@
+{
+  "name": "snooze-settings-remove-the-added-option",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Remove snooze option 6"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "name": "Snooze option 6"
+      },
+      "count": 0
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Close"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Snooze interaction fixture"
+      },
+      "count": 1
+    }
+  ]
+}

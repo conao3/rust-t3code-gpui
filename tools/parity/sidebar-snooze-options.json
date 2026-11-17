@@ -1,0 +1,112 @@
+{
+  "name": "snooze-settings-add-and-edit-duration",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Snooze interaction fixture, UI parity"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "button",
+        "name": "Snooze thread",
+        "index": 0
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitem",
+        "name": "Custom\u2026"
+      },
+      "count": 1,
+      "native": {
+        "role": "menu item",
+        "name": "Custom\u2026"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Custom\u2026"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Custom\u2026"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Edit snooze options"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Add option"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Add option"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "name": "Snooze option 6"
+      },
+      "count": 1
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Amount",
+        "index": 2
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "type",
+      "value": "45"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Amount",
+        "index": 2
+      },
+      "count": 1,
+      "value": "45"
+    }
+  ]
+}

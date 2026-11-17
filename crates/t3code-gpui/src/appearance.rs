@@ -147,7 +147,7 @@ pub fn apply(light: bool, cx: &mut App) {
         c.warning_active = color("warning", light);
         c.warning_hover = color("warning", light);
         c.warning_foreground = color("warningForeground", light);
-        c.overlay = color("surface", light);
+        c.overlay = color("canvas", light).opacity(if light { 0.60 } else { 0.64 });
         c.window_border = color("border", light);
         c.red = color("error", light);
         c.red_light = color("error", light);

@@ -25,6 +25,7 @@ uuid = { version = "1.29.2", features = ["v4"] }
 debug = 1
 
 [patch.crates-io]
+gpui-base = { path = "vendor/gpui-base" }
 accesskit_atspi_common = { path = "vendor/accesskit_atspi_common" }
 gpui-component = { path = "vendor/gpui-component" }
 gpui-pre-linux = { path = "vendor/gpui-pre-linux" }

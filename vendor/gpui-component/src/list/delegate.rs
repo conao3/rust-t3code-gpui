@@ -10,6 +10,11 @@ use crate::{
 pub trait ListDelegate: Sized + 'static {
     type Item: Selectable + IntoElement;
 
+    #[allow(missing_docs)]
+    fn item_accessibility_label(&self, _index: IndexPath, _cx: &App) -> Option<gpui::SharedString> {
+        None
+    }
+
     /// When Query Input change, this method will be called.
     /// You can perform search here.
     fn perform_search(

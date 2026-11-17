@@ -249,6 +249,9 @@ macro_rules! map_base_root {
 }
 
 impl BaseDialogRoot {
+    fn accessibility_label(self, label: SharedString) -> Self {
+        map_base_root!(self, accessibility_label(label))
+    }
     fn layer(self, index: usize, topmost: bool) -> Self {
         map_base_root!(self, layer(index, topmost))
     }
@@ -395,6 +398,15 @@ impl Dialog {
         F: Fn(DialogContent, &mut Window, &mut App) -> DialogContent + 'static,
     {
         self.content_builder = Some(Rc::new(builder));
+        self
+    }
+
+    #[allow(missing_docs)]
+    pub fn accessibility_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.base = self
+            .base
+            .take()
+            .map(|base| base.accessibility_label(label.into()));
         self
     }
 

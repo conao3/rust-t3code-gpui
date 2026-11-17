@@ -28,6 +28,8 @@ pub struct NumberInput {
     focus_ring_enabled: bool,
     disabled: bool,
     accessibility_label: Option<SharedString>,
+    decrement_label: Option<SharedString>,
+    increment_label: Option<SharedString>,
     style: StyleRefinement,
 }
 
@@ -44,6 +46,8 @@ impl NumberInput {
             focus_ring_enabled: true,
             disabled: false,
             accessibility_label: None,
+            decrement_label: None,
+            increment_label: None,
             style: StyleRefinement::default(),
         }
     }
@@ -69,6 +73,17 @@ impl NumberInput {
     /// Set the appearance of the number input, if false will no border and background.
     pub fn appearance(mut self, appearance: bool) -> Self {
         self.appearance = appearance;
+        self
+    }
+
+    #[allow(missing_docs)]
+    pub fn step_labels(
+        mut self,
+        decrement: impl Into<SharedString>,
+        increment: impl Into<SharedString>,
+    ) -> Self {
+        self.decrement_label = Some(decrement.into());
+        self.increment_label = Some(increment.into());
         self
     }
 
@@ -141,15 +156,21 @@ impl RenderOnce for NumberInput {
         } else {
             cx.theme().radius
         };
+        let decrement_label = self
+            .decrement_label
+            .unwrap_or_else(|| t!("Input.Decrement").into());
+        let increment_label = self
+            .increment_label
+            .unwrap_or_else(|| t!("Input.Increment").into());
         let base_state = self.state.clone();
         let content = BaseNumberInput::new(&base_state)
             .disabled(self.disabled)
-            .when_some(self.accessibility_label, |this, label| {
+            .when_some(self.accessibility_label.clone(), |this, label| {
                 this.accessibility_label(label)
             })
             .size_full()
             .decrement_button(move |this| {
-                this.accessibility_label(t!("Input.Decrement"))
+                this.accessibility_label(decrement_label)
                     .flex()
                     .items_center()
                     .justify_center()
@@ -171,6 +192,9 @@ impl RenderOnce for NumberInput {
             })
             .input(
                 Input::new(&self.state)
+                    .when_some(self.accessibility_label, |input, label| {
+                        input.aria_label(label)
+                    })
                     .appearance(false)
                     .with_size(button_size)
                     .h_full()
@@ -182,7 +206,7 @@ impl RenderOnce for NumberInput {
                     .when_some(self.suffix, |this, suffix| this.suffix(suffix)),
             )
             .increment_button(move |this| {
-                this.accessibility_label(t!("Input.Increment"))
+                this.accessibility_label(increment_label)
                     .flex()
                     .items_center()
                     .justify_center()

@@ -59,6 +59,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -131,6 +133,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -213,6 +217,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -295,6 +301,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -367,6 +375,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -449,6 +459,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -533,6 +545,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -622,6 +636,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -711,6 +727,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -800,6 +818,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -889,6 +909,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -978,6 +1000,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1055,6 +1079,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1137,6 +1163,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1219,6 +1247,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1301,6 +1331,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1383,6 +1415,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1465,6 +1499,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1532,6 +1568,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1604,6 +1642,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1686,6 +1726,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1768,6 +1810,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1840,6 +1884,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -1922,6 +1968,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2006,6 +2054,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2095,6 +2145,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2184,6 +2236,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2273,6 +2327,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2362,6 +2418,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2451,6 +2509,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2528,6 +2588,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2610,6 +2672,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2692,6 +2756,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2774,6 +2840,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2856,6 +2924,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -2938,6 +3008,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3005,6 +3077,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3077,6 +3151,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3159,6 +3235,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3241,6 +3319,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3313,6 +3393,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3395,6 +3477,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3479,6 +3563,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3568,6 +3654,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3657,6 +3745,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3746,6 +3836,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3835,6 +3927,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -3924,6 +4018,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4001,6 +4097,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4083,6 +4181,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4165,6 +4265,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4247,6 +4349,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4329,6 +4433,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4411,6 +4517,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4478,6 +4586,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4550,6 +4660,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4632,6 +4744,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4714,6 +4828,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4786,6 +4902,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4868,6 +4986,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -4952,6 +5072,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5007,273 +5129,6 @@
         "pendingBackgroundTasks": [
           {
             "kind": "command",
-            "awaited": false
-          }
-        ]
-      },
-      "pendingSubagent": null,
-      "expected": {
-        "runtime": {
-          "status": "waiting",
-          "activeRunId": null,
-          "providerInstanceId": "previous",
-          "providerName": null,
-          "lastError": null,
-          "lastErrorClass": null,
-          "lastErrorCode": null,
-          "usageLimitResetAt": null,
-          "updatedAt": "2026-11-17T12:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "status": "waiting",
-          "requestedAt": null,
-          "startedAt": null,
-          "completedAt": null,
-          "assistantMessageId": null
-        },
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingUserInputAt": null,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
-        "snoozedUntil": null,
-        "snoozedAt": null,
-        "settledAt": null,
-        "providerInstanceHistory": [
-          "a",
-          "b",
-          "previous"
-        ],
-        "modelSelection": {
-          "instanceId": "next",
-          "model": "fixture"
-        },
-        "updatedAt": "2026-11-17T12:00:00.000Z",
-        "source": {
-          "pendingRuntimeRequest": null
-        }
-      },
-      "stack": [
-        "a",
-        "b",
-        "previous"
-      ],
-      "activity": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "id": "fixture",
-        "projectId": "project",
-        "title": "Fixture",
-        "createdAt": "2026-11-17T00:00:00.000Z",
-        "updatedAt": "2026-11-17T12:00:00.000Z",
-        "lineage": {
-          "relationshipToParent": "root"
-        },
-        "status": "waiting",
-        "latestRunId": "run",
-        "activeRunId": null,
-        "activeProviderThreadId": null,
-        "providerInstanceId": "previous",
-        "modelSelection": {
-          "instanceId": "next",
-          "model": "fixture"
-        },
-        "pendingRuntimeRequest": null,
-        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
-        "archivedAt": null,
-        "deletedAt": null,
-        "settledAt": null,
-        "snoozedUntil": null,
-        "snoozedAt": null,
-        "providerInstanceHistory": [
-          "a",
-          "b",
-          "previous"
-        ],
-        "pendingBackgroundTasks": [
-          {
-            "kind": "command",
-            "awaited": true
-          }
-        ]
-      },
-      "pendingSubagent": null,
-      "expected": {
-        "runtime": {
-          "status": "idle",
-          "activeRunId": null,
-          "providerInstanceId": "previous",
-          "providerName": null,
-          "lastError": null,
-          "lastErrorClass": null,
-          "lastErrorCode": null,
-          "usageLimitResetAt": null,
-          "updatedAt": "2026-11-17T12:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "status": "waiting",
-          "requestedAt": null,
-          "startedAt": null,
-          "completedAt": null,
-          "assistantMessageId": null
-        },
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingUserInputAt": null,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
-        "snoozedUntil": null,
-        "snoozedAt": null,
-        "settledAt": null,
-        "providerInstanceHistory": [
-          "a",
-          "b",
-          "previous"
-        ],
-        "modelSelection": {
-          "instanceId": "next",
-          "model": "fixture"
-        },
-        "updatedAt": "2026-11-17T12:00:00.000Z",
-        "source": {
-          "pendingRuntimeRequest": null
-        }
-      },
-      "stack": [
-        "a",
-        "b",
-        "previous"
-      ],
-      "activity": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "id": "fixture",
-        "projectId": "project",
-        "title": "Fixture",
-        "createdAt": "2026-11-17T00:00:00.000Z",
-        "updatedAt": "2026-11-17T12:00:00.000Z",
-        "lineage": {
-          "relationshipToParent": "root"
-        },
-        "status": "waiting",
-        "latestRunId": "run",
-        "activeRunId": null,
-        "activeProviderThreadId": null,
-        "providerInstanceId": "previous",
-        "modelSelection": {
-          "instanceId": "next",
-          "model": "fixture"
-        },
-        "pendingRuntimeRequest": null,
-        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
-        "archivedAt": null,
-        "deletedAt": null,
-        "settledAt": null,
-        "snoozedUntil": null,
-        "snoozedAt": null,
-        "providerInstanceHistory": [
-          "a",
-          "b",
-          "previous"
-        ],
-        "pendingBackgroundTasks": [
-          {
-            "kind": "subagent",
-            "awaited": false
-          }
-        ]
-      },
-      "pendingSubagent": null,
-      "expected": {
-        "runtime": {
-          "status": "idle",
-          "activeRunId": null,
-          "providerInstanceId": "previous",
-          "providerName": null,
-          "lastError": null,
-          "lastErrorClass": null,
-          "lastErrorCode": null,
-          "usageLimitResetAt": null,
-          "updatedAt": "2026-11-17T12:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "status": "waiting",
-          "requestedAt": null,
-          "startedAt": null,
-          "completedAt": null,
-          "assistantMessageId": null
-        },
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingUserInputAt": null,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
-        "snoozedUntil": null,
-        "snoozedAt": null,
-        "settledAt": null,
-        "providerInstanceHistory": [
-          "a",
-          "b",
-          "previous"
-        ],
-        "modelSelection": {
-          "instanceId": "next",
-          "model": "fixture"
-        },
-        "updatedAt": "2026-11-17T12:00:00.000Z",
-        "source": {
-          "pendingRuntimeRequest": null
-        }
-      },
-      "stack": [
-        "a",
-        "b",
-        "previous"
-      ],
-      "activity": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "id": "fixture",
-        "projectId": "project",
-        "title": "Fixture",
-        "createdAt": "2026-11-17T00:00:00.000Z",
-        "updatedAt": "2026-11-17T12:00:00.000Z",
-        "lineage": {
-          "relationshipToParent": "root"
-        },
-        "status": "waiting",
-        "latestRunId": "run",
-        "activeRunId": null,
-        "activeProviderThreadId": null,
-        "providerInstanceId": "previous",
-        "modelSelection": {
-          "instanceId": "next",
-          "model": "fixture"
-        },
-        "pendingRuntimeRequest": null,
-        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
-        "archivedAt": null,
-        "deletedAt": null,
-        "settledAt": null,
-        "snoozedUntil": null,
-        "snoozedAt": null,
-        "providerInstanceHistory": [
-          "a",
-          "b",
-          "previous"
-        ],
-        "pendingBackgroundTasks": [
-          {
-            "kind": "monitor",
             "awaited": false
           }
         ]
@@ -5308,6 +5163,281 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "a",
+        "b",
+        "previous"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "waiting",
+        "latestRunId": "run",
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "pendingBackgroundTasks": [
+          {
+            "kind": "command",
+            "awaited": true
+          }
+        ]
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": {
+          "status": "idle",
+          "activeRunId": null,
+          "providerInstanceId": "previous",
+          "providerName": null,
+          "lastError": null,
+          "lastErrorClass": null,
+          "lastErrorCode": null,
+          "usageLimitResetAt": null,
+          "updatedAt": "2026-11-17T12:00:00.000Z"
+        },
+        "latestRun": {
+          "runId": "run",
+          "status": "waiting",
+          "requestedAt": null,
+          "startedAt": null,
+          "completedAt": null,
+          "assistantMessageId": null
+        },
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "a",
+        "b",
+        "previous"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "waiting",
+        "latestRunId": "run",
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "pendingBackgroundTasks": [
+          {
+            "kind": "subagent",
+            "awaited": false
+          }
+        ]
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": {
+          "status": "idle",
+          "activeRunId": null,
+          "providerInstanceId": "previous",
+          "providerName": null,
+          "lastError": null,
+          "lastErrorClass": null,
+          "lastErrorCode": null,
+          "usageLimitResetAt": null,
+          "updatedAt": "2026-11-17T12:00:00.000Z"
+        },
+        "latestRun": {
+          "runId": "run",
+          "status": "waiting",
+          "requestedAt": null,
+          "startedAt": null,
+          "completedAt": null,
+          "assistantMessageId": null
+        },
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "a",
+        "b",
+        "previous"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "waiting",
+        "latestRunId": "run",
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "pendingBackgroundTasks": [
+          {
+            "kind": "monitor",
+            "awaited": false
+          }
+        ]
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": {
+          "status": "waiting",
+          "activeRunId": null,
+          "providerInstanceId": "previous",
+          "providerName": null,
+          "lastError": null,
+          "lastErrorClass": null,
+          "lastErrorCode": null,
+          "usageLimitResetAt": null,
+          "updatedAt": "2026-11-17T12:00:00.000Z"
+        },
+        "latestRun": {
+          "runId": "run",
+          "status": "waiting",
+          "requestedAt": null,
+          "startedAt": null,
+          "completedAt": null,
+          "assistantMessageId": null
+        },
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5397,6 +5527,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5474,6 +5606,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5556,6 +5690,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5638,6 +5774,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5720,6 +5858,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5802,6 +5942,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5884,6 +6026,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -5951,6 +6095,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6023,6 +6169,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6105,6 +6253,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6187,6 +6337,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6259,6 +6411,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6341,6 +6495,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6425,6 +6581,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6514,6 +6672,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6603,6 +6763,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6692,6 +6854,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6781,6 +6945,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6870,6 +7036,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -6947,6 +7115,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7029,6 +7199,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7111,6 +7283,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7193,6 +7367,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7275,6 +7451,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7357,6 +7535,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7424,6 +7604,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7496,6 +7678,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7568,6 +7752,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7640,6 +7826,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7712,6 +7900,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7784,6 +7974,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7868,6 +8060,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -7957,6 +8151,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8046,6 +8242,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8135,6 +8333,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8224,6 +8424,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8313,6 +8515,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8390,6 +8594,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8472,6 +8678,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8554,6 +8762,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8636,6 +8846,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8718,6 +8930,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8800,6 +9014,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8867,6 +9083,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -8939,6 +9157,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9021,6 +9241,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9103,6 +9325,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9175,6 +9399,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9257,6 +9483,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9341,6 +9569,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9430,6 +9660,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9519,6 +9751,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9608,6 +9842,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9697,6 +9933,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9786,6 +10024,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9863,6 +10103,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -9945,6 +10187,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10027,6 +10271,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10109,6 +10355,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10191,6 +10439,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10273,6 +10523,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10340,6 +10592,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10412,6 +10666,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10494,6 +10750,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10576,6 +10834,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10648,6 +10908,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10730,6 +10992,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10814,6 +11078,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10903,6 +11169,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -10992,6 +11260,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11081,6 +11351,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11170,6 +11442,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11259,6 +11533,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11336,6 +11612,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11418,6 +11696,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11500,6 +11780,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11582,6 +11864,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11664,6 +11948,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11746,6 +12032,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11813,6 +12101,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11885,6 +12175,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -11967,6 +12259,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12049,6 +12343,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12121,6 +12417,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12203,6 +12501,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12287,6 +12587,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12376,6 +12678,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12465,6 +12769,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12554,6 +12860,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12643,6 +12951,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12732,6 +13042,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12809,6 +13121,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12891,6 +13205,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -12973,6 +13289,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13055,6 +13373,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13137,6 +13457,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13219,6 +13541,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13304,6 +13628,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13390,6 +13716,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13476,6 +13804,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13561,6 +13891,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13647,6 +13979,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13733,6 +14067,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13818,6 +14154,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13904,6 +14242,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -13990,6 +14330,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14060,6 +14402,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14133,6 +14477,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14206,6 +14552,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14279,6 +14627,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14352,6 +14702,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14425,6 +14777,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14498,6 +14852,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14571,6 +14927,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14644,6 +15002,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14717,6 +15077,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14790,6 +15152,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14863,6 +15227,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -14949,6 +15315,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15034,6 +15402,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15119,6 +15489,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15203,6 +15575,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15289,6 +15663,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15375,6 +15751,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15459,6 +15837,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15545,6 +15925,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15631,6 +16013,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15715,6 +16099,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15801,6 +16187,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15887,6 +16275,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -15971,6 +16361,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -16057,6 +16449,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -16143,6 +16537,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -16228,6 +16624,8 @@
         "snoozedUntil": null,
         "snoozedAt": null,
         "settledAt": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
         "providerInstanceHistory": [
           "a",
           "b",
@@ -16249,6 +16647,894 @@
         "previous"
       ],
       "activity": "2026-11-17T12:30:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": null,
+        "blockedOnThreadWait": false,
+        "goal": null
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": null,
+        "goal": null,
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": null,
+        "blockedOnThreadWait": false,
+        "goal": {
+          "status": "active"
+        }
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": null,
+        "goal": {
+          "status": "active"
+        },
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": null,
+        "blockedOnThreadWait": true,
+        "goal": null
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": null,
+        "goal": null,
+        "blockedOnThreadWait": true,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": null,
+        "blockedOnThreadWait": true,
+        "goal": {
+          "status": "active"
+        }
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": null,
+        "goal": {
+          "status": "active"
+        },
+        "blockedOnThreadWait": true,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": "active",
+        "blockedOnThreadWait": false,
+        "goal": null
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": "active",
+        "goal": null,
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": "active",
+        "blockedOnThreadWait": false,
+        "goal": {
+          "status": "active"
+        }
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": "active",
+        "goal": {
+          "status": "active"
+        },
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": "active",
+        "blockedOnThreadWait": true,
+        "goal": null
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": "active",
+        "goal": null,
+        "blockedOnThreadWait": true,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": "active",
+        "blockedOnThreadWait": true,
+        "goal": {
+          "status": "active"
+        }
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": "active",
+        "goal": {
+          "status": "active"
+        },
+        "blockedOnThreadWait": true,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": "settled",
+        "blockedOnThreadWait": false,
+        "goal": null
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": "settled",
+        "goal": null,
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": "settled",
+        "blockedOnThreadWait": false,
+        "goal": {
+          "status": "active"
+        }
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": "settled",
+        "goal": {
+          "status": "active"
+        },
+        "blockedOnThreadWait": false,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": "settled",
+        "blockedOnThreadWait": true,
+        "goal": null
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": "settled",
+        "goal": null,
+        "blockedOnThreadWait": true,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
+    },
+    {
+      "input": {
+        "id": "fixture",
+        "projectId": "project",
+        "title": "Fixture",
+        "createdAt": "2026-11-17T00:00:00.000Z",
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "lineage": {
+          "relationshipToParent": "root"
+        },
+        "status": "idle",
+        "latestRunId": null,
+        "activeRunId": null,
+        "activeProviderThreadId": null,
+        "providerInstanceId": "previous",
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "pendingRuntimeRequest": null,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "archivedAt": null,
+        "deletedAt": null,
+        "settledAt": null,
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "settledOverride": "settled",
+        "blockedOnThreadWait": true,
+        "goal": {
+          "status": "active"
+        }
+      },
+      "pendingSubagent": null,
+      "expected": {
+        "runtime": null,
+        "latestRun": null,
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingUserInputAt": null,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "latestUserMessageAt": "2026-11-17T10:00:00.000Z",
+        "snoozedUntil": null,
+        "snoozedAt": null,
+        "settledAt": null,
+        "settledOverride": "settled",
+        "goal": {
+          "status": "active"
+        },
+        "blockedOnThreadWait": true,
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "previous"
+        ],
+        "modelSelection": {
+          "instanceId": "next",
+          "model": "fixture"
+        },
+        "updatedAt": "2026-11-17T12:00:00.000Z",
+        "source": {
+          "pendingRuntimeRequest": null
+        }
+      },
+      "stack": [
+        "b",
+        "previous",
+        "next"
+      ],
+      "activity": "2026-11-17T10:00:00.000Z"
     }
   ]
 }
