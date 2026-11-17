@@ -75,6 +75,7 @@ class Native:
         self.parent_paths = {}
         while queue:
             node, parents = queue.pop(0)
+            node.clear_cache()
             self.parent_paths[id(node)] = parents
             result.append(node)
             if len(result) > 5000:
@@ -89,15 +90,16 @@ class Native:
     def tree(self):
         from gi.repository import GLib
 
-        deadline = time.monotonic() + 5
+        attempts = 0
         while True:
+            attempts += 1
             context = GLib.MainContext.default()
             while context.pending():
                 context.iteration(False)
             try:
                 return self.snapshot()
             except GLib.Error as error:
-                if not stale_object(error) or time.monotonic() >= deadline:
+                if not stale_object(error) or attempts >= 3:
                     raise
                 time.sleep(0.05)
 
@@ -121,7 +123,14 @@ class Native:
             except NotImplementedError:
                 bounds = None
             value = None
-            if role in ["entry", "text", "label", "document frame", "terminal"]:
+            if role in [
+                "entry",
+                "text",
+                "label",
+                "document frame",
+                "terminal",
+                "combo box",
+            ]:
                 try:
                     content = node.queryText()
                     value = content.getText(0, content.characterCount)
@@ -156,6 +165,7 @@ class Native:
                     "expanded": state.contains(self.atspi.STATE_EXPANDED)
                     if state.contains(self.atspi.STATE_EXPANDABLE)
                     else None,
+                    "selected": state.contains(self.atspi.STATE_SELECTED),
                     "bounds": bounds,
                     "states": [str(value) for value in state.getStates()],
                 }

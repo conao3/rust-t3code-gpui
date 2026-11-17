@@ -373,9 +373,112 @@ pub(super) fn merge(environments: &[(String, Value)], hidden: &HashSet<String>) 
     result
 }
 
+pub(super) fn chart_scale(peak: f64) -> (f64, Vec<f64>) {
+    if peak <= 0. {
+        return (0., vec![0.]);
+    }
+    let raw = peak / 4.;
+    let magnitude = 10_f64.powf(raw.log10().floor());
+    let normalized = raw / magnitude;
+    let step = if normalized > 5. {
+        10.
+    } else if normalized > 2. {
+        5.
+    } else if normalized > 1. {
+        2.
+    } else {
+        1.
+    } * magnitude;
+    let max = (peak / step).ceil() * step;
+    (
+        max,
+        (0..=(max / step).round() as usize)
+            .map(|index| index as f64 * step)
+            .collect(),
+    )
+}
+
+pub(super) fn chart_tangents(points: &[(f32, f32)]) -> Vec<f32> {
+    if points.len() < 2 {
+        return vec![0.; points.len()];
+    }
+    let slopes = points
+        .windows(2)
+        .map(|pair| {
+            let dx = pair[1].0 - pair[0].0;
+            if dx == 0. {
+                0.
+            } else {
+                (pair[1].1 - pair[0].1) / dx
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut tangents = vec![0.; points.len()];
+    tangents[0] = slopes[0];
+    tangents[points.len() - 1] = slopes[slopes.len() - 1];
+    for index in 1..points.len() - 1 {
+        tangents[index] = if slopes[index - 1] * slopes[index] <= 0. {
+            0.
+        } else {
+            (slopes[index - 1] + slopes[index]) / 2.
+        };
+    }
+    for (index, slope) in slopes.into_iter().enumerate() {
+        if slope == 0. {
+            tangents[index] = 0.;
+            tangents[index + 1] = 0.;
+            continue;
+        }
+        let a = tangents[index] / slope;
+        let b = tangents[index + 1] / slope;
+        let magnitude = a * a + b * b;
+        if magnitude > 9. {
+            let scale = 3. / magnitude.sqrt();
+            tangents[index] = scale * a * slope;
+            tangents[index + 1] = scale * b * slope;
+        }
+    }
+    tangents
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chart_matches_pinned_reference() {
+        let oracle: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/usage-chart-oracle.json"))
+                .unwrap();
+        for row in oracle["scales"].as_array().unwrap() {
+            let (max, ticks) = chart_scale(row["peak"].as_f64().unwrap());
+            assert!((max - row["max"].as_f64().unwrap()).abs() < 1e-8);
+            let expected = row["ticks"].as_array().unwrap();
+            assert_eq!(ticks.len(), expected.len());
+            for (actual, expected) in ticks.iter().zip(expected) {
+                assert!((actual - expected.as_f64().unwrap()).abs() < 1e-8);
+            }
+        }
+        for row in oracle["curves"].as_array().unwrap() {
+            let points = row["points"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|pair| {
+                    (
+                        pair[0].as_f64().unwrap() as f32,
+                        pair[1].as_f64().unwrap() as f32,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let tangents = chart_tangents(&points);
+            let expected = row["tangents"].as_array().unwrap();
+            assert_eq!(tangents.len(), expected.len());
+            for (actual, expected) in tangents.iter().zip(expected) {
+                assert!((f64::from(*actual) - expected.as_f64().unwrap()).abs() < 1e-5);
+            }
+        }
+    }
     #[test]
     fn windows_match_calendar_days_and_rolling_minutes() {
         let now = DateTime::parse_from_rfc3339("2026-11-18T01:12:34.567+09:00").unwrap();

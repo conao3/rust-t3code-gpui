@@ -717,6 +717,17 @@ where
             })
             .when(!loading, |this| {
                 this.on_action(cx.listener(Self::on_action_cancel))
+                    .on_key_down(cx.listener(|list, event: &gpui::KeyDownEvent, window, cx| {
+                        let entry = match event.keystroke.key.as_str() {
+                            "home" => list.rows_cache.entities.iter().find(|entry| entry.is_entry()),
+                            "end" => list.rows_cache.entities.iter().rfind(|entry| entry.is_entry()),
+                            _ => return,
+                        };
+                        if let Some(entry) = entry {
+                            list.select_item(entry.index(), window, cx);
+                            cx.stop_propagation();
+                        }
+                    }))
                     .on_action(cx.listener(Self::on_action_confirm))
                     .on_action(cx.listener(Self::on_action_select_next))
                     .on_action(cx.listener(Self::on_action_select_prev))

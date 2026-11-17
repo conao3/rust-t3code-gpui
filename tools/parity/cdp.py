@@ -190,6 +190,11 @@ class Cdp:
                     ),
                     None,
                 ),
+                "selected": any(
+                    p["value"].get("value") is True
+                    for p in n.get("properties", [])
+                    if p["name"] == "selected"
+                ),
             }
             for n in result["nodes"]
             if not n.get("ignored")

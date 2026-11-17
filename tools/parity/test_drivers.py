@@ -544,6 +544,31 @@ class ComparisonTests(unittest.TestCase):
         error.code = 2
         self.assertFalse(stale_object(error))
 
+    def test_large_snapshots_retry_stale_nodes_with_a_bounded_attempt_count(self):
+        from native import Native
+
+        class StaleError(Exception):
+            pass
+
+        context = Mock()
+        context.pending.return_value = False
+        glib = SimpleNamespace(
+            Error=StaleError, MainContext=SimpleNamespace(default=lambda: context)
+        )
+        app = object.__new__(Native)
+        app.snapshot = Mock(side_effect=[StaleError("Unknown object"), []])
+        with (
+            patch.dict(sys.modules, {"gi.repository": SimpleNamespace(GLib=glib)}),
+            patch("native.time.sleep"),
+            patch("native.time.monotonic", side_effect=[0, 30]),
+        ):
+            self.assertEqual(app.tree(), [])
+            self.assertEqual(app.snapshot.call_count, 2)
+            app.snapshot = Mock(side_effect=StaleError("Unknown object"))
+            with self.assertRaises(StaleError):
+                app.tree()
+            self.assertEqual(app.snapshot.call_count, 3)
+
     def test_native_click_uses_the_retrying_snapshot_instead_of_stale_objects(self):
         from native import Native
 

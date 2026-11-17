@@ -7,17 +7,38 @@ pub(super) struct Archive {
     error: Option<String>,
     loading: bool,
     pending: HashSet<String>,
+    sequence: u64,
+    refresh_pending: bool,
+    clock_task: Option<Task<()>>,
+    subscription: Option<Subscription>,
 }
 impl Archive {
     pub(super) fn new(root: WeakEntity<Root>, environment: String, cx: &mut Context<Self>) -> Self {
-        let view = Self {
-            root,
+        let mut view = Self {
+            root: root.clone(),
             environment,
             snapshot: Value::Null,
             error: None,
             loading: false,
             pending: HashSet::new(),
+            sequence: 0,
+            refresh_pending: false,
+            clock_task: None,
+            subscription: None,
         };
+        if let Some(owner) = root.upgrade() {
+            view.subscription = Some(cx.observe(&owner, |view, owner, cx| {
+                let sequence = owner
+                    .read(cx)
+                    .connection(&view.environment)
+                    .map(|connection| connection.shell().lock().expect("shell").sequence)
+                    .unwrap_or(0);
+                if sequence != view.sequence {
+                    view.sequence = sequence;
+                    view.refresh(cx);
+                }
+            }));
+        }
         let this = cx.entity().downgrade();
         cx.defer(move |cx| {
             let _ = this.update(cx, |view, cx| view.refresh(cx));
@@ -25,6 +46,10 @@ impl Archive {
         view
     }
     fn refresh(&mut self, cx: &mut Context<Self>) {
+        if self.loading {
+            self.refresh_pending = true;
+            return;
+        }
         self.loading = true;
         settings_controls::request(
             &self.root,
@@ -32,17 +57,52 @@ impl Archive {
             "orchestration.getArchivedShellSnapshot",
             json!({}),
             cx,
-            |view, result, _| {
+            |view, result, cx| {
                 view.loading = false;
                 match result {
                     Ok(snapshot) => {
                         view.snapshot = snapshot;
                         view.error = None;
+                        view.schedule_clock(cx);
                     }
                     Err(error) => view.error = Some(error.to_string()),
                 }
+                if std::mem::take(&mut view.refresh_pending) {
+                    view.refresh(cx);
+                }
             },
         );
+    }
+    fn schedule_clock(&mut self, cx: &mut Context<Self>) {
+        let now = SystemTime::now();
+        let delay = self.snapshot["threads"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|thread| [&thread["archivedAt"], &thread["createdAt"]])
+            .filter_map(Value::as_str)
+            .filter_map(|timestamp| humantime::parse_rfc3339(timestamp).ok())
+            .map(|timestamp| {
+                let seconds = now.duration_since(timestamp).unwrap_or_default().as_secs();
+                let unit = if seconds < 3600 {
+                    60
+                } else if seconds < 86400 {
+                    3600
+                } else {
+                    86400
+                };
+                Duration::from_secs(unit - seconds % unit)
+            })
+            .min();
+        self.clock_task = delay.map(|delay| {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(delay).await;
+                let _ = this.update(cx, |view, cx| {
+                    view.schedule_clock(cx);
+                    cx.notify();
+                });
+            })
+        });
     }
     fn perform(&mut self, id: String, delete: bool, cx: &mut Context<Self>) {
         if !self.pending.insert(id.clone()) {
@@ -105,18 +165,45 @@ impl Render for Archive {
             .as_array()
             .cloned()
             .unwrap_or_default();
+        let selected_project = self
+            .root
+            .upgrade()
+            .and_then(|root| root.read(cx).settings_project.clone());
+        let threads = threads
+            .into_iter()
+            .filter(|thread| {
+                selected_project
+                    .as_ref()
+                    .is_none_or(|project| thread["projectId"] == *project)
+            })
+            .collect::<Vec<_>>();
         let projects = self.snapshot["projects"]
             .as_array()
             .cloned()
             .unwrap_or_default();
-        if self.loading || threads.is_empty() {
-            content = content.child(div().child(if self.loading {
-                "Loading archived threads"
-            } else if self.error.is_some() {
-                "Could not load archived threads"
-            } else {
-                "No archived threads"
-            }));
+        if (self.loading && self.snapshot.is_null()) || threads.is_empty() {
+            content = content
+                .child(
+                    settings_controls::text("Archived threads").font_weight(FontWeight::SEMIBOLD),
+                )
+                .child(settings_controls::text(if self.loading {
+                    "Loading archived threads"
+                } else if self.error.is_some() {
+                    "Could not load archived threads"
+                } else {
+                    "No archived threads"
+                }))
+                .child(
+                    settings_controls::text(if self.loading {
+                        "Checking connected environments."
+                    } else if let Some(error) = &self.error {
+                        error
+                    } else {
+                        "Archived threads will appear here."
+                    })
+                    .text_sm()
+                    .text_color(theme.muted_foreground),
+                );
         }
         for (index, project) in projects.iter().enumerate() {
             let mut rows = threads
@@ -133,11 +220,18 @@ impl Render for Archive {
             if rows.is_empty() {
                 continue;
             }
-            let mut group = v_flex().id(("archive-project", index)).gap_2().child(
-                div()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(project["title"].as_str().unwrap_or_default().to_string()),
+            let group = v_flex().id(("archive-project", index)).gap_3().child(
+                settings_controls::text(project["title"].as_str().unwrap_or_default().to_string())
+                    .px_4()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD),
             );
+            let mut items = v_flex()
+                .rounded(px(12.))
+                .overflow_hidden()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.muted.opacity(0.25));
             for thread in rows {
                 let Some(id) = thread["id"].as_str() else {
                     continue;
@@ -147,27 +241,42 @@ impl Render for Archive {
                 let restore = id.clone();
                 let remove = id.clone();
                 let remove_title = title.clone();
-                group = group.child(
+                items = items.child(
                     h_flex()
+                        .id(SharedString::from(format!("archive-thread-{id}")))
                         .gap_3()
+                        .px_4()
                         .py_3()
                         .border_b_1()
                         .border_color(theme.border)
                         .child(
-                            v_flex().flex_1().child(title.clone()).child(
-                                div()
-                                    .text_xs()
-                                    .text_color(theme.muted_foreground)
-                                    .child(format!(
+                            v_flex()
+                                .flex_1()
+                                .child(settings_controls::text(title.clone()).text_sm())
+                                .child(
+                                    settings_controls::text(format!(
                                         "Archived {} · Created {}",
-                                        thread["archivedAt"].as_str().unwrap_or_default(),
-                                        thread["createdAt"].as_str().unwrap_or_default()
-                                    )),
-                            ),
+                                        relative_time(
+                                            thread["archivedAt"]
+                                                .as_str()
+                                                .or(thread["createdAt"].as_str())
+                                                .unwrap_or_default(),
+                                            SystemTime::now()
+                                        ),
+                                        relative_time(
+                                            thread["createdAt"].as_str().unwrap_or_default(),
+                                            SystemTime::now()
+                                        )
+                                    ))
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground),
+                                ),
                         )
                         .child(
                             Button::new(SharedString::from(format!("unarchive-{id}")))
-                                .label("Unarchive")
+                                .icon(gpui_kit::assets::IconName::ArchiveX)
+                                .outline()
+                                .compact()
                                 .accessibility_label(format!("Unarchive {title}"))
                                 .disabled(self.pending.contains(&id))
                                 .on_click(cx.listener(move |view, _, _, cx| {
@@ -176,7 +285,10 @@ impl Render for Archive {
                         )
                         .child(
                             Button::new(SharedString::from(format!("delete-{id}")))
-                                .label("Delete")
+                                .icon(gpui_kit::assets::IconName::Trash)
+                                .danger()
+                                .outline()
+                                .compact()
                                 .accessibility_label(format!("Delete {title}"))
                                 .disabled(self.pending.contains(&id))
                                 .on_click(cx.listener(move |view, _, window, cx| {
@@ -185,8 +297,21 @@ impl Render for Archive {
                         ),
                 );
             }
-            content = content.child(group);
+            content = content.child(group.child(items));
         }
         content
+    }
+}
+
+fn relative_time(timestamp: &str, now: SystemTime) -> String {
+    let Ok(timestamp) = humantime::parse_rfc3339(timestamp) else {
+        return String::new();
+    };
+    let seconds = now.duration_since(timestamp).unwrap_or_default().as_secs();
+    match seconds {
+        0..60 => "just now".to_string(),
+        60..3600 => format!("{}m ago", seconds / 60),
+        3600..86400 => format!("{}h ago", seconds / 3600),
+        _ => format!("{}d ago", seconds / 86400),
     }
 }

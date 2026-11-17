@@ -1,0 +1,194 @@
+{
+  "name": "settings-advanced-search-and-select-boundaries",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 900,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Settings"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "treeitem",
+        "name": "Chat"
+      },
+      "native": {
+        "role": "tree item",
+        "name": "Chat"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Advanced"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Show skills in slash menu",
+        "checked": true
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Show skills in slash menu",
+        "checked": true
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "switch",
+        "name": "Show skills in slash menu"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Show skills in slash menu"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Show skills in slash menu",
+        "checked": false
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Show skills in slash menu",
+        "checked": false
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Advanced"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "combobox",
+        "name": "Search settings"
+      }
+    },
+    {
+      "action": "type",
+      "value": "skills"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "listbox",
+        "name": "Settings search results"
+      },
+      "native": {
+        "role": "list box",
+        "name": "Settings search results"
+      }
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Show skills in slash menu",
+        "checked": false
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Show skills in slash menu",
+        "checked": false
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "combobox",
+        "name": "Send shortcut"
+      }
+    },
+    {
+      "action": "press",
+      "value": "end"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText",
+        "name": "Ctrl + Enter always",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Send shortcut"
+        }
+      },
+      "native": {
+        "role": "label",
+        "name": "Ctrl + Enter always",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Send shortcut"
+        }
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "combobox",
+        "name": "Send shortcut"
+      }
+    },
+    {
+      "action": "press",
+      "value": "home"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText",
+        "name": "Enter",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Send shortcut"
+        }
+      },
+      "native": {
+        "role": "label",
+        "name": "Enter",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Send shortcut"
+        }
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Close"
+      }
+    }
+  ]
+}

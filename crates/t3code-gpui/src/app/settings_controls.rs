@@ -88,7 +88,18 @@ impl SettingRow {
         let select = match definition.control {
             Control::Select(options) => Some(choice_select::state(
                 options,
-                value.as_str().unwrap_or_default(),
+                &match definition.key {
+                    "diffFilesCollapsed" => if value == true {
+                        "collapsed"
+                    } else {
+                        "expanded"
+                    }
+                    .to_string(),
+                    _ => value
+                        .as_str()
+                        .map(str::to_string)
+                        .unwrap_or_else(|| value.to_string()),
+                },
                 window,
                 cx,
             )),
@@ -143,7 +154,14 @@ impl SettingRow {
                 window,
                 |view, _, event: &SelectEvent<_>, _, cx| {
                     if let SelectEvent::Confirm(Some(value)) = event {
-                        view.save(json!(*value), cx);
+                        let value = match view.definition.key {
+                            "diffFilesCollapsed" => json!(*value == "collapsed"),
+                            "browserRecordingFrameRate" => {
+                                json!(value.parse::<u32>().expect("frame rate option"))
+                            }
+                            _ => json!(*value),
+                        };
+                        view.save(value, cx);
                     }
                 },
             ));
@@ -201,11 +219,56 @@ impl SettingRow {
 impl Render for SettingRow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let label = self.definition.label;
+        let accessible_label = match self.definition.key {
+            "timestampFormat" => "Timestamp format",
+            "confirmThreadUnpin" => "Confirm thread unpinning",
+            "confirmThreadArchive" => "Confirm thread archiving",
+            "confirmThreadDelete" => "Confirm thread deletion",
+            "confirmQuit" => "Quit shortcut behavior",
+            "voiceShortcutMode" => "Dictation shortcut mode",
+            "diffIgnoreWhitespace" => "Hide whitespace changes by default",
+            "proactivePanelsEnabled" => "Open pull requests and changes panels proactively",
+            "enableAgentBrowserAccess" => "Agent browser access",
+            "addProjectBaseDirectory" => "Add project base directory",
+            "newWorktreesStartFromOrigin" => "Start new worktrees from remote by default",
+            "fontSizeInterface" => "Interface font size",
+            "fontSizeCode" => "Code font size",
+            "fontSizePrompt" => "Prompt font size",
+            "fontSizeTerminal" => "Terminal font size",
+            _ => label,
+        };
         let value = self.value.clone();
         let key = self.definition.key;
+        let description = if key == "followUpBehavior" {
+            let shortcut = self
+                .root
+                .upgrade()
+                .map(|root| root.read(cx).settings.send_shortcut)
+                .unwrap_or(client_settings::SendShortcut::Enter);
+            format!(
+                "Queue follow-ups while the agent runs or steer the current run. {}",
+                match shortcut {
+                    client_settings::SendShortcut::ModEnterMultiline =>
+                        "Press Ctrl + Enter for single-line prompts or Ctrl + Shift + Enter for multiline prompts to do the opposite for one message.",
+                    client_settings::SendShortcut::ModEnter =>
+                        "Press Ctrl + Shift + Enter to do the opposite for one message.",
+                    client_settings::SendShortcut::Enter =>
+                        "Press Ctrl + Enter to do the opposite for one message.",
+                }
+            )
+        } else if key == "responseStreamingMode" {
+            if value == "turn" {
+                "Text appears once the agent finishes its turn."
+            } else {
+                "Each paragraph or code block appears as soon as it is complete."
+            }
+            .to_string()
+        } else {
+            self.definition.description.to_string()
+        };
         let control = match self.definition.control {
             Control::Switch => Switch::new(key)
-                .accessibility_label(label)
+                .accessibility_label(accessible_label)
                 .checked(if key == "sidebarAutoSettleAfterDays" {
                     !value.is_null()
                 } else if key == "sidebarProjectGroupingMode" {
@@ -225,18 +288,25 @@ impl Render for SettingRow {
                 }))
                 .into_any_element(),
             Control::Select(_) => Select::new(self.select.as_ref().expect("select state"))
-                .accessibility_label(label)
-                .w(px(225.))
-                .h(px(32.))
+                .accessibility_label(accessible_label)
+                .w(px(match key {
+                    "notificationMode" => 224.,
+                    "sidebarProjectSortOrder" => 176.,
+                    "screenReaderAnnouncements" => 192.,
+                    "sendShortcut" if value == "mod-enter-multiline" => 288.,
+                    "sendShortcut" if value == "mod-enter" => 208.,
+                    _ => 160.,
+                }))
+                .h(px(28.))
                 .into_any_element(),
             Control::Number(_, _) => NumberInput::new(&self.input)
-                .accessibility_label(label)
+                .accessibility_label(accessible_label)
                 .step_labels("Decrease", "Increase")
                 .w(px(110.))
                 .h(px(32.))
                 .into_any_element(),
             Control::Text => Input::new(&self.input)
-                .aria_label(label)
+                .aria_label(accessible_label)
                 .w(px(260.))
                 .h(px(32.))
                 .into_any_element(),
@@ -254,13 +324,12 @@ impl Render for SettingRow {
                 v_flex()
                     .flex_1()
                     .min_w_0()
-                    .gap_1()
-                    .child(div().text_sm().child(label))
+                    .gap(px(2.))
+                    .child(text(label).text_sm())
                     .child(
-                        div()
+                        text(description)
                             .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(self.definition.description),
+                            .text_color(cx.theme().muted_foreground),
                     ),
             )
             .when(
@@ -268,7 +337,15 @@ impl Render for SettingRow {
                 |row| {
                     row.child(
                         Button::new("reset")
-                            .label("Reset")
+                            .icon(gpui_kit::assets::IconName::Undo2)
+                            .accessibility_label(format!(
+                                "Reset {} to default",
+                                if key == "showSkillsInSlashMenu" {
+                                    "skills in slash menu".to_string()
+                                } else {
+                                    label.to_lowercase()
+                                }
+                            ))
                             .ghost()
                             .compact()
                             .on_click(cx.listener(|view, _, _, cx| view.reset(cx))),
@@ -320,4 +397,13 @@ pub(super) fn request<T: 'static>(
         });
     })
     .detach();
+}
+
+pub(super) fn text(value: impl Into<SharedString>) -> gpui::Stateful<gpui::Div> {
+    let value = value.into();
+    div()
+        .id(value.clone())
+        .role(accesskit::Role::Label)
+        .aria_value(value.clone())
+        .child(value)
 }
