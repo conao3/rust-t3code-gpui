@@ -357,7 +357,10 @@ impl Root {
                             .map(|(ix, part)| self.render_panel_part(ix, part, cx)),
                     )
                     .into_any_element(),
-                PanelBody::Diff(state) => div().flex_1().child(Diff::new(state)).into_any_element(),
+                PanelBody::Diff(state) => div()
+                    .flex_1()
+                    .child(Diff::new(state).soft_wrap(self.diff_view.wrap))
+                    .into_any_element(),
             }
         };
         Some(

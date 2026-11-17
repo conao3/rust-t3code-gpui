@@ -42,8 +42,10 @@ use crate::workspace;
 mod choice_select;
 mod composer;
 mod diff;
+mod diff_controls;
 mod files;
 mod find;
+mod git_controls;
 mod hosts;
 mod lineage;
 mod palette;
@@ -348,6 +350,8 @@ struct DetailsStamp {
 }
 
 pub struct Root {
+    diff_view: diff_controls::State,
+    git_state: git_controls::State,
     right_panel: right_panel::State,
     right_panel_threads: HashMap<(String, String), right_panel::State>,
     right_panel_target: Option<(String, String)>,
@@ -614,6 +618,8 @@ impl Root {
         .filter_map(|(section, expanded)| (!expanded).then_some(section))
         .collect();
         Self {
+            diff_view: diff_controls::State::default(),
+            git_state: git_controls::State::default(),
             right_panel: right_panel::State::default(),
             right_panel_threads: saved_panels.threads.into_iter().collect(),
             right_panel_target: None,
@@ -1205,6 +1211,8 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &ToggleFilePicker, window, cx| {
                 root.toggle_file_picker(window, cx)
             }))
+            .on_action(cx.listener(|root, action: &git_controls::GitAction, window, cx| root.git_action(action, window, cx)))
+            .on_action(cx.listener(|root, action: &diff_controls::SelectDiff, _, cx| root.select_diff(action, cx)))
             .on_action(cx.listener(|root, action: &right_panel::TabAction, _, cx| root.panel_tab_action(action, cx)))
             .on_action(cx.listener(|root, _: &ToggleRightPanel, window, cx| root.toggle_right_panel(window, cx)))
             .on_action(cx.listener(|root, _: &NewRightPanel, window, cx| root.new_panel(window, cx)))

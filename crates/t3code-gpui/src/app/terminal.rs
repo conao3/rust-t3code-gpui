@@ -36,7 +36,7 @@ impl Root {
         ))
     }
 
-    fn save_terminal_layout(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn save_terminal_layout(&mut self, cx: &mut Context<Self>) {
         if self.terminal_save_scheduled {
             return;
         }

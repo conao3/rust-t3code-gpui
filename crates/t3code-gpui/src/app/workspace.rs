@@ -64,7 +64,7 @@ impl Root {
                 0.
             }
             + if self.workspace_status.is_repo() {
-                83.
+                180.
             } else {
                 0.
             }
@@ -358,7 +358,8 @@ impl Root {
                                 .rounded(px(8.))
                                 .accessibility_label("Open changes")
                                 .on_click(cx.listener(|root, _, _, cx| root.toggle_diff(cx))),
-                        ),
+                        )
+                        .child(self.render_git_controls(cx)),
                 )
             })
             .when_some(self.workspace_status.error.clone(), |card, error| {

@@ -138,10 +138,7 @@ impl Root {
         }
         match self.right_panel.active.clone().as_deref() {
             Some("files") if self.explorer.is_none() => self.toggle_explorer(cx),
-            Some("diff") => {
-                self.right_panel.launcher = true;
-                self.toggle_diff(cx);
-            }
+            Some("diff") => self.refresh_diff(cx),
             Some(id) if id.starts_with("file:") => self.open_file(id[5..].into(), cx),
             _ => {}
         }
@@ -370,6 +367,17 @@ impl Root {
             self.render_surface_launcher(cx)
         } else {
             match self.right_panel.active.as_deref() {
+                Some("diff") => v_flex()
+                    .h_full()
+                    .min_h_0()
+                    .child(self.render_diff_toolbar(cx))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .children(self.render_file_panel(cx)),
+                    )
+                    .into_any_element(),
                 Some("files") => self
                     .render_explorer(cx)
                     .unwrap_or_else(|| div().child("Loading files…").into_any_element()),
