@@ -1654,7 +1654,32 @@ impl Root {
         div()
             .relative()
             .w_full()
-            .child(toolbar.child(self.composer_button(cx)))
+            .child(
+                toolbar
+                    .child(
+                        Button::new("dictation")
+                            .icon(IconName::Mic)
+                            .ghost()
+                            .size(px(28.))
+                            .accessibility_label(if self.dictation.recording.is_some() {
+                                "Stop dictation"
+                            } else {
+                                "Start dictation"
+                            })
+                            .tooltip(if self.dictation.recording.is_some() {
+                                "Stop dictation"
+                            } else {
+                                "Start dictation"
+                            })
+                            .disabled(self.dictation.busy)
+                            .on_click(
+                                cx.listener(|root, _, window, cx| {
+                                    root.toggle_dictation(window, cx)
+                                }),
+                            ),
+                    )
+                    .child(self.composer_button(cx)),
+            )
             .children(picker)
             .into_any_element()
     }

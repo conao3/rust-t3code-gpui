@@ -42,6 +42,7 @@ use crate::workspace;
 mod choice_select;
 mod composer;
 mod composer_controls;
+mod composer_dictation;
 mod composer_images;
 mod composer_prompts;
 mod composer_queue;
@@ -85,6 +86,7 @@ actions!(
     t3code_gpui,
     [
         Send,
+        Dictate,
         NewWithoutProject,
         SteerQueuedMessage,
         EditQueuedMessage,
@@ -139,6 +141,7 @@ actions!(
 /// The action of a T3 keybinding command this app implements.
 fn action_for(command: &str) -> Option<Box<dyn Action>> {
     Some(match command {
+        "composer.dictation" => Box::new(Dictate),
         "chat.newWithoutProject" => Box::new(NewWithoutProject),
         "thread.steerQueuedMessage" => Box::new(SteerQueuedMessage),
         "thread.editQueuedMessage" => Box::new(EditQueuedMessage),
@@ -348,6 +351,7 @@ struct ComposerControlsStamp {
     draft: bool,
     status: Option<ThreadStatus>,
     delivery: Delivery,
+    dictation: (bool, bool),
     queue_edit: Option<(String, bool)>,
     question: bool,
     empty: bool,
@@ -444,6 +448,7 @@ pub struct Root {
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
     composer_sends: HashSet<String>,
+    dictation: composer_dictation::Dictation,
     composer_attachments: HashMap<String, Vec<attachments::Pending>>,
     queue_edit: Option<composer_queue::Edit>,
     prompts: composer_prompts::Prompts,
@@ -708,6 +713,7 @@ impl Root {
             model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
             composer_sends: HashSet::new(),
+            dictation: composer_dictation::Dictation::default(),
             composer_attachments: HashMap::new(),
             queue_edit: None,
             prompts: composer_prompts::Prompts {
@@ -1154,6 +1160,7 @@ impl Render for Root {
             draft: self.draft.is_some(),
             status: self.open_entry().map(|entry| entry.status),
             delivery: self.composer_delivery(false),
+            dictation: (self.dictation.busy, self.dictation.recording.is_some()),
             queue_edit: self
                 .queue_edit
                 .as_ref()
@@ -1331,6 +1338,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &EditQueuedMessage, window, cx| root.edit_latest_queued(window, cx)))
             .on_action(cx.listener(|root, _: &SteerQueuedMessage, _, cx| root.steer_next_queued(cx)))
             .on_action(cx.listener(|root, _: &NewWithoutProject, window, cx| root.new_without_project(window, cx)))
+            .on_action(cx.listener(|root, _: &Dictate, window, cx| root.toggle_dictation(window, cx)))
             .on_action(cx.listener(|root, _: &SendAlternate, window, cx| root.send_intent(composer::SubmissionIntent::Alternate, window, cx)))
             .on_action(cx.listener(|root, _: &SendBackground, window, cx| {
                 if root.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }

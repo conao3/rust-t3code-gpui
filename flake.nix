@@ -90,7 +90,8 @@
             '';
             postFixup = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
               wrapProgram $out/bin/t3code-gpui \
-                --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath runtimeLibs}
+                --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath runtimeLibs} \
+                --prefix PATH : ${lib.makeBinPath [ pkgs.pipewire ]}
             '';
             meta = {
               license = lib.licenses.asl20;
@@ -125,6 +126,7 @@
                 ))
               ])
               ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+                pkgs.pipewire
                 pkgs.at-spi2-core
                 pkgs.gobject-introspection
                 pkgs.dbus

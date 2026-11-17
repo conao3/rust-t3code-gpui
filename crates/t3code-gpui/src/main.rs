@@ -3,6 +3,7 @@ mod appearance;
 mod attachments;
 mod client_settings;
 mod completion;
+mod dictation;
 mod drafts;
 mod explorer;
 mod inbox;
