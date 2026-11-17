@@ -234,6 +234,7 @@ fn color(role: &str, light: bool) -> Hsla {
         "sidebarRowActive" => (0x1a1b1b, 0xffffff),
         "sidebarRowHover" => (0x131313, 0xfcfcfc),
         "sidebarMutedForeground" => (0xa3a3a3, 0x71717b),
+        "secondaryLabel" => (0x8f8f8f, 0x71717b),
         "codeBackground" => (0x111111, 0xffffff),
         _ => unreachable!("unknown T3 color role"),
     };
@@ -266,6 +267,10 @@ pub fn sidebar_hover(cx: &App) -> Hsla {
 
 pub fn sidebar_muted(cx: &App) -> Hsla {
     themed_color("sidebarMutedForeground", cx)
+}
+
+pub fn secondary_label(cx: &App) -> Hsla {
+    themed_color("secondaryLabel", cx)
 }
 
 pub fn code_background(cx: &App) -> Hsla {
@@ -361,9 +366,15 @@ const EDITOR_ASSETS: &[(&str, &[u8])] = &[
 ];
 
 pub struct Assets;
+mod providers {
+    include!("../assets/providers/assets.rs");
+}
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> anyhow::Result<Option<std::borrow::Cow<'static, [u8]>>> {
         if let Some((_, data)) = EDITOR_ASSETS.iter().find(|(name, _)| *name == path) {
+            return Ok(Some(std::borrow::Cow::Borrowed(*data)));
+        }
+        if let Some((_, data)) = providers::ASSETS.iter().find(|(name, _)| *name == path) {
             return Ok(Some(std::borrow::Cow::Borrowed(*data)));
         }
         match path {
@@ -381,6 +392,12 @@ impl AssetSource for Assets {
     }
     fn list(&self, path: &str) -> anyhow::Result<Vec<SharedString>> {
         let mut paths = gpui_kit::assets::AllAssets.list(path)?;
+        paths.extend(
+            providers::ASSETS
+                .iter()
+                .filter(|(name, _)| name.starts_with(path))
+                .map(|(name, _)| SharedString::from(*name)),
+        );
         paths.extend(
             [
                 "icons/t3-openai.svg",
@@ -403,6 +420,30 @@ impl AssetSource for Assets {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn provider_svgs_decode_with_bounded_square_viewports_and_visible_pixels() {
+        use gpui_kit::SvgRenderer;
+        let renderer = SvgRenderer::new(std::sync::Arc::new(super::Assets));
+        for (path, bytes) in super::providers::ASSETS {
+            let image = renderer
+                .render_single_frame(bytes, 1.)
+                .unwrap_or_else(|error| panic!("{path}: {error}"));
+            let size = image.size(0);
+            assert_eq!(size.width, size.height, "{path}");
+            assert!(i32::from(size.width) <= 256, "{path}");
+            assert!(
+                image
+                    .as_bytes(0)
+                    .unwrap()
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|pixel| pixel[3] > 0),
+                "{path}"
+            );
+        }
+    }
+
     #[test]
     fn bundled_syntax_palettes_decode_for_the_pinned_highlighter() {
         for source in [

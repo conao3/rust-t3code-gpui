@@ -1,0 +1,74 @@
+{
+  "name": "sidebar-provider-icons-badges-and-row-spacing",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Provider fixture codex_hub, UI parity"
+      }
+    },
+    {
+      "action": "pointer",
+      "kind": "move",
+      "x": 700,
+      "y": 400
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Provider fixture codex_hub"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Provider fixture kiro, UI parity"
+      }
+    },
+    {
+      "action": "pointer",
+      "kind": "move",
+      "x": 700,
+      "y": 400
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Provider fixture kiro"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Provider fixture codex, UI parity"
+      }
+    },
+    {
+      "action": "pointer",
+      "kind": "move",
+      "x": 700,
+      "y": 400
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Provider fixture codex"
+      },
+      "count": 1
+    }
+  ]
+}

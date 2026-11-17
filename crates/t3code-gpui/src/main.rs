@@ -12,6 +12,7 @@ mod models;
 mod navigation;
 mod permissions;
 mod projects;
+mod provider_display;
 mod row_view;
 mod sidebar;
 mod tables;

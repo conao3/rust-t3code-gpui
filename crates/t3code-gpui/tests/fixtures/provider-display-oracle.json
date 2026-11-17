@@ -1,0 +1,7518 @@
+{
+  "sourceRevision": "24e77473ecf41bc1f7142529c7911c1c1aae1d76",
+  "sources": {
+    "packages/client-runtime/src/state/providerInstanceDisplay.ts": "54ef1a76cf419c96efaa456003677c85835d859915d629eadc3aa17ee544bf56",
+    "packages/client-runtime/src/state/models.ts": "d83e6539f7b5f09a34ab2b224d58d6f1d3f92611620f52fe0cfbaca67a061f28",
+    "packages/contracts/src/model.ts": "754f9f6611fadefcd72ccc1211102379a878026643092abca27e5f90fee00cf9",
+    "packages/contracts/src/providerInstance.ts": "ade67de404651ff6c5373ba1b0359f598c06d49f5e4de2aa77ebf396ab91233a",
+    "apps/web/src/providerInstances.ts": "52f34496c50b94919252cf9c4ee57c3fa042c6fb871bc3e7d17d0b4f45e7a3f9",
+    "packages/contracts/src/server.ts": "9230a643e5913f28022689201ea4825c6fbcb0ee3252e31d546af1fae9232e4b",
+    "packages/client-runtime/src/state/threadSort.ts": "52a7ff2bc25fad376b67dc84bdda5bc01536230aa58eef5f264f202550c2b805",
+    "apps/web/src/timestampFormat.ts": "fce7b51aff43c82eaec465064466c97d220626362b4603b7cf91d75b1c511e66",
+    "apps/web/src/components/sidebar/SidebarThreadRow.tsx": "5c9ac0509457488a23949754f0a7617189525dc20246a1691aa5a49dedc8c14f"
+  },
+  "adapter": "Contract string brands are identity functions; original display, metadata, badge, history and machine functions execute unchanged",
+  "initials": [
+    {
+      "input": "Codex",
+      "expected": "CO"
+    },
+    {
+      "input": "Codex (hub)",
+      "expected": "CH"
+    },
+    {
+      "input": "Theo's Codex",
+      "expected": "TC"
+    },
+    {
+      "input": "Codex 'hub'",
+      "expected": "CH"
+    },
+    {
+      "input": "Codex ’hub’",
+      "expected": "CH"
+    },
+    {
+      "input": "'",
+      "expected": ""
+    },
+    {
+      "input": "’",
+      "expected": ""
+    },
+    {
+      "input": "'',",
+      "expected": ""
+    },
+    {
+      "input": "( )",
+      "expected": ""
+    },
+    {
+      "input": "",
+      "expected": ""
+    },
+    {
+      "input": "A",
+      "expected": "A"
+    },
+    {
+      "input": "ß",
+      "expected": "SS"
+    },
+    {
+      "input": "ßeta test",
+      "expected": "SST"
+    },
+    {
+      "input": "🙂🙂🙂",
+      "expected": "🙂🙂"
+    },
+    {
+      "input": "日本語",
+      "expected": "日本"
+    },
+    {
+      "input": "日本 語",
+      "expected": "日語"
+    },
+    {
+      "input": "Ｃｏｄｅｘ hub",
+      "expected": "ＣH"
+    },
+    {
+      "input": "foo_bar",
+      "expected": "FB"
+    },
+    {
+      "input": "foo/bar",
+      "expected": "FB"
+    },
+    {
+      "input": "foo—bar",
+      "expected": "FB"
+    },
+    {
+      "input": "foo…bar",
+      "expected": "FB"
+    },
+    {
+      "input": "ab",
+      "expected": "A"
+    },
+    {
+      "input": "a﻿b",
+      "expected": "AB"
+    },
+    {
+      "input": "a　b",
+      "expected": "AB"
+    },
+    {
+      "input": "a b",
+      "expected": "AB"
+    },
+    {
+      "input": "a b",
+      "expected": "AB"
+    },
+    {
+      "input": "'foo' 'bar'",
+      "expected": "FB"
+    },
+    {
+      "input": "‘foo’ ‘bar’",
+      "expected": "FB"
+    },
+    {
+      "input": "_a_",
+      "expected": "A"
+    },
+    {
+      "input": "İstanbul Server",
+      "expected": "İS"
+    },
+    {
+      "input": "i̇ server",
+      "expected": "IS"
+    },
+    {
+      "input": "🤖 Codex",
+      "expected": "🤖C"
+    }
+  ],
+  "names": [
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex",
+        "displayName": ""
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex",
+        "displayName": "  "
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex_conao3"
+      },
+      "expected": "Codex Conao3"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex_conao3",
+        "displayName": ""
+      },
+      "expected": "Codex Conao3"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex_conao3",
+        "displayName": "  "
+      },
+      "expected": "Codex Conao3"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex Conao3"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "codex_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent",
+        "displayName": ""
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent",
+        "displayName": "  "
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent_conao3"
+      },
+      "expected": "Claude Agent Conao3"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent_conao3",
+        "displayName": ""
+      },
+      "expected": "Claude Agent Conao3"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent_conao3",
+        "displayName": "  "
+      },
+      "expected": "Claude Agent Conao3"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude Agent Conao3"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "claudeAgent_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode"
+      },
+      "expected": "OpenCode"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode",
+        "displayName": ""
+      },
+      "expected": "OpenCode"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode",
+        "displayName": "  "
+      },
+      "expected": "OpenCode"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode_conao3"
+      },
+      "expected": "Opencode Conao3"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode_conao3",
+        "displayName": ""
+      },
+      "expected": "Opencode Conao3"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode_conao3",
+        "displayName": "  "
+      },
+      "expected": "Opencode Conao3"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "opencode_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry"
+      },
+      "expected": "ACP Registry"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry",
+        "displayName": ""
+      },
+      "expected": "ACP Registry"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry",
+        "displayName": "  "
+      },
+      "expected": "ACP Registry"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry_conao3"
+      },
+      "expected": "Acp Registry Conao3"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry_conao3",
+        "displayName": ""
+      },
+      "expected": "Acp Registry Conao3"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry_conao3",
+        "displayName": "  "
+      },
+      "expected": "Acp Registry Conao3"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "acpRegistry_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity"
+      },
+      "expected": "Antigravity"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity",
+        "displayName": ""
+      },
+      "expected": "Antigravity"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity",
+        "displayName": "  "
+      },
+      "expected": "Antigravity"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity_conao3"
+      },
+      "expected": "Antigravity Conao3"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity_conao3",
+        "displayName": ""
+      },
+      "expected": "Antigravity Conao3"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity_conao3",
+        "displayName": "  "
+      },
+      "expected": "Antigravity Conao3"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "antigravity_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor"
+      },
+      "expected": "Cursor"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor",
+        "displayName": ""
+      },
+      "expected": "Cursor"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor",
+        "displayName": "  "
+      },
+      "expected": "Cursor"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor_conao3"
+      },
+      "expected": "Cursor Conao3"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor_conao3",
+        "displayName": ""
+      },
+      "expected": "Cursor Conao3"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor_conao3",
+        "displayName": "  "
+      },
+      "expected": "Cursor Conao3"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "cursor_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok"
+      },
+      "expected": "Grok"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok",
+        "displayName": ""
+      },
+      "expected": "Grok"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok",
+        "displayName": "  "
+      },
+      "expected": "Grok"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok_conao3"
+      },
+      "expected": "Grok Conao3"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok_conao3",
+        "displayName": ""
+      },
+      "expected": "Grok Conao3"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok_conao3",
+        "displayName": "  "
+      },
+      "expected": "Grok Conao3"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "grok_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx"
+      },
+      "expected": "fx"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx",
+        "displayName": ""
+      },
+      "expected": "fx"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx",
+        "displayName": "  "
+      },
+      "expected": "fx"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx_conao3"
+      },
+      "expected": "Fx Conao3"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx_conao3",
+        "displayName": ""
+      },
+      "expected": "Fx Conao3"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx_conao3",
+        "displayName": "  "
+      },
+      "expected": "Fx Conao3"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "fx_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro"
+      },
+      "expected": "Kiro"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro",
+        "displayName": ""
+      },
+      "expected": "Kiro"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro",
+        "displayName": "  "
+      },
+      "expected": "Kiro"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro_conao3"
+      },
+      "expected": "Kiro Conao3"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro_conao3",
+        "displayName": ""
+      },
+      "expected": "Kiro Conao3"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro_conao3",
+        "displayName": "  "
+      },
+      "expected": "Kiro Conao3"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "kiro_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse"
+      },
+      "expected": "Muse Code"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse",
+        "displayName": ""
+      },
+      "expected": "Muse Code"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse",
+        "displayName": "  "
+      },
+      "expected": "Muse Code"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse_conao3"
+      },
+      "expected": "Muse Conao3"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse_conao3",
+        "displayName": ""
+      },
+      "expected": "Muse Conao3"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse_conao3",
+        "displayName": "  "
+      },
+      "expected": "Muse Conao3"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "muse_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi"
+      },
+      "expected": "Pi"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi",
+        "displayName": ""
+      },
+      "expected": "Pi"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi",
+        "displayName": "  "
+      },
+      "expected": "Pi"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi_conao3"
+      },
+      "expected": "Pi Conao3"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi_conao3",
+        "displayName": ""
+      },
+      "expected": "Pi Conao3"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi_conao3",
+        "displayName": "  "
+      },
+      "expected": "Pi Conao3"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "pi_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible"
+      },
+      "expected": "Openai Compatible"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible",
+        "displayName": ""
+      },
+      "expected": "Openai Compatible"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible",
+        "displayName": "  "
+      },
+      "expected": "Openai Compatible"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible_conao3"
+      },
+      "expected": "Openai Compatible Conao3"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible_conao3",
+        "displayName": ""
+      },
+      "expected": "Openai Compatible Conao3"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible_conao3",
+        "displayName": "  "
+      },
+      "expected": "Openai Compatible Conao3"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "openaiCompatible_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver"
+      },
+      "expected": "Custom Driver"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver",
+        "displayName": ""
+      },
+      "expected": "Custom Driver"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver",
+        "displayName": "  "
+      },
+      "expected": "Custom Driver"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver_conao3"
+      },
+      "expected": "Custom Driver Conao3"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver_conao3",
+        "displayName": ""
+      },
+      "expected": "Custom Driver Conao3"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver_conao3",
+        "displayName": "  "
+      },
+      "expected": "Custom Driver Conao3"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver_conao3",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver_conao3",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver_conao3",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "customDriver_conao3",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "﻿name﻿"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    }
+  ],
+  "accents": [
+    {
+      "input": "",
+      "expected": null
+    },
+    {
+      "input": " ",
+      "expected": null
+    },
+    {
+      "input": "#000000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffffff",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#Aa00Ff",
+      "expected": "#Aa00Ff"
+    },
+    {
+      "input": "﻿#123456﻿",
+      "expected": "#123456"
+    },
+    {
+      "input": "#123",
+      "expected": null
+    },
+    {
+      "input": "#1234567",
+      "expected": null
+    },
+    {
+      "input": "#12zz34",
+      "expected": null
+    },
+    {
+      "input": "red",
+      "expected": null
+    },
+    {
+      "input": "#日本語",
+      "expected": null
+    },
+    {
+      "input": "#123456",
+      "expected": null
+    }
+  ],
+  "contrast": [
+    {
+      "input": "#000000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#000040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#000080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#0000c0",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#0000ff",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#004000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#004040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#004080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#0040c0",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#0040ff",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#008000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#008040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#008080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#0080c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#0080ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00c000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00c040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00c080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00c0c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00c0ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00ff00",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00ff40",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00ff80",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00ffc0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00ffff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#400000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#400040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#400080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#4000c0",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#4000ff",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#404000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#404040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#404080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#4040c0",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#4040ff",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#408000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#408040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#408080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#4080c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#4080ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40c000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40c040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40c080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40c0c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40c0ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40ff00",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40ff40",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40ff80",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40ffc0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#40ffff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#800000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#800040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#800080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#8000c0",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#8000ff",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#804000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#804040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#804080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#8040c0",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#8040ff",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#808000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#808040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#808080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#8080c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#8080ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80c000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80c040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80c080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80c0c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80c0ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80ff00",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80ff40",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80ff80",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80ffc0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#80ffff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c00000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#c00040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#c00080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#c000c0",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#c000ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c04000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#c04040",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#c04080",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#c040c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c040ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c08000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c08040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c08080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c080c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c080ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0c000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0c040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0c080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0c0c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0c0ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0ff00",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0ff40",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0ff80",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0ffc0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#c0ffff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff0000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff0040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff0080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff00c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff00ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff4000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff4040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff4080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff40c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff40ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff8000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff8040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff8080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff80c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ff80ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffc000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffc040",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffc080",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffc0c0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffc0ff",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffff00",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffff40",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffff80",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffffc0",
+      "expected": "#000000"
+    },
+    {
+      "input": "#ffffff",
+      "expected": "#000000"
+    }
+  ],
+  "stacks": [
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": []
+      },
+      "expected": [
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a"
+        ]
+      },
+      "expected": [
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "b"
+        ]
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b"
+        ]
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "b",
+          "a"
+        ]
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "a",
+          "b"
+        ]
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ]
+      },
+      "expected": [
+        "c",
+        "d",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "a",
+          "c",
+          "b",
+          "d"
+        ]
+      },
+      "expected": [
+        "b",
+        "d",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": []
+      },
+      "expected": [
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a"
+        ]
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "b"
+        ]
+      },
+      "expected": [
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b"
+        ]
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "b",
+          "a"
+        ]
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "a",
+          "b"
+        ]
+      },
+      "expected": [
+        "a",
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ]
+      },
+      "expected": [
+        "c",
+        "d",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "a",
+          "c",
+          "b",
+          "d"
+        ]
+      },
+      "expected": [
+        "c",
+        "d",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [],
+        "runtime": null
+      },
+      "expected": [
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "b"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "b",
+          "a"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "a",
+          "b"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "c",
+        "d",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "b",
+        "d",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [],
+        "runtime": null
+      },
+      "expected": [
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "b"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "b",
+          "a"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "a",
+          "b"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "a",
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "c",
+        "d",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "runtime": null
+      },
+      "expected": [
+        "c",
+        "d",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "b",
+          "a"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "a",
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "c",
+        "d",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "d",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "b",
+          "a"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "a",
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "c",
+        "d",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "runtime": {
+          "providerInstanceId": "a"
+        }
+      },
+      "expected": [
+        "b",
+        "d",
+        "a"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "b",
+          "a"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "a",
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "a",
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "c",
+        "d",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "a"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "c",
+        "d",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "b",
+          "a"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "a",
+          "b"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "a",
+        "a",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "c",
+        "d",
+        "b"
+      ]
+    },
+    {
+      "input": {
+        "modelSelection": {
+          "instanceId": "b"
+        },
+        "providerInstanceHistory": [
+          "a",
+          "b",
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "runtime": {
+          "providerInstanceId": "b"
+        }
+      },
+      "expected": [
+        "c",
+        "d",
+        "b"
+      ]
+    }
+  ],
+  "catalogs": [
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "accentColor": "#445566"
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": false,
+          "accent": "#445566",
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "accentColor": "invalid"
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "accentColor": "#445566"
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": false,
+          "accent": "#445566",
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "accentColor": "invalid"
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "accentColor": "#445566"
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": true,
+          "accent": "#445566",
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "accentColor": "invalid"
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": false,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": false,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "accentColor": "#445566"
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": true,
+          "accent": "#445566",
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "codex",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "accentColor": "invalid"
+          },
+          {
+            "instanceId": "codex_second",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "codex",
+          "driver": "codex",
+          "name": "Codex",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        },
+        {
+          "instance_id": "codex_second",
+          "driver": "codex",
+          "name": "Codex Second",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "codex",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          },
+          {
+            "instanceId": "b",
+            "driver": "claudeAgent",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          },
+          {
+            "instanceId": "c",
+            "driver": "opencode",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "codex",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        },
+        {
+          "instance_id": "b",
+          "driver": "claudeAgent",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        },
+        {
+          "instance_id": "c",
+          "driver": "opencode",
+          "name": "C",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": "https://example.invalid/override.svg",
+          "badge": false
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "agentId": "same",
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": "https://example.invalid/override.svg",
+          "badge": true
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "agentId": "other",
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "other",
+          "registry_icon": "https://example.invalid/override.svg",
+          "badge": false
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "source": "local",
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "source": "local",
+                "agentId": "same",
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "source": "local",
+                "agentId": "other",
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": null,
+          "badge": false
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "source": "registry",
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": null,
+          "registry_icon": "https://example.invalid/override.svg",
+          "badge": false
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "source": "registry",
+                "agentId": "same",
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": "https://example.invalid/override.svg",
+          "badge": true
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": true
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [
+          {
+            "instanceId": "a",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": [],
+            "iconUrl": "https://example.invalid/a.svg"
+          },
+          {
+            "instanceId": "b",
+            "driver": "acpRegistry",
+            "enabled": true,
+            "installed": true,
+            "status": "ready",
+            "models": []
+          }
+        ],
+        "settings": {
+          "providerInstances": {
+            "a": {
+              "config": {
+                "source": "registry",
+                "agentId": "other",
+                "registryIconUrl": "  https://example.invalid/override.svg  "
+              }
+            },
+            "b": {
+              "config": {
+                "agentId": "same"
+              }
+            }
+          }
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": [
+        {
+          "instance_id": "a",
+          "driver": "acpRegistry",
+          "name": "A",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "other",
+          "registry_icon": "https://example.invalid/override.svg",
+          "badge": false
+        },
+        {
+          "instance_id": "b",
+          "driver": "acpRegistry",
+          "name": "B",
+          "enabled": true,
+          "accent": null,
+          "registry_agent": "same",
+          "registry_icon": null,
+          "badge": false
+        }
+      ]
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "server"
+          }
+        }
+      },
+      "machine": "server",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": null
+        },
+        "environment": {
+          "platform": {
+            "machine": "server"
+          }
+        }
+      },
+      "machine": "server",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "desktop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "server"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "laptop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "server"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "cloud"
+          }
+        }
+      },
+      "machine": "cloud",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": null
+        },
+        "environment": {
+          "platform": {
+            "machine": "cloud"
+          }
+        }
+      },
+      "machine": "cloud",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "desktop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "cloud"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "laptop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "cloud"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "linux"
+          }
+        }
+      },
+      "machine": "linux",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": null
+        },
+        "environment": {
+          "platform": {
+            "machine": "linux"
+          }
+        }
+      },
+      "machine": "linux",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "desktop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "linux"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "laptop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "linux"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": null
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "desktop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "laptop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "desktop"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "laptop"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": null
+        },
+        "environment": {
+          "platform": {
+            "machine": "laptop"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "desktop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "laptop"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "laptop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "laptop"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "mac-mini"
+          }
+        }
+      },
+      "machine": "mac-mini",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": null
+        },
+        "environment": {
+          "platform": {
+            "machine": "mac-mini"
+          }
+        }
+      },
+      "machine": "mac-mini",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "desktop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "mac-mini"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "laptop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "mac-mini"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {}
+        },
+        "environment": {
+          "platform": {
+            "machine": "mac-studio"
+          }
+        }
+      },
+      "machine": "mac-studio",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": null
+        },
+        "environment": {
+          "platform": {
+            "machine": "mac-studio"
+          }
+        }
+      },
+      "machine": "mac-studio",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "desktop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "mac-studio"
+          }
+        }
+      },
+      "machine": "desktop",
+      "entries": []
+    },
+    {
+      "input": {
+        "providers": [],
+        "settings": {
+          "providerInstances": {},
+          "environmentIcon": "laptop"
+        },
+        "environment": {
+          "platform": {
+            "machine": "mac-studio"
+          }
+        }
+      },
+      "machine": "laptop",
+      "entries": []
+    }
+  ],
+  "times": [
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-17T12:01:00.000Z",
+      "expected": "now"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-17T12:00:00.000Z",
+      "expected": "now"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-17T11:59:00.001Z",
+      "expected": "now"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-17T11:59:00.000Z",
+      "expected": "1m"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-17T11:00:00.001Z",
+      "expected": "59m"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-17T11:00:00.000Z",
+      "expected": "1h"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-16T12:00:00.001Z",
+      "expected": "23h"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-16T12:00:00.000Z",
+      "expected": "1d"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2026-11-15T12:00:00.000Z",
+      "expected": "2d"
+    },
+    {
+      "now": 1794916800000,
+      "timestamp": "2025-11-17T12:00:00.000Z",
+      "expected": "365d"
+    }
+  ],
+  "activity": [
+    {
+      "input": {},
+      "expected": null
+    },
+    {
+      "input": {
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T02:00:00Z"
+    },
+    {
+      "input": {
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "latestUserMessageAt": "invalid"
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T02:00:00Z"
+    },
+    {
+      "input": {
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "latestUserMessageAt": "2026-11-17T03:00:00Z"
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    },
+    {
+      "input": {
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    },
+    {
+      "input": {
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "invalid"
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T02:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestUserMessageAt": "invalid"
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T02:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestUserMessageAt": "2026-11-17T03:00:00Z"
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "invalid",
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z"
+      },
+      "expected": "2026-11-17T00:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T02:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": "2026-11-17T00:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestUserMessageAt": "invalid"
+      },
+      "expected": "2026-11-17T00:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T02:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestUserMessageAt": "invalid",
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": "2026-11-17T00:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestUserMessageAt": "2026-11-17T03:00:00Z"
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "requestedAt": "2026-11-17T02:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "requestedAt": "2026-11-17T01:00:00Z",
+          "startedAt": "2026-11-17T04:00:00Z",
+          "completedAt": "2026-11-17T05:00:00Z"
+        }
+      },
+      "expected": "2026-11-17T05:00:00Z"
+    },
+    {
+      "input": {
+        "updatedAt": "2026-11-17T00:00:00Z",
+        "latestUserMessageAt": "2026-11-17T03:00:00Z",
+        "latestRun": {
+          "completedAt": "invalid"
+        }
+      },
+      "expected": "2026-11-17T03:00:00Z"
+    }
+  ]
+}

@@ -7676,6 +7676,7 @@ dependencies = [
  "icu_locale_core",
  "markdown",
  "notify-rust",
+ "regex",
  "serde",
  "serde_json",
  "sys-locale",

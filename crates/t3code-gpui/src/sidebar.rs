@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 use t3_client::projection::ShellState;
@@ -41,6 +42,50 @@ pub struct ThreadEntry {
     pub pin_order: Option<String>,
     pub snoozed_until: Option<String>,
     pub launched_from: Option<(String, String)>,
+    pub provider_stack: Vec<String>,
+    pub activity_timestamp: Option<String>,
+}
+
+pub fn activity_timestamp(thread: &Value) -> Option<String> {
+    let candidates = [
+        thread.get("latestUserMessageAt"),
+        thread.pointer("/latestRun/requestedAt"),
+        thread.pointer("/latestRun/startedAt"),
+        thread.pointer("/latestRun/completedAt"),
+    ];
+    let mut latest = None;
+    for candidate in candidates.into_iter().flatten().filter_map(Value::as_str) {
+        if let Ok(timestamp) = humantime::parse_rfc3339(candidate)
+            && latest
+                .as_ref()
+                .is_none_or(|(_, previous)| timestamp > *previous)
+        {
+            latest = Some((candidate, timestamp));
+        }
+    }
+    latest.map(|(value, _)| value.to_string()).or_else(|| {
+        let value = text(thread, "updatedAt");
+        humantime::parse_rfc3339(value)
+            .ok()
+            .map(|_| value.to_string())
+    })
+}
+
+pub fn relative_label(timestamp: &str, now: SystemTime) -> String {
+    let Ok(timestamp) = humantime::parse_rfc3339(timestamp) else {
+        return String::new();
+    };
+    let minutes = now.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() / 60;
+    let elapsed = (UNIX_EPOCH + std::time::Duration::from_secs(minutes * 60))
+        .duration_since(timestamp)
+        .unwrap_or_default()
+        .as_secs();
+    match elapsed {
+        0..60 => "now".into(),
+        60..3600 => format!("{}m", elapsed / 60),
+        3600..86400 => format!("{}h", elapsed / 3600),
+        _ => format!("{}d", elapsed / 86400),
+    }
 }
 
 fn text<'a>(value: &'a Value, key: &str) -> &'a str {
@@ -136,6 +181,8 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
                         l.get("threadId")?.as_str()?.to_string(),
                     ))
                 }),
+                provider_stack: crate::provider_display::stack(thread),
+                activity_timestamp: activity_timestamp(thread),
             }
         })
         .collect()
@@ -364,6 +411,29 @@ pub fn newly_needing_attention<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activity_and_compact_time_match_the_original() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/provider-display-oracle.json"
+        ))
+        .unwrap();
+        for case in fixture["activity"].as_array().unwrap() {
+            assert_eq!(
+                activity_timestamp(&case["input"]).as_deref(),
+                case["expected"].as_str(),
+                "{case}"
+            );
+        }
+        for case in fixture["times"].as_array().unwrap() {
+            let now = UNIX_EPOCH + std::time::Duration::from_millis(case["now"].as_u64().unwrap());
+            assert_eq!(
+                relative_label(case["timestamp"].as_str().unwrap(), now),
+                case["expected"].as_str().unwrap(),
+                "{case}"
+            );
+        }
+    }
     use serde_json::json;
 
     fn thread(extra: Value) -> Value {
@@ -488,6 +558,8 @@ mod tests {
             pin_order: None,
             snoozed_until: None,
             launched_from: None,
+            provider_stack: Vec::new(),
+            activity_timestamp: None,
         }
     }
 

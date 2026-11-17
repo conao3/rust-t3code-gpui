@@ -39,6 +39,7 @@ use crate::timeline::{self, Pending, Row, RowKind};
 use crate::workspace;
 
 mod lineage;
+mod sidebar_branding;
 mod sidebar_controls;
 
 type CommandFuture =
@@ -346,6 +347,7 @@ impl Render for TimelinePane {
 
 #[derive(PartialEq)]
 struct SidebarStamp {
+    catalog_revision: u64,
     jump_labels: Vec<Option<String>>,
     history_available: (bool, bool),
     entries_revision: u64,
@@ -469,6 +471,7 @@ pub struct Root {
     runtime: Handle,
     connections: Vec<Arc<Connection>>,
     model_catalogs: HashMap<String, (Value, Vec<models::Instance>)>,
+    sidebar_catalogs: HashMap<String, crate::provider_display::Catalog>,
     model_catalog_revision: u64,
     composer_controls: Entity<ComposerControlsPane>,
     composer_controls_stamp: Option<ComposerControlsStamp>,
@@ -715,6 +718,7 @@ impl Root {
             runtime,
             connections,
             model_catalogs: HashMap::new(),
+            sidebar_catalogs: HashMap::new(),
             model_catalog_revision: 0,
             composer_controls: cx.new(|_| ComposerControlsPane { root: sidebar_root }),
             composer_controls_stamp: None,
@@ -1443,9 +1447,14 @@ impl Root {
             Change::Config { environment } => {
                 self.model_catalog_revision = self.model_catalog_revision.wrapping_add(1);
                 if let Some(config) = self.config_of(&environment) {
+                    self.sidebar_catalogs.insert(
+                        environment.clone(),
+                        crate::provider_display::Catalog::from_config(&config),
+                    );
                     let instances = models::instances(&config);
                     self.model_catalogs.insert(environment, (config, instances));
                 } else {
+                    self.sidebar_catalogs.remove(&environment);
                     self.model_catalogs.remove(&environment);
                 }
                 self.shell_dirty = true;
@@ -4161,6 +4170,8 @@ impl Root {
                     .flatten();
                 let family_key = entry.key();
                 let selected = open.as_ref().is_some_and(|(env, id)| entry.is(env, id));
+                let receded =
+                    !selected && matches!(entry.status, ThreadStatus::Idle | ThreadStatus::Working);
                 let dot = match entry.status {
                     ThreadStatus::Approval | ThreadStatus::Input => Some(theme.warning),
                     ThreadStatus::Working => Some(theme.primary),
@@ -4192,6 +4203,7 @@ impl Root {
                 let child_index = rows.len();
                 rows.push(
                     v_flex()
+                        .group("sidebar-row")
                         .id(SharedString::from(format!(
                             "thread:{environment}:{thread_id}"
                         )))
@@ -4209,14 +4221,33 @@ impl Root {
                         })
                         .w_full()
                         .pl(px(crate::appearance::ROW_INSET + 16. * depth as f32))
-                        .pr_2()
+                        .pr(px(crate::appearance::ROW_INSET))
+                        .my(px(2.))
                         .py_2()
                         .gap_1()
                         .rounded_md()
                         .when(selected, |row| row.bg(sidebar_active))
+                        .when(selected && self.settings.light_theme, |row| {
+                            row.relative().child(
+                                div()
+                                    .absolute()
+                                    .inset_0()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(theme.sidebar_border.opacity(0.7)),
+                            )
+                        })
+                        .when(
+                            !selected
+                                && matches!(
+                                    entry.status,
+                                    ThreadStatus::Idle | ThreadStatus::Working
+                                ),
+                            |row| row.text_color(sidebar_muted.opacity(0.75)),
+                        )
                         .when(settled || snoozed, |row| row.text_color(sidebar_muted))
                         .hover(|row| {
-                            row.bg(if selected {
+                            row.text_color(theme.sidebar_foreground).bg(if selected {
                                 sidebar_active
                             } else {
                                 sidebar_hover
@@ -4237,19 +4268,9 @@ impl Root {
                         .child(
                             h_flex()
                                 .w_full()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(sidebar_muted)
-                                        .when(remote, |chip| {
-                                            chip.px_1()
-                                                .rounded_sm()
-                                                .bg(theme.warning.opacity(0.15))
-                                                .text_color(theme.warning)
-                                        })
-                                        .child(entry.environment.clone()),
-                                )
+                                .h(px(20.))
+                                .gap(px(6.))
+                                .child(self.render_host_chip(&entry.environment, remote, cx))
                                 .child(div().flex_1())
                                 .when_some(jump_label.clone(), |row, label| {
                                     row.child(
@@ -4274,38 +4295,50 @@ impl Root {
                                             status.absolute().opacity(0.)
                                         })
                                         .text_xs()
-                                        .text_color(dot.unwrap_or(sidebar_muted))
+                                        .text_color(
+                                            dot.unwrap_or(crate::appearance::secondary_label(cx)),
+                                        )
                                         .child(if entry.status == ThreadStatus::Idle {
-                                            humantime::parse_rfc3339(
-                                                entry
-                                                    .latest_user_message_at
-                                                    .as_deref()
-                                                    .unwrap_or(&entry.updated_at),
-                                            )
-                                            .ok()
-                                            .and_then(|time| {
-                                                SystemTime::now().duration_since(time).ok()
-                                            })
-                                            .map(|age| {
-                                                if age.as_secs() >= 3600 {
-                                                    format!("{}h", age.as_secs() / 3600)
-                                                } else {
-                                                    format!("{}m", age.as_secs() / 60)
-                                                }
-                                            })
-                                            .unwrap_or_default()
+                                            entry
+                                                .activity_timestamp
+                                                .as_deref()
+                                                .map(|time| {
+                                                    sidebar::relative_label(time, SystemTime::now())
+                                                })
+                                                .unwrap_or_default()
                                         } else {
                                             entry.status.label().to_string()
                                         }),
                                 ),
                         )
                         .child(
-                            div()
-                                .flex_1()
+                            h_flex()
+                                .h(px(20.))
                                 .min_w_0()
-                                .truncate()
+                                .gap_1()
                                 .text_sm()
-                                .child(entry.title.clone()),
+                                .line_height(px(20.))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_color(theme.sidebar_foreground.opacity(if receded {
+                                            0.75
+                                        } else {
+                                            1.
+                                        }))
+                                        .font_weight(if receded {
+                                            FontWeight::NORMAL
+                                        } else {
+                                            FontWeight::MEDIUM
+                                        })
+                                        .group_hover("sidebar-row", |title| {
+                                            title.text_color(theme.sidebar_foreground)
+                                        })
+                                        .child(entry.title.clone()),
+                                )
+                                .children(self.render_sidebar_provider_stack(&entry, cx)),
                         )
                         .when_some(family, |row, family| {
                             let label = match (family.collapsed, family.working) {
@@ -4427,6 +4460,7 @@ impl Root {
                     .flex_1()
                     .overflow_y_scroll()
                     .track_scroll(&self.sidebar_scroll)
+                    .gap(px(1.))
                     .p_2()
                     .children(rows),
             )
@@ -6506,6 +6540,7 @@ impl Render for Root {
             (f32::from(window.viewport_size().width) - 640.).max(208.),
         );
         let sidebar_stamp = SidebarStamp {
+            catalog_revision: self.model_catalog_revision,
             jump_labels: if self.jump_hints && !self.picker_open && !self.palette_open {
                 keymap::jump_labels(&self.key_rules, &|name| self.key_context(name, window, cx))
             } else {
