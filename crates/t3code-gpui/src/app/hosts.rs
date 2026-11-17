@@ -2,6 +2,7 @@ use super::*;
 
 impl Root {
     pub(super) fn toggle_hosts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.usage_page = None;
         self.settings_open = true;
         self.settings_page = "connections";
         self.hosts_open = false;

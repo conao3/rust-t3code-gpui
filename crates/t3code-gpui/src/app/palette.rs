@@ -17,7 +17,7 @@ impl Root {
 
     pub(super) fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 11] = [
+        let commands: [(&str, Box<dyn Action>); 12] = [
             ("New thread", Box::new(NewThread)),
             ("Next Done or waiting thread", Box::new(NextDone)),
             ("Settle the thread", Box::new(Settle)),
@@ -29,6 +29,7 @@ impl Root {
             ("Toggle the sidebar", Box::new(ToggleSidebar)),
             ("Manage hosts", Box::new(ManageHosts)),
             ("Settings", Box::new(OpenSettings)),
+            ("Usage", Box::new(OpenUsage)),
         ];
         let threads = self.entries.iter().map(|entry| {
             CommandItem::new()

@@ -7697,6 +7697,7 @@ dependencies = [
  "gpui-pre-wgpu",
  "html-escape",
  "humantime",
+ "iana-time-zone",
  "icu_calendar",
  "icu_collator",
  "icu_datetime",

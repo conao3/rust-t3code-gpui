@@ -1,0 +1,128 @@
+{
+  "name": "usage-metrics-periods-and-shortcuts",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {
+      "action": "press",
+      "value": "ctrl+u"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Refresh limits"
+      }
+    },
+    {
+      "action": "press",
+      "value": "c"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Refresh usage"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+1"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Past 24h",
+        "checked": true
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Past 24h",
+        "checked": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "t"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+2"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "7 days",
+        "checked": true
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "7 days",
+        "checked": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+3"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "30 days",
+        "checked": true
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "30 days",
+        "checked": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+4"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "90 days",
+        "checked": true
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "90 days",
+        "checked": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "l"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Refresh limits"
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Refresh limits"
+      },
+      "count": 0
+    }
+  ]
+}

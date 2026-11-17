@@ -908,6 +908,15 @@ impl Root {
                             ),
                     )
                     .child(
+                        Button::new("usage")
+                            .label("Usage")
+                            .compact()
+                            .ghost()
+                            .on_click(
+                                cx.listener(|root, _, window, cx| root.toggle_usage(window, cx)),
+                            ),
+                    )
+                    .child(
                         Button::new("settings")
                             .icon(IconName::Settings)
                             .tooltip("Settings")
@@ -915,6 +924,7 @@ impl Root {
                             .compact()
                             .ghost()
                             .on_click(cx.listener(|root, _, _, cx| {
+                                root.usage_page = None;
                                 root.settings_open = !root.settings_open;
                                 cx.notify();
                             })),

@@ -62,6 +62,8 @@ mod terminal;
 #[path = "app/timeline.rs"]
 mod timeline_view;
 mod titlebar;
+mod usage;
+mod usage_data;
 #[path = "app/workspace.rs"]
 mod workspace_view;
 
@@ -95,6 +97,14 @@ actions!(
         ToggleExplorer,
         ManageHosts,
         OpenSettings,
+        OpenUsage,
+        UsageCost,
+        UsageTokens,
+        UsageLimits,
+        UsageDay,
+        UsageWeek,
+        UsageMonth,
+        UsageQuarter,
         CloseFilePanel,
         CycleRuntimeMode,
         NextUserMessage,
@@ -154,6 +164,14 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "editor.openFavorite" => Box::new(OpenFavoriteEditor),
         "settings.connections" => Box::new(ManageHosts),
         "settings.open" => Box::new(OpenSettings),
+        "usage.open" => Box::new(OpenUsage),
+        "usage.cost" => Box::new(UsageCost),
+        "usage.tokens" => Box::new(UsageTokens),
+        "usage.limits" => Box::new(UsageLimits),
+        "usage.period.day" => Box::new(UsageDay),
+        "usage.period.week" => Box::new(UsageWeek),
+        "usage.period.month" => Box::new(UsageMonth),
+        "usage.period.quarter" => Box::new(UsageQuarter),
         "rightPanel.toggle" => Box::new(ToggleExplorer),
         "rightPanel.close" => Box::new(CloseFilePanel),
         "appearance.cycle" => Box::new(CycleAppearance),
@@ -442,6 +460,7 @@ pub struct Root {
     settings: ClientSettings,
     settings_path: std::path::PathBuf,
     settings_open: bool,
+    usage_page: Option<Entity<usage::UsagePage>>,
     settings_focus: FocusHandle,
     settings_page: &'static str,
     settings_environment: Option<String>,
@@ -701,6 +720,7 @@ impl Root {
             settings,
             settings_path,
             settings_open: false,
+            usage_page: None,
             settings_focus: cx.focus_handle(),
             settings_page: "general",
             settings_environment: None,
@@ -832,6 +852,15 @@ impl Root {
                 .is_some_and(|drawer| drawer.read(cx).is_focused(window, cx)),
             "isDesktop" => true,
             "modelPickerOpen" => self.picker_open,
+            "usagePageOpen" => {
+                self.usage_page.is_some()
+                    && !self.key_context("editableFocus", window, cx)
+                    && !window.context_stack().iter().any(|context| {
+                        context.contains("PopupMenu")
+                            || context.contains("Dialog")
+                            || context.contains("Select")
+                    })
+            }
             "rightPanelOpen" => self.file_panel.is_some() || self.explorer.is_some(),
             "composerFocus" => self.composer.read(cx).focus_handle(cx).is_focused(window),
             "editableFocus" => {
@@ -1129,6 +1158,7 @@ impl Render for Root {
             && !self.file_picker_open
             && !self.hosts_open
             && !self.settings_open
+            && self.usage_page.is_none()
         {
             self.focus.focus(window, cx);
         }
@@ -1223,9 +1253,18 @@ impl Render for Root {
                 cx.listener(|root, _: &ManageHosts, window, cx| root.toggle_hosts(window, cx)),
             )
             .on_action(cx.listener(|root, _: &OpenSettings, _, cx| {
+                root.usage_page = None;
                 root.settings_open = !root.settings_open;
                 cx.notify();
             }))
+            .on_action(cx.listener(|root, _: &OpenUsage, window, cx| root.toggle_usage(window,cx)))
+            .on_action(cx.listener(|root, _: &UsageCost, _, cx| root.select_usage(Some("cost"),None,cx)))
+            .on_action(cx.listener(|root, _: &UsageTokens, _, cx| root.select_usage(Some("tokens"),None,cx)))
+            .on_action(cx.listener(|root, _: &UsageLimits, _, cx| root.select_usage(Some("limits"),None,cx)))
+            .on_action(cx.listener(|root, _: &UsageDay, _, cx| root.select_usage(None,Some(1),cx)))
+            .on_action(cx.listener(|root, _: &UsageWeek, _, cx| root.select_usage(None,Some(7),cx)))
+            .on_action(cx.listener(|root, _: &UsageMonth, _, cx| root.select_usage(None,Some(30),cx)))
+            .on_action(cx.listener(|root, _: &UsageQuarter, _, cx| root.select_usage(None,Some(90),cx)))
             .on_action(cx.listener(|root, _: &CloseFilePanel, window, cx| {
                 root.close_file_panel(window, cx);
             }))
@@ -1304,7 +1343,7 @@ impl Render for Root {
             )
             .on_action(cx.listener(|root, _: &Settle, _, cx| root.settle(cx)))
             .on_action(cx.listener(|root, _: &NewThread, window, cx| root.new_thread(window, cx)))
-            .on_action(cx.listener(|root, _: &Cancel, window, cx| {if root.settings_open {root.settings_open=false;root.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else {root.cancel(window,cx);}}))
+            .on_action(cx.listener(|root, _: &Cancel, window, cx| {if root.usage_page.is_some() {root.usage_page=None;root.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else if root.settings_open {root.settings_open=false;root.composer.update(cx,|input,cx|input.focus(window,cx));cx.notify();} else {root.cancel(window,cx);}}))
             .on_action(cx.listener(|root, _: &ToggleModelPicker, window, cx| {
                 root.toggle_model_picker(window, cx)
             }))
@@ -1399,6 +1438,7 @@ impl Render for Root {
             .when(self.hosts_open, |root_el| {
                 root_el.child(self.render_hosts(cx))
             })
+            .children(self.usage_page.clone().map(|page| div().absolute().inset_0().p(px(40.)).flex().items_center().justify_center().bg(cx.theme().background.opacity(0.8)).child(div().size_full().max_w(px(1280.)).max_h(px(960.)).rounded(px(16.)).overflow_hidden().border_1().border_color(cx.theme().border).child(page.cached(StyleRefinement::default().size_full())))))
             .when(self.settings_open, |root_el| {
                 root_el.child(self.render_settings(window,cx))
             })
