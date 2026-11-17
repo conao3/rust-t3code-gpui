@@ -1224,7 +1224,7 @@ fn render_file_header(
             DiffFileStatus::Conflicted => Some(t!("Diff.ConflictedFile")),
             _ => None,
         };
-        let statistics = !document.is_single_column();
+        let statistics = !matches!(document.status(), DiffFileStatus::Unchanged | DiffFileStatus::Conflicted);
         h_flex()
             .w_full()
             .min_w_0()
@@ -1507,7 +1507,7 @@ fn render_unified_cell(
         ));
     }
     let gutters = if single_column {
-        [Some((DiffSide::Modified, modified)), None]
+        [Some((side, if side == DiffSide::Original { original } else { modified })), None]
     } else {
         [
             Some((DiffSide::Original, original)),

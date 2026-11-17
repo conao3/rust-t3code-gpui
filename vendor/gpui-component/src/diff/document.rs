@@ -538,7 +538,7 @@ impl DiffFile {
     pub(crate) fn is_single_column(&self) -> bool {
         matches!(
             self.status(),
-            DiffFileStatus::Unchanged | DiffFileStatus::Conflicted
+            DiffFileStatus::Unchanged | DiffFileStatus::Conflicted | DiffFileStatus::Added | DiffFileStatus::Deleted
         )
     }
     /// Merge conflicts in working-file order; slice indices identify resolutions.
