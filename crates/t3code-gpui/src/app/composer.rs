@@ -185,9 +185,16 @@ impl Root {
             "up" => open.selected = (open.selected + n - 1) % n,
             "escape" => self.completion = None,
             "enter" | "tab" if !keystroke.modifiers.control => {
+                let trigger = open.trigger.clone();
+                let suggestion = open.suggestions[open.selected].clone();
+                self.completion = None;
+                if self.accept_token(&trigger, &suggestion, window, cx) {
+                    self.stash_composer(cx);
+                    cx.notify();
+                    return true;
+                }
                 let text = self.composer.read(cx).value().to_string();
-                let (value, at) =
-                    completion::apply(&text, &open.trigger, &open.suggestions[open.selected]);
+                let (value, at) = completion::apply(&text, &trigger, &suggestion);
                 let (line, column) = completion::line_column(&value, at);
                 self.completion = None;
                 self.composer.update(cx, |state, cx| {
@@ -287,6 +294,12 @@ impl Root {
             return;
         };
         let text = self.composer.read(cx).value().to_string();
+        if self.attachments.is_empty() {
+            self.composer_attachments.remove(&key);
+        } else {
+            self.composer_attachments
+                .insert(key.clone(), self.attachments.clone());
+        }
         if self.drafts.set(&key, &text) {
             self.schedule_drafts_save(cx);
         }
@@ -295,6 +308,11 @@ impl Root {
     /// Puts the draft of what the composer is for now into it, at the next render.
     pub(super) fn load_composer(&mut self) {
         self.abandon_queue_edit();
+        self.attachments = self
+            .composer_key()
+            .and_then(|key| self.composer_attachments.get(&key))
+            .cloned()
+            .unwrap_or_default();
         self.prompts.history = None;
         self.prompts.open = false;
         self.hovered_message = None;

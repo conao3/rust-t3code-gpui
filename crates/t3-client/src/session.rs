@@ -485,6 +485,17 @@ impl Connection {
         Ok(json!({"type": kind, "id": id, "name": name, "mimeType": mime_type, "sizeBytes": size}))
     }
 
+    pub async fn attachment_bytes(&self, attachment: Value) -> Result<Vec<u8>> {
+        let issued = self.request("assets.createUrl", json!({"resource": {
+            "_tag":"attachment", "attachmentId":attachment["id"], "fileName":attachment["name"],
+            "mimeType":attachment["mimeType"], "disposition":"inline"
+        }})).await?;
+        let path = issued["relativeUrl"]
+            .as_str()
+            .context("Attachment URL missing")?;
+        self.api.get_bytes(path, 25 * 1024 * 1024).await
+    }
+
     pub async fn archive_thread(&self, thread_id: &str) -> Result<u64> {
         self.dispatch(json!({"type": "thread.archive", "threadId": thread_id}))
             .await

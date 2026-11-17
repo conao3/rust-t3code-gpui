@@ -97,7 +97,7 @@ impl Root {
                     format!("{}\n\n{}", current.trim_end(), entry.prompt)
                 };
                 self.composer.update(cx, |state, cx| {
-                    state.set_value(text, window, cx);
+                    state.set_value(super::composer_tokens::content(text), window, cx);
                     state.focus(window, cx);
                 });
                 for file in entry.attachments {
@@ -229,7 +229,7 @@ impl Root {
         let (line, column) = completion::line_column(&prompt, prompt.len());
         let position = Position::new(line, column);
         self.composer.update(cx, |state, cx| {
-            state.set_value(prompt, window, cx);
+            state.set_value(super::composer_tokens::content(prompt), window, cx);
             state.set_cursor_position(position, window, cx);
         });
         self.stash_composer(cx);

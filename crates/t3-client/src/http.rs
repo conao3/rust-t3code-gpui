@@ -187,6 +187,34 @@ impl Api {
             })
     }
 
+    pub async fn get_bytes(&self, path: &str, limit: usize) -> Result<Vec<u8>> {
+        anyhow::ensure!(
+            path.starts_with('/') && !path.starts_with("//"),
+            "Expected relative asset URL"
+        );
+        let mut response = self
+            .http
+            .get(format!("{}{}", self.origin, path))
+            .bearer_auth(&self.token)
+            .timeout(Duration::from_secs(120))
+            .send()
+            .await?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "Asset request returned HTTP {}",
+            response.status()
+        );
+        let mut bytes = vec![];
+        while let Some(chunk) = response.chunk().await? {
+            anyhow::ensure!(
+                bytes.len() + chunk.len() <= limit,
+                "Image attachment exceeds the display limit"
+            );
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(bytes)
+    }
+
     /// Posts raw bytes, as an attachment upload sends a file to the URL T3 issued for it.
     pub async fn post_bytes(&self, path: &str, content_type: &str, bytes: Vec<u8>) -> Result<()> {
         let response = self

@@ -71,6 +71,7 @@ impl Root {
             .get("context")
             .filter(|context| !context.is_null())
             .cloned();
+        self.stash_composer(cx);
         self.queue_edit = Some(Edit {
             target,
             run_id,
@@ -81,7 +82,7 @@ impl Root {
             context,
         });
         self.composer.update(cx, |state, cx| {
-            state.set_value(text, window, cx);
+            state.set_value(super::composer_tokens::content(text), window, cx);
             state.focus(window, cx);
         });
         self.completion = None;

@@ -14,6 +14,9 @@ use gpui_kit::*;
 
 use crate::timeline::{AssistantMetadata, Draft, Pending, Question, Row, RowKind};
 
+#[path = "row_images.rs"]
+mod images;
+
 const DETAIL_LINES: usize = 400;
 
 #[derive(Clone)]
@@ -84,6 +87,7 @@ pub enum RowEvent {
 }
 
 pub struct RowView {
+    images: images::Images,
     row: Row,
     summary: String,
     markdown: Option<Entity<TextViewState>>,
@@ -142,6 +146,7 @@ impl RowView {
             })
         });
         let mut view = Self {
+            images: images::Images::default(),
             row,
             summary,
             markdown,
@@ -747,6 +752,7 @@ impl Render for RowView {
                 .child(
                     div()
                         .id("user-bubble")
+                        .child(self.render_images())
                         .role(accesskit::Role::Document)
                         .aria_label("User message")
                         .accessibility_id(self.row.key.clone())

@@ -42,9 +42,11 @@ use crate::workspace;
 mod choice_select;
 mod composer;
 mod composer_controls;
+mod composer_images;
 mod composer_prompts;
 mod composer_queue;
 mod composer_scratch;
+mod composer_tokens;
 mod diff;
 mod files;
 mod find;
@@ -442,6 +444,7 @@ pub struct Root {
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
     composer_sends: HashSet<String>,
+    composer_attachments: HashMap<String, Vec<attachments::Pending>>,
     queue_edit: Option<composer_queue::Edit>,
     prompts: composer_prompts::Prompts,
     composer_choices: composer_controls::Controls,
@@ -705,6 +708,7 @@ impl Root {
             model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
             composer_sends: HashSet::new(),
+            composer_attachments: HashMap::new(),
             queue_edit: None,
             prompts: composer_prompts::Prompts {
                 store: prompt_store,
@@ -1139,8 +1143,9 @@ impl Render for Root {
             window.mark_view_dirty(self.details_pane.entity_id());
         }
         if let Some(text) = self.pending_composer.take() {
-            self.composer
-                .update(cx, |state, cx| state.set_value(text, window, cx));
+            self.composer.update(cx, |state, cx| {
+                state.set_value(composer_tokens::content(text), window, cx)
+            });
         }
         self.sync_composer_controls(window, cx);
         let controls_stamp = ComposerControlsStamp {
