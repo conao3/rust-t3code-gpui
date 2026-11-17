@@ -848,6 +848,9 @@ impl Root {
         }
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
+        if self.pr_guide_key(keystroke, window, cx) {
+            return true;
+        }
         if self.prompt_key(keystroke, window, cx) {
             return true;
         }

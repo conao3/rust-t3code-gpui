@@ -168,7 +168,41 @@
     "run": null,
     "currentHeadSha": "abc123"
   },
-  "pullRequests.generateReviewGuide": null,
+  "pullRequests.generateReviewGuide": {
+    "guide": {
+      "headSha": "abc123",
+      "generatedAt": "2026-11-18T00:00:00.000Z",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-5.3-codex"
+      },
+      "stops": [
+        {
+          "title": "Read the contract",
+          "summary": "Check the deterministic review input.",
+          "attention": {
+            "kind": "contract",
+            "note": "Keep the response stable."
+          },
+          "excerpts": [],
+          "files": [],
+          "notes": [],
+          "questions": []
+        },
+        {
+          "title": "Verify the result",
+          "summary": "Confirm the review output.",
+          "attention": null,
+          "excerpts": [],
+          "files": [],
+          "notes": [],
+          "questions": []
+        }
+      ]
+    },
+    "run": null,
+    "currentHeadSha": "abc123"
+  },
   "pullRequests.submitReview": null,
   "pullRequests.linkedThreads": {
     "threads": []
