@@ -858,6 +858,9 @@ impl Root {
             return false;
         }
         let keystroke = &event.keystroke;
+        if self.project_search.open && self.project_search_key(keystroke, window, cx) {
+            return true;
+        }
         if event.is_held && self.thread_undo_held.as_ref() == Some(&keystroke.key) {
             return true;
         }
@@ -1411,7 +1414,7 @@ impl Render for Root {
                 cx.listener(|root, _: &TogglePalette, window, cx| root.toggle_palette(window, cx)),
             )
             .on_action(cx.listener(|root, _: &ToggleProjectSearch, window, cx| root.toggle_project_search(window, cx)))
-            .on_action(cx.listener(|root, action: &project_search::OpenMatch, _, cx| root.open_project_match(action, cx)))
+            .on_action(cx.listener(|root, action: &project_search::OpenMatch, window, cx| root.open_project_match(action, window, cx)))
             .on_action(cx.listener(|root, _: &ToggleFilePicker, window, cx| {
                 root.toggle_file_picker(window, cx)
             }))
