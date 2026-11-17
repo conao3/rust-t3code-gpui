@@ -63,7 +63,7 @@ pub struct Snapshot {
     pub row_data: Vec<Arc<Row>>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Key {
     pub key: i32,

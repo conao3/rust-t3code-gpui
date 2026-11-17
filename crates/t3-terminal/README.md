@@ -10,4 +10,6 @@ A process caches the compiled Wasmtime module. Initial compilation uses at most 
 
 `cargo test -p t3-terminal` runs operations and full snapshot comparisons obtained from the pinned original browser adapter. The fixture includes ANSI styling, Unicode/wide cells, combining sequences, partial UTF-8/CSI/OSC, scrollback and alternate screens, selection, resize, PTY queries/history replay, Kitty keyboard actions, bracketed paste, mouse encoding and synchronized-output boundaries. It also verifies the vendored module's hash and embedded revision.
 
+`KeyboardEvent::encoded` follows the same revision's `keyCodes.ts` and `core.ts` keyboard conversion. Its 1,226 reference cases cover every physical code, fallback logical names, modifier combinations, lock state, press/repeat/release, composition, layout maps and Unicode. A printable non-BMP character has a codepoint but no single UTF-16-unit keyboard text, matching the browser. IME text commits belong to the transport's text input path.
+
 On Linux, `cargo run --release -p t3-terminal --example measure` reports cold/warm initialization, VT throughput and full-grid snapshot cost. These measurements cover the engine. Application comparisons also need GPUI painting, input, transport, frame scheduling and the reference Electron processes.
