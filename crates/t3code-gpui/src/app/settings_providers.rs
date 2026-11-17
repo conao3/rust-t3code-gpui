@@ -10,6 +10,7 @@ pub(super) struct Providers {
     root: WeakEntity<Root>,
     environment: String,
     editing: Option<String>,
+    selected: String,
     original: Value,
     inputs: [Entity<InputState>; 4],
     driver: Entity<settings_controls::Choices>,
@@ -45,6 +46,7 @@ impl Providers {
             root,
             environment,
             editing: None,
+            selected: "codex".into(),
             original: Value::Null,
             inputs,
             driver,
@@ -157,7 +159,7 @@ impl Providers {
     }
 }
 impl Render for Providers {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _ = &self.subscriptions;
         let config = self
             .root
@@ -175,22 +177,307 @@ impl Render for Providers {
                 );
             }
         }
+        let order = [
+            "codex",
+            "claudeAgent",
+            "cursor",
+            "grok",
+            "fx",
+            "opencode",
+            "antigravity",
+            "kiro",
+            "muse",
+            "pi",
+            "acpRegistry",
+        ];
+        let mut ordered = instances.iter().collect::<Vec<_>>();
+        ordered.sort_by_key(|(id, instance)| {
+            (
+                order
+                    .iter()
+                    .position(|driver| instance["driver"] == *driver)
+                    .unwrap_or(order.len()),
+                (*id).clone(),
+            )
+        });
+        let selected = instances
+            .get(&self.selected)
+            .map(|instance| (self.selected.clone(), instance.clone()))
+            .or_else(|| {
+                ordered
+                    .first()
+                    .map(|(id, instance)| ((*id).clone(), (*instance).clone()))
+            });
+        let mut details = v_flex().flex_1().min_w_0().gap_6().py_4();
+        if let Some((id, instance)) = &selected {
+            let provider = config["providers"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|provider| provider["instanceId"] == *id);
+            let name = instance_name(id, instance);
+            details = details
+                .child(
+                    settings_controls::text(name)
+                        .px_4()
+                        .font_weight(FontWeight::SEMIBOLD),
+                )
+                .when(
+                    instance["driver"].as_str() != Some(id.as_str()),
+                    |details| {
+                        let id = id.clone();
+                        details.child(
+                            Button::new("delete-instance")
+                                .icon(gpui_kit::assets::IconName::Trash)
+                                .accessibility_label(format!("Delete instance {id}"))
+                                .ghost()
+                                .on_click(cx.listener(move |view, _, window, cx| {
+                                    view.remove(id.clone(), window, cx)
+                                })),
+                        )
+                    },
+                )
+                .child(
+                    v_flex()
+                        .px_4()
+                        .gap_1()
+                        .child(settings_controls::text("Status"))
+                        .child(settings_controls::text(provider_summary(provider)).text_xs()),
+                );
+            let mut fields = vec![("displayName", "Display name", "")];
+            if instance["driver"] == "codex" {
+                fields.extend([
+                    ("config/binaryPath", "Binary path", "Path to the Codex binary used by this instance."),
+                    ("config/homePath", "CODEX_HOME path", "Custom Codex home and config directory."),
+                    ("config/shadowHomePath", "Shadow home path", "Account-specific Codex home. Keeps auth.json separate while sharing state from CODEX_HOME."),
+                    ("config/launchArgs", "Launch arguments", "Additional CLI arguments passed to codex app-server on session start."),
+                ]);
+            }
+            for (path, label, description) in fields {
+                if path == "config/binaryPath" {
+                    details = details.child(
+                        settings_controls::text("Runtime")
+                            .px_4()
+                            .font_weight(FontWeight::SEMIBOLD),
+                    );
+                }
+                let value = instance
+                    .pointer(&format!("/{path}"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let root = self.root.clone();
+                let environment = self.environment.clone();
+                let id = id.clone();
+                let field = window.use_keyed_state(
+                    SharedString::from(format!("provider-field:{environment}:{id}:{path}:{value}")),
+                    cx,
+                    |window, cx| {
+                        ProviderField::new(
+                            root,
+                            environment,
+                            id,
+                            path,
+                            label,
+                            description,
+                            value,
+                            window,
+                            cx,
+                        )
+                    },
+                );
+                details = details.child(field);
+            }
+            if instance["driver"] != "codex" {
+                let id = id.clone();
+                let instance = instance.clone();
+                details = details.child(
+                    Button::new("edit-runtime")
+                        .label("Runtime")
+                        .outline()
+                        .mx_4()
+                        .on_click(cx.listener(move |view, _, window, cx| {
+                            view.edit(id.clone(), instance.clone(), window, cx)
+                        })),
+                );
+            }
+        }
         v_flex().gap_3().when_some(self.error.clone(),|view,error|view.child(div().id("provider-save-error").role(accesskit::Role::Alert).text_color(cx.theme().danger).child(error)))
-            .child(h_flex().gap_2().child(Button::new("add-provider").label("Add provider").outline().on_click(cx.listener(|view,_,window,cx|view.edit(String::new(),json!({"driver":"codex"}),window,cx)))).child(Button::new("refresh-providers").label("Refresh").ghost().on_click(cx.listener(|view,_,_,cx|view.request("server.refreshProviders",json!({}),cx)))))
+            .child(h_flex().gap_2().child(Button::new("add-provider").label("Add provider").outline().on_click(cx.listener(|view,_,window,cx|view.edit(String::new(),json!({"driver":"codex"}),window,cx)))).child(Button::new("refresh-providers").label("Refresh provider status").ghost().on_click(cx.listener(|view,_,_,cx|view.request("server.refreshProviders",json!({}),cx)))))
             .when(self.editing.is_some(),|view|view.child(v_flex().gap_2().p_3().border_1().border_color(cx.theme().border)
                 .child(Select::new(&self.driver).accessibility_label("Provider").disabled(!self.creating))
                 .children(self.inputs.iter().zip(["Instance ID","Display name","Binary path","Home path"]).map(|(input,label)|Input::new(input).aria_label(label).disabled(label=="Instance ID"&&!self.creating)))
                 .child(Switch::new("provider-enabled").accessibility_label("Enabled").label("Enabled").checked(self.enabled).on_change(cx.listener(|view,checked,_,cx| {view.enabled = *checked;cx.notify();})))
-                .child(h_flex().gap_2().child(Button::new("save-provider").label("Save").disabled(self.saving).primary().on_click(cx.listener(|view,_,_,cx|view.save(cx)))).child(Button::new("cancel-provider").label("Cancel").ghost().on_click(cx.listener(|view,_,_,cx| {view.editing=None;cx.notify();}))))))
-            .children(instances.into_iter().enumerate().map(|(index,(id,instance))| {
-                let edit_id=id.clone();let edit_instance=instance.clone();let enable_id=id.clone();let enabled=instance["enabled"].as_bool().unwrap_or(true);
-                let provider=config["providers"].as_array().into_iter().flatten().find(|provider|provider["instanceId"]==id);
-                let status=provider.and_then(|provider|provider["status"].as_str()).unwrap_or("unavailable").to_string();
-                h_flex().id(("provider",index)).role(accesskit::Role::Group).aria_label(id.clone()).gap_3().p_3().border_1().border_color(cx.theme().border).rounded_md()
-                    .child(v_flex().flex_1().child(instance["displayName"].as_str().unwrap_or(&id).to_string()).child(div().text_xs().text_color(cx.theme().muted_foreground).child(format!("{} · {status}",instance["driver"].as_str().unwrap_or_default()))))
-                    .child(Switch::new(("enabled",index)).accessibility_label(format!("Enable {id}")).checked(enabled).on_change(cx.listener(move |view,checked,_,cx| {let mut instance=instance.clone();instance["enabled"]=json!(*checked);view.request("server.updateSettings",json!({"patch":{},"providerInstanceMutation":{"operation":"upsert","instanceId":enable_id,"instance":instance}}),cx);})))
-                    .child(Button::new(("edit",index)).label("Edit").ghost().on_click(cx.listener(move |view,_,window,cx|view.edit(edit_id.clone(),edit_instance.clone(),window,cx))))
-                    .child(Button::new(("remove",index)).label("Remove").ghost().on_click(cx.listener(move |view,_,window,cx|view.remove(id.clone(),window,cx))))
-            }))
+                .child(h_flex().gap_2().when(!self.creating, |row| row.child(Button::new("remove-provider").label("Remove").ghost().on_click(cx.listener(|view, _, window, cx| { if let Some(id) = view.editing.clone() { view.remove(id, window, cx); } })))).child(Button::new("save-provider").label("Save").disabled(self.saving).primary().on_click(cx.listener(|view,_,_,cx|view.save(cx)))).child(Button::new("cancel-provider").label("Cancel").ghost().on_click(cx.listener(|view,_,_,cx| {view.editing=None;cx.notify();}))))))
+            .child(h_flex().items_start().border_1().border_color(cx.theme().border).rounded(px(12.)).overflow_hidden()
+                .child(v_flex().w(px(272.)).flex_none().children(ordered.into_iter().enumerate().map(|(index, (id, instance))| {
+                    let name = instance_name(id, instance);
+                    let select_id = id.clone(); let enable_id = id.clone(); let enable_instance = instance.clone();
+                    let provider = config["providers"].as_array().into_iter().flatten().find(|provider| provider["instanceId"] == *id);
+                    let status = provider_summary(provider);
+                    let version = provider.and_then(|provider| provider["version"].as_str()).map(|version| if version.starts_with(|ch: char| ch.is_ascii_digit()) { format!("v{version}") } else { version.to_string() });
+                    h_flex().id(("provider", index)).gap_3().px_4().py_3().border_b_1().border_color(cx.theme().border)
+                        .when(self.selected == *id, |view| view.bg(cx.theme().accent))
+                        .when(order.contains(&instance["driver"].as_str().unwrap_or_default()), |row| row.child(gpui_kit::component::Icon::default().path(SharedString::from(format!("icons/providers/{}-{}.svg", instance["driver"].as_str().unwrap_or_default(), if !cx.theme().mode.is_dark() { "light" } else { "dark" }))).size(px(16.))))
+                        .child(Button::new(("select-provider", index)).accessibility_label(format!("Select {name}")).ghost().flex_1().min_w_0().justify_start().h_auto().child(v_flex().w_full().items_start().child(h_flex().gap_1().child(settings_controls::text(name.clone()).text_sm()).when_some(version, |view, version| view.child(settings_controls::text(version).text_xs().text_color(cx.theme().muted_foreground)))).child(settings_controls::text(status).text_xs().text_color(cx.theme().muted_foreground)))
+                            .on_click(cx.listener(move |view, _, _, cx| { view.selected = select_id.clone(); cx.notify(); })))
+                        .child(Switch::new(("enabled", index)).accessibility_label(format!("Enable {name}")).checked(instance["enabled"].as_bool().unwrap_or(true)).on_change(cx.listener(move |view, checked, _, cx| {
+                            let mut instance = enable_instance.clone(); instance["enabled"] = json!(*checked);
+                            view.request("server.updateSettings", json!({"patch":{},"providerInstanceMutation":{"operation":"upsert","instanceId":enable_id,"instance":instance}}), cx);
+                        })))
+                })))
+                .child(details))
+    }
+}
+
+fn instance_name(id: &str, instance: &Value) -> String {
+    crate::provider_display::display_name(
+        &json!({"driver": instance["driver"], "instanceId":id, "displayName":instance["displayName"]}),
+    )
+}
+
+fn provider_summary(provider: Option<&Value>) -> String {
+    let Some(provider) = provider else {
+        return "Checking provider status".into();
+    };
+    if provider["enabled"] == false || provider["status"] == "disabled" {
+        return "Disabled".into();
+    }
+    if provider["installed"] == false {
+        return "Not found".into();
+    }
+    if provider["status"] == "warning" {
+        return "Needs attention".into();
+    }
+    if provider["status"] == "error" {
+        return "Unavailable".into();
+    }
+    let auth = provider["auth"]["status"].as_str();
+    if matches!(auth, Some("unauthenticated" | "authenticated")) {
+        let status = if auth == Some("authenticated") {
+            "Authenticated"
+        } else {
+            "Not authenticated"
+        };
+        return provider["auth"]["label"]
+            .as_str()
+            .or_else(|| provider["auth"]["type"].as_str())
+            .map(|label| format!("{status} · {label}"))
+            .unwrap_or_else(|| status.into());
+    }
+    match provider["status"].as_str() {
+        Some("warning") => "Needs attention",
+        Some("error") => "Unavailable",
+        _ => "Available",
+    }
+    .into()
+}
+
+struct ProviderField {
+    input: Entity<InputState>,
+    label: &'static str,
+    description: &'static str,
+    _subscription: Subscription,
+}
+
+impl ProviderField {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        root: WeakEntity<Root>,
+        environment: String,
+        id: String,
+        path: &'static str,
+        label: &'static str,
+        description: &'static str,
+        value: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let input = cx.new(|cx| InputState::new(window, cx).default_value(value));
+        let subscription = cx.subscribe(&input, move |_, input, event, cx| {
+            if !matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) { return; }
+            let text = input.read(cx).value().trim().to_string();
+            let _ = root.update(cx, |root, cx| {
+                let config = root.config_of(&environment).unwrap_or(Value::Null);
+                let instance = config["settings"]["providerInstances"].get(&id).cloned().or_else(|| {
+                    config["providers"].as_array()?.iter().find(|provider| provider["instanceId"] == id)
+                        .map(|provider| json!({"driver":provider["driver"],"enabled":provider["enabled"]}))
+                });
+                let Some(instance) = instance else {
+                    root.message = Some(format!("Provider instance {id} is no longer available"));
+                    cx.notify();
+                    return;
+                };
+                let instance = update_field(instance, path, &text);
+                root.settings_request(&environment, "server.updateSettings", json!({"patch":{},"providerInstanceMutation":{"operation":"upsert","instanceId":id,"instance":instance}}), cx);
+            });
+        });
+        Self {
+            input,
+            label,
+            description,
+            _subscription: subscription,
+        }
+    }
+}
+
+fn update_field(mut instance: Value, path: &str, value: &str) -> Value {
+    let (object, key) = if let Some(key) = path.strip_prefix("config/") {
+        if !instance["config"].is_object() {
+            instance["config"] = json!({});
+        }
+        (
+            instance["config"].as_object_mut().expect("provider config"),
+            key,
+        )
+    } else {
+        (instance.as_object_mut().expect("provider instance"), path)
+    };
+    if value.is_empty() && key != "launchArgs" {
+        object.remove(key);
+    } else {
+        object.insert(key.into(), json!(value));
+    }
+    instance
+}
+
+impl Render for ProviderField {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        h_flex()
+            .px_4()
+            .gap_4()
+            .items_start()
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_1()
+                    .child(settings_controls::text(self.label).text_sm())
+                    .when(!self.description.is_empty(), |view| {
+                        view.child(
+                            settings_controls::text(self.description)
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground),
+                        )
+                    }),
+            )
+            .child(Input::new(&self.input).aria_label(self.label).w(px(224.)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::update_field;
+    use serde_json::json;
+    #[test]
+    fn editing_runtime_preserves_provider_auth_and_other_fields() {
+        let instance = json!({"driver":"codex","enabled":false,"environment":[{"name":"KEY","value":"fixture","sensitive":true}],"config":{"homePath":"/fixture","launchArgs":"--foo"}});
+        let next = update_field(instance.clone(), "config/homePath", "");
+        assert!(next["config"].get("homePath").is_none());
+        assert_eq!(next["environment"], instance["environment"]);
+        assert_eq!(next["enabled"], false);
+        assert_eq!(
+            update_field(next, "config/launchArgs", "")["config"]["launchArgs"],
+            ""
+        );
     }
 }
