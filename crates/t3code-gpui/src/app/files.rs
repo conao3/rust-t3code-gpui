@@ -24,12 +24,16 @@ impl Root {
             return;
         };
         let runtime = self.runtime.clone();
+        let target = self.current();
         cx.spawn(async move |this, cx| {
             let found = on_runtime(&runtime, async move {
                 connection.search_entries(&cwd, &query, 50).await
             })
             .await;
             let _ = this.update(cx, |root, cx| {
+                if root.current() != target {
+                    return;
+                }
                 root.file_hits = found
                     .ok()
                     .and_then(|r| r.get("entries").and_then(Value::as_array).cloned())
@@ -54,6 +58,7 @@ impl Root {
             return;
         };
         let runtime = self.runtime.clone();
+        let target = self.current();
         cx.spawn(async move |this, cx| {
             let read = on_runtime(&runtime, {
                 let path = path.clone();
@@ -61,6 +66,9 @@ impl Root {
             })
             .await;
             let _ = this.update(cx, |root, cx| {
+                if root.current() != target {
+                    return;
+                }
                 match read {
                     Ok(file) => {
                         let contents = file
@@ -74,12 +82,10 @@ impl Root {
                             });
                         let parts = document_parts(&path, contents, cx);
                         let lines = contents.lines().map(str::to_string).collect();
-                        root.file_panel = Some(FilePanel::new(
-                            path,
-                            PanelBody::Document(parts),
-                            note,
-                            lines,
-                        ));
+                        root.install_panel_file(
+                            FilePanel::new(path, PanelBody::Document(parts), note, lines),
+                            cx,
+                        );
                         root.file_find_again(cx);
                     }
                     Err(error) => root.message = Some(format!("{error:#}")),
@@ -140,8 +146,8 @@ impl Root {
     }
 
     pub(super) fn toggle_explorer(&mut self, cx: &mut Context<Self>) {
-        if self.explorer.take().is_some() {
-            cx.notify();
+        self.activate_panel("files".into(), cx);
+        if self.explorer.is_some() {
             return;
         }
         let Some((environment, cwd)) = self.composer_cwd() else {
@@ -239,7 +245,7 @@ impl Root {
         let loading_root = !open.directories.contains_key("");
         Some(
             v_flex()
-                .w(px(260.))
+                .w_full()
                 .h_full()
                 .flex_none()
                 .border_l_1()
@@ -258,7 +264,7 @@ impl Root {
                                 .compact()
                                 .outline()
                                 .on_click(cx.listener(|root, _, _, cx| {
-                                    root.explorer = None;
+                                    root.close_panel_tab("files", cx);
                                     cx.notify();
                                 })),
                         ),
@@ -356,7 +362,6 @@ impl Root {
         };
         Some(
             v_flex()
-                .track_focus(&self.panel_focus)
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|root, _, window, cx| {
@@ -365,7 +370,7 @@ impl Root {
                         }
                     }),
                 )
-                .w(px(620.))
+                .w_full()
                 .h_full()
                 .flex_none()
                 .border_l_1()
@@ -595,6 +600,7 @@ impl Root {
     fn sort_table(&mut self, part: usize, column: usize, cx: &mut Context<Self>) {
         if let Some(PanelPart::Table { sort, .. }) = self.panel_part(part) {
             *sort = tables::Sort::next(*sort, column);
+            self.panel_revision += 1;
             cx.notify();
         }
     }
@@ -609,6 +615,7 @@ impl Root {
             } else {
                 header_rows.saturating_sub(1)
             };
+            self.panel_revision += 1;
             cx.notify();
         }
     }
@@ -621,7 +628,9 @@ impl Root {
     }
 
     pub(super) fn close_file_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.file_panel = None;
+        if let Some(id) = self.right_panel.active.clone() {
+            self.close_panel_tab(&id, cx);
+        }
         self.file_find_open = false;
         self.composer
             .update(cx, |state, cx| state.focus(window, cx));

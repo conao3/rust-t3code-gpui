@@ -47,6 +47,7 @@ mod find;
 mod hosts;
 mod lineage;
 mod palette;
+mod right_panel;
 mod settings;
 mod sidebar_branding;
 mod sidebar_controls;
@@ -88,6 +89,9 @@ actions!(
         ToggleFilePicker,
         ToggleDiff,
         ToggleExplorer,
+        ToggleRightPanel,
+        NewRightPanel,
+        MaximizeRightPanel,
         ManageHosts,
         OpenSettings,
         CloseFilePanel,
@@ -149,7 +153,9 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "editor.openFavorite" => Box::new(OpenFavoriteEditor),
         "settings.connections" => Box::new(ManageHosts),
         "settings.open" => Box::new(OpenSettings),
-        "rightPanel.toggle" => Box::new(ToggleExplorer),
+        "rightPanel.toggle" => Box::new(ToggleRightPanel),
+        "rightPanel.new" => Box::new(NewRightPanel),
+        "rightPanel.toggleMaximized" => Box::new(MaximizeRightPanel),
         "rightPanel.close" => Box::new(CloseFilePanel),
         "appearance.cycle" => Box::new(CycleAppearance),
         "theme.select" => Box::new(OpenSettings),
@@ -342,6 +348,14 @@ struct DetailsStamp {
 }
 
 pub struct Root {
+    right_panel: right_panel::State,
+    right_panel_threads: HashMap<(String, String), right_panel::State>,
+    right_panel_target: Option<(String, String)>,
+    right_panel_width: f32,
+    panel_resizing: bool,
+    panel_revision: u64,
+    panel_stamp: String,
+    panel_pane: Entity<right_panel::Pane>,
     lineage_data: crate::lineage::Details,
     lineage_target: Option<(String, String)>,
     lineage_revision: u64,
@@ -580,6 +594,16 @@ impl Root {
         let mut terminal_store =
             crate::terminal::Store::load(drafts_path.with_file_name("terminals.json"));
         let terminal_error = terminal_store.error.take();
+        let (saved_panels, panel_error) = match right_panel::load(&drafts_path) {
+            Ok(saved) => (saved, None),
+            Err(error) => (
+                right_panel::Saved {
+                    width: 540.,
+                    threads: Vec::new(),
+                },
+                Some(format!("Could not load right panels: {error:#}")),
+            ),
+        };
         let collapsed = [
             sidebar::Section::Working,
             sidebar::Section::Snoozed,
@@ -590,6 +614,16 @@ impl Root {
         .filter_map(|(section, expanded)| (!expanded).then_some(section))
         .collect();
         Self {
+            right_panel: right_panel::State::default(),
+            right_panel_threads: saved_panels.threads.into_iter().collect(),
+            right_panel_target: None,
+            right_panel_width: saved_panels.width,
+            panel_resizing: false,
+            panel_revision: 0,
+            panel_stamp: String::new(),
+            panel_pane: cx.new(|_| right_panel::Pane {
+                root: sidebar_root.clone(),
+            }),
             lineage_data: crate::lineage::Details::default(),
             lineage_target: None,
             lineage_revision: 0,
@@ -656,7 +690,7 @@ impl Root {
             user_cursor: None,
             hovered_message: None,
             composer,
-            message: terminal_error,
+            message: terminal_error.or(panel_error),
             picker_open: false,
             picker_instance: None,
             permissions_menu: None,
@@ -819,7 +853,7 @@ impl Root {
                 .is_some_and(|drawer| drawer.read(cx).is_focused(window, cx)),
             "isDesktop" => true,
             "modelPickerOpen" => self.picker_open,
-            "rightPanelOpen" => self.file_panel.is_some() || self.explorer.is_some(),
+            "rightPanelOpen" => self.right_panel.open,
             "composerFocus" => self.composer.read(cx).focus_handle(cx).is_focused(window),
             "editableFocus" => {
                 self.key_context("terminalFocus", window, cx)
@@ -1056,6 +1090,7 @@ impl Render for Root {
             self.sidebar_stamp = Some(sidebar_stamp);
             window.mark_view_dirty(self.sidebar_pane.entity_id());
         }
+        self.prepare_right_panel(window, cx);
         self.follow_explorer(cx);
         self.follow_workspace();
         let details_stamp = DetailsStamp {
@@ -1169,6 +1204,12 @@ impl Render for Root {
             )
             .on_action(cx.listener(|root, _: &ToggleFilePicker, window, cx| {
                 root.toggle_file_picker(window, cx)
+            }))
+            .on_action(cx.listener(|root, action: &right_panel::TabAction, _, cx| root.panel_tab_action(action, cx)))
+            .on_action(cx.listener(|root, _: &ToggleRightPanel, window, cx| root.toggle_right_panel(window, cx)))
+            .on_action(cx.listener(|root, _: &NewRightPanel, window, cx| root.new_panel(window, cx)))
+            .on_action(cx.listener(|root, _: &MaximizeRightPanel, _, cx| {
+                if root.right_panel.open { root.right_panel.maximized = !root.right_panel.maximized; root.save_right_panel(); root.panel_revision += 1; cx.notify(); }
             }))
             .on_action(cx.listener(|root, _: &ToggleDiff, _, cx| root.toggle_diff(cx)))
             .on_action(cx.listener(|root, _: &OpenBranchPicker, window, cx| {
@@ -1312,6 +1353,10 @@ impl Render for Root {
                     && let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() {
                     drawer.update(cx, |drawer, cx| drawer.drag_resize(f32::from(event.position.y), f32::from(window.viewport_size().height), cx));
                 }
+                if root.panel_resizing && event.pressed_button == Some(MouseButton::Left) {
+                    root.right_panel_width = (f32::from(window.viewport_size().width) - f32::from(event.position.x)).max(360.);
+                    cx.notify();
+                }
                 if root.sidebar_resizing && event.pressed_button == Some(MouseButton::Left) {
                     let max = (f32::from(window.viewport_size().width) - 640.).max(208.);
                     root.settings.sidebar_width = f32::from(event.position.x).clamp(208., max);
@@ -1323,6 +1368,8 @@ impl Render for Root {
                 cx.listener(|root, _, _, cx| {
                     if let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() { drawer.update(cx, |drawer, cx| drawer.end_resize(cx)); }
                     root.window_drag_pending = false;
+                    if root.panel_resizing { root.save_right_panel(); }
+                    root.panel_resizing = false;
                     if root.sidebar_resizing {
                         root.sidebar_resizing = false;
                         if let Err(error) = client_settings::update(
@@ -1369,11 +1416,12 @@ impl Render for Root {
                                 ),
                         )
                     })
-                    .child(v_flex().flex_1().h_full().min_w_0().min_h_0()
+                    .when(!(self.right_panel.open && (self.right_panel.maximized || f32::from(window.viewport_size().width) <= 980.)), |row| row.child(v_flex().flex_1().h_full().min_w_0().min_h_0()
                         .child(div().flex_1().h_0().min_h_0().child(self.render_workspace_canvas(pane, cx)))
-                        .children(terminal_drawer.map(|drawer| drawer.cached(StyleRefinement::default().w_full().h(px(terminal_height)).flex_none()).into_any_element())))
-                    .children(self.render_explorer(cx))
-                    .children(self.render_file_panel(cx)),
+                        .children(terminal_drawer.map(|drawer| drawer.cached(StyleRefinement::default().w_full().h(px(terminal_height)).flex_none()).into_any_element()))))
+                    .when(self.right_panel.open, |row| row
+                        .child(div().w(px(4.)).h_full().cursor_col_resize().on_mouse_down(MouseButton::Left, cx.listener(|root, _, _, cx| { root.panel_resizing = true; cx.notify(); })))
+                        .child(self.panel_pane.clone().cached(StyleRefinement::default().w(px(self.panel_width(f32::from(window.viewport_size().width)))).h_full().flex_none()))),
             )
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))

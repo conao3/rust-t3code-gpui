@@ -2,15 +2,14 @@ use super::*;
 
 impl Root {
     pub(super) fn toggle_diff(&mut self, cx: &mut Context<Self>) {
-        if self
-            .file_panel
-            .as_ref()
-            .is_some_and(|p| p.path == DIFF_TITLE)
+        if self.right_panel.open
+            && !self.right_panel.launcher
+            && self.right_panel.active.as_deref() == Some("diff")
         {
-            self.file_panel = None;
-            cx.notify();
+            self.close_panel_tab("diff", cx);
             return;
         }
+        self.activate_panel("diff".into(), cx);
         let Some((environment, cwd)) = self.composer_cwd() else {
             self.message = Some("Open a thread first.".into());
             cx.notify();
@@ -20,6 +19,7 @@ impl Root {
             return;
         };
         let runtime = self.runtime.clone();
+        let target = self.current();
         cx.spawn(async move |this, cx| {
             let preview =
                 on_runtime(&runtime, async move { connection.diff_preview(&cwd).await }).await;
@@ -49,6 +49,9 @@ impl Root {
                 Err(error) => Err(error),
             };
             let _ = this.update(cx, |root, cx| {
+                if root.current() != target || root.right_panel.active.as_deref() != Some("diff") {
+                    return;
+                }
                 match preview {
                     Ok((lines, files)) => {
                         let text = lines.iter().map(|l| l.text().to_string()).collect();
@@ -57,12 +60,10 @@ impl Root {
                                 .with_mode(DiffMode::Unified)
                                 .with_syntax_max_line_length(500)
                         });
-                        root.file_panel = Some(FilePanel::new(
-                            DIFF_TITLE.into(),
-                            PanelBody::Diff(state),
-                            None,
-                            text,
-                        ));
+                        root.install_panel_file(
+                            FilePanel::new(DIFF_TITLE.into(), PanelBody::Diff(state), None, text),
+                            cx,
+                        );
                         root.file_find_again(cx);
                     }
                     Err(error) => root.message = Some(format!("{error:#}")),

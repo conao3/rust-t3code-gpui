@@ -1,0 +1,24 @@
+{
+  "name": "right-panel-surfaces",
+  "viewport": [1400, 900],
+  "theme": "dark",
+  "settle_ms": 1200,
+  "steps": [
+    {"action": "click", "selector": {"role": "button", "name": "Panel fixture, UI parity"}},
+    {"action": "press", "value": "ctrl+alt+b"},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Add panel surface"}, "count": 1},
+    {"action": "press", "value": "f"},
+    {"action": "checkpoint", "selector": {"role": "tab", "name": "Files"}, "count": 1},
+    {"action": "press", "value": "ctrl+t"},
+    {"action": "press", "value": "d"},
+    {"action": "checkpoint", "selector": {"role": "tab", "name": "Diff"}, "count": 1},
+    {"action": "click", "selector": {"role": "button", "name": "Maximize panel"}},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Restore panel size"}, "count": 1},
+    {"action": "click", "selector": {"role": "button", "name": "Restore panel size"}},
+    {"action": "press", "value": "ctrl+alt+b"},
+    {"action": "press", "value": "ctrl+alt+b"},
+    {"action": "checkpoint", "selector": {"role": "tab", "name": "Diff"}, "count": 1},
+    {"action": "press", "value": "ctrl+w"},
+    {"action": "checkpoint", "selector": {"role": "tab", "name": "Files"}, "count": 1}
+  ]
+}
