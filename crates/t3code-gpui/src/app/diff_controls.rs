@@ -200,14 +200,15 @@ impl Root {
     }
 
     fn diff_turns(&self) -> Vec<u64> {
-        let Some((environment, thread)) = self.current() else {
+        let Some(open) = &self.conversation.open else {
             return Vec::new();
         };
-        let Some(thread) = self.thread_value(&environment, &thread) else {
-            return Vec::new();
-        };
-        let mut turns = thread["checkpoints"]
-            .as_array()
+        let state = open.watch.state();
+        let state = state.lock().expect("thread state");
+        let mut turns = state
+            .projection
+            .get("checkpoints")
+            .and_then(Value::as_array)
             .into_iter()
             .flatten()
             .filter(|checkpoint| checkpoint["runId"].is_string())
