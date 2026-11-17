@@ -748,11 +748,13 @@ impl Render for RowView {
             RowKind::User => base
                 .py_2()
                 .flex()
-                .justify_end()
+                .flex_col()
+                .items_end()
+                .gap_1()
+                .child(self.render_images())
                 .child(
                     div()
                         .id("user-bubble")
-                        .child(self.render_images())
                         .role(accesskit::Role::Document)
                         .aria_label("User message")
                         .accessibility_id(self.row.key.clone())
@@ -768,6 +770,9 @@ impl Render for RowView {
                         .p_3()
                         .rounded(px(16.))
                         .bg(crate::appearance::message(cx))
+                        .when(self.row.text.is_empty(), |bubble| {
+                            bubble.p_0().bg(gpui_kit::transparent_black())
+                        })
                         .when(self.row.detail == "agent", |bubble| {
                             bubble
                                 .cursor_pointer()

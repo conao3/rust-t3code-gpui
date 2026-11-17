@@ -66,6 +66,7 @@ impl RowView {
     pub(super) fn render_images(&self) -> AnyElement {
         v_flex()
             .gap_2()
+            .items_end()
             .children(
                 self.images
                     .items
@@ -78,7 +79,8 @@ impl RowView {
                             .aria_label(name.clone())
                             .child(
                                 img(image.clone())
-                                    .max_w(px(400.))
+                                    .w(px(384.))
+                                    .max_w_full()
                                     .max_h(px(300.))
                                     .object_fit(ObjectFit::Contain)
                                     .rounded_md(),
