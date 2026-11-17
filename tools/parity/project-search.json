@@ -68,6 +68,13 @@
       "count": 1
     },
     {
+      "action": "focus",
+      "selector": {
+        "role": "combobox",
+        "name": "Search in UI parity"
+      }
+    },
+    {
       "action": "press",
       "value": "enter"
     },

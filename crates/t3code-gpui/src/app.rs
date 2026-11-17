@@ -1379,7 +1379,7 @@ impl Render for Root {
                     .children(self.render_explorer(cx))
                     .children(self.render_file_panel(cx)),
             )
-            .when(self.project_search.open, |root_el| root_el.child(self.render_project_search(cx)))
+            .when(self.project_search.open, |root_el| root_el.child(self.render_project_search(window, cx)))
             .when(self.palette_open, |root_el| {
                 root_el.child(self.render_palette(cx))
             })

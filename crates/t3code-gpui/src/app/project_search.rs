@@ -201,6 +201,7 @@ impl Root {
     fn render_project_search_row(&self, index: usize, cx: &Context<Self>) -> AnyElement {
         match self.project_search.rows.get(index) {
             Some(SearchRow::Header(path, count)) => h_flex()
+                .w_full()
                 .h(px(32.))
                 .px_3()
                 .gap_2()
@@ -215,21 +216,62 @@ impl Root {
                     path: item["path"].as_str().unwrap_or_default().into(),
                     line: item["lineNumber"].as_u64().unwrap_or(1) as usize,
                 };
-                let label = format!(
-                    "{} {}",
-                    action.line,
-                    item["lineContent"].as_str().unwrap_or_default()
-                );
+                let content = item["lineContent"].as_str().unwrap_or_default();
+                let label = format!("{} {content}", action.line);
+                let byte_offset = |offset: usize| {
+                    let mut units = 0;
+                    for (byte, ch) in content.char_indices() {
+                        if units >= offset {
+                            return byte;
+                        }
+                        units += ch.len_utf16();
+                    }
+                    content.len()
+                };
+                let highlights: Vec<_> = item["matchRanges"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|range| {
+                        let start = byte_offset(range["start"].as_u64().unwrap_or(0) as usize);
+                        let end = byte_offset(range["end"].as_u64().unwrap_or(0) as usize);
+                        (
+                            start..end,
+                            HighlightStyle {
+                                background_color: Some(cx.theme().primary.opacity(0.3)),
+                                ..Default::default()
+                            },
+                        )
+                    })
+                    .collect();
                 Button::new(("project-search-match", *index))
-                    .label(label)
+                    .accessibility_label(label)
                     .ghost()
                     .compact()
                     .h(px(28.))
                     .w_full()
-                    .justify_start()
-                    .font_family("monospace")
-                    .text_xs()
-                    .selected(*index == self.project_search.selected)
+                    .px_3()
+                    .rounded_none()
+                    .when(*index == self.project_search.selected, |button| {
+                        button.bg(cx.theme().accent)
+                    })
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .gap_3()
+                            .font_family("monospace")
+                            .text_xs()
+                            .child(
+                                div()
+                                    .w(px(40.))
+                                    .text_right()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(action.line.to_string()),
+                            )
+                            .child(div().flex_1().min_w_0().truncate().text_left().child(
+                                StyledText::new(content.to_string()).with_highlights(highlights),
+                            )),
+                    )
                     .on_click(
                         cx.listener(move |root, _, _, cx| root.open_project_match(&action, cx)),
                     )
@@ -239,7 +281,7 @@ impl Root {
         }
     }
 
-    pub(super) fn render_project_search(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_project_search(&self, window: &Window, cx: &Context<Self>) -> AnyElement {
         let state = &self.project_search;
         let project = self
             .open_entry()
@@ -270,19 +312,23 @@ impl Root {
         let root = cx.entity().downgrade();
         div()
             .absolute()
-            .top(px(80.))
+            .top_0()
             .left_0()
-            .right_0()
+            .size_full()
+            .bg(black().opacity(0.5))
             .flex()
             .justify_center()
             .child(
                 v_flex()
                     .id("project-content-search")
-                    .w(px(720.))
-                    .rounded_md()
+                    .w(px(576.))
+                    .h(px(420.))
+                    .mt(window.viewport_size().height * 0.1)
+                    .rounded(px(16.))
+                    .overflow_hidden()
                     .border_1()
                     .border_color(cx.theme().border)
-                    .bg(cx.theme().popover)
+                    .bg(cx.theme().background)
                     .shadow_lg()
                     .role(accesskit::Role::Dialog)
                     .aria_label("Search project contents")
@@ -301,19 +347,11 @@ impl Root {
                             .py_2()
                             .gap_2()
                             .child(
-                                Button::new("project-search-back")
-                                    .label("Back")
-                                    .ghost()
-                                    .compact()
-                                    .accessibility_label("Back to command palette")
-                                    .on_click(cx.listener(|root, _, window, cx| {
-                                        root.project_search.open = false;
-                                        root.toggle_palette(window, cx);
-                                    })),
-                            )
-                            .child(
                                 div().flex_1().child(
                                     Input::new(&state.input)
+                                        .appearance(false)
+                                        .focus_bordered(false)
+                                        .prefix(Icon::new(IconName::Search).size(px(14.)))
                                         .role(accesskit::Role::ComboBox)
                                         .aria_label(format!("Search in {project}")),
                                 ),
@@ -333,24 +371,24 @@ impl Root {
                                         .selected(state.options[index])
                                         .ghost()
                                         .compact()
-                                        .on_click(cx.listener(move |root, _, window, cx| {
+                                        .on_click(cx.listener(move |root, _, _, cx| {
                                             root.project_search.options[index] =
                                                 !root.project_search.options[index];
                                             root.search_project_contents(
                                                 root.project_search.query.clone(),
                                                 cx,
                                             );
-                                            root.project_search
-                                                .input
-                                                .update(cx, |state, cx| state.focus(window, cx));
                                         }))
                                 }),
                             ),
                     )
                     .child(
-                        div()
+                        h_flex()
+                            .h(px(36.))
+                            .flex_none()
                             .px_3()
-                            .py_1()
+                            .border_b_1()
+                            .border_color(cx.theme().border)
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
                             .child(status),
@@ -360,8 +398,20 @@ impl Root {
                             root.update(cx, |root, cx| root.render_project_search_row(index, cx))
                                 .unwrap_or_else(|_| div().into_any_element())
                         })
-                        .h(px(420.))
+                        .flex_1()
+                        .min_h_0()
                         .w_full(),
+                    )
+                    .child(
+                        h_flex()
+                            .h(px(40.))
+                            .flex_none()
+                            .px_3()
+                            .border_t_1()
+                            .border_color(cx.theme().border)
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child("↑ ↓ Navigate   Enter Open file   Esc Back"),
                     ),
             )
             .into_any_element()
