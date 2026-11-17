@@ -512,6 +512,7 @@ pub struct Root {
     sidebar_resizing: bool,
     window_drag_pending: bool,
     history: crate::navigation::History,
+    history_drafts: HashMap<String, NewThreadDraft>,
     sidebar_pane: Entity<SidebarPane>,
     sidebar_header: sidebar_header::State,
     sidebar_scroll: ScrollHandle,
@@ -780,6 +781,7 @@ impl Root {
             sidebar_resizing: false,
             window_drag_pending: false,
             history: crate::navigation::History::default(),
+            history_drafts: HashMap::new(),
             sidebar_pane: cx.new(|_| SidebarPane {
                 root: sidebar_root.clone(),
             }),
@@ -1494,14 +1496,10 @@ impl Render for Root {
                 }
             }))
             .on_action(cx.listener(|root, _: &HistoryBack, _, cx| {
-                if let Some((environment, thread_id)) = root.history.step(false) {
-                    root.open_thread(environment, thread_id, cx);
-                }
+                root.step_history(false, cx);
             }))
             .on_action(cx.listener(|root, _: &HistoryForward, _, cx| {
-                if let Some((environment, thread_id)) = root.history.step(true) {
-                    root.open_thread(environment, thread_id, cx);
-                }
+                root.step_history(true, cx);
             }))
             .on_action(cx.listener(|root, _: &ToggleSidebar, _, cx| {
                 root.sidebar_hidden = !root.sidebar_hidden;

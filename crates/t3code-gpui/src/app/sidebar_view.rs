@@ -249,7 +249,10 @@ impl Root {
             return;
         };
         self.pr_state.page = false;
-        self.history.visit((environment.clone(), thread_id.clone()));
+        self.history.visit(crate::navigation::Target::Thread(
+            environment.clone(),
+            thread_id.clone(),
+        ));
         self.stash_composer(cx);
         let watch = connection.watch_thread(&self.runtime, &thread_id);
         self.conversation.open = Some(OpenThread { environment, watch });

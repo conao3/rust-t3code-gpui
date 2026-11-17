@@ -1,6 +1,56 @@
 use super::*;
 
 impl Root {
+    pub(super) fn go_home(&mut self, cx: &mut Context<Self>) {
+        self.stash_composer(cx);
+        self.history.visit(crate::navigation::Target::Home);
+        self.conversation.draft = None;
+        self.pr_state.page = false;
+        self.close_thread(cx);
+        if let Some(group) = self.project_groups().first() {
+            let saved = self
+                .history_drafts
+                .values()
+                .find(|draft| draft.group.as_deref() == Some(group.key.as_str()))
+                .cloned();
+            if let Some(draft) = saved {
+                self.conversation.draft = Some(draft);
+            } else {
+                self.begin_new_thread_with_history(true, cx);
+            }
+            self.history.replace(crate::navigation::Target::Draft(
+                self.conversation.draft.as_ref().unwrap().id.clone(),
+            ));
+        }
+        self.load_composer();
+        cx.notify();
+    }
+
+    pub(super) fn step_history(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let Some(target) = self.history.step(forward) else {
+            return;
+        };
+        match target {
+            crate::navigation::Target::Home => self.go_home(cx),
+            crate::navigation::Target::Thread(environment, thread) => {
+                self.open_thread(environment, thread, cx)
+            }
+            crate::navigation::Target::Draft(id) => {
+                self.stash_composer(cx);
+                self.conversation.draft = Some(
+                    self.history_drafts
+                        .get(&id)
+                        .expect("visited draft is retained")
+                        .clone(),
+                );
+                self.pr_state.page = false;
+                self.close_thread(cx);
+                self.load_composer();
+                cx.notify();
+            }
+        }
+    }
+
     fn window_drag_area(&self, id: &'static str, cx: &Context<Self>) -> Stateful<Div> {
         div()
             .id(id)
@@ -249,7 +299,7 @@ impl Root {
                     .ghost()
                     .h(px(28.))
                     .px_1()
-                    .on_click(cx.listener(|root, _, window, cx| root.new_thread(window, cx)))
+                    .on_click(cx.listener(|root, _, _, cx| root.go_home(cx)))
                     .ml_4()
                     .child(
                         h_flex().gap(px(3.)).child("T3 Code").child(
