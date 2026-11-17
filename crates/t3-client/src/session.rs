@@ -392,6 +392,12 @@ impl Connection {
             })
     }
 
+    pub async fn pull_request_diff(&self, reference: Value) -> Result<Value> {
+        self.api
+            .post("/api/pull-requests/diff", Some(&reference))
+            .await
+    }
+
     pub async fn diff_preview(&self, cwd: &str) -> Result<Value> {
         self.rpc()
             .await?

@@ -49,6 +49,7 @@ mod git_controls;
 mod hosts;
 mod lineage;
 mod palette;
+mod pull_requests;
 mod right_panel;
 mod settings;
 mod sidebar_branding;
@@ -92,6 +93,7 @@ actions!(
         ToggleDiff,
         ToggleExplorer,
         ToggleRightPanel,
+        CopyPullRequestNumber,
         NewRightPanel,
         MaximizeRightPanel,
         ManageHosts,
@@ -155,6 +157,7 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "editor.openFavorite" => Box::new(OpenFavoriteEditor),
         "settings.connections" => Box::new(ManageHosts),
         "settings.open" => Box::new(OpenSettings),
+        "pullRequest.copyNumber" => Box::new(CopyPullRequestNumber),
         "rightPanel.toggle" => Box::new(ToggleRightPanel),
         "rightPanel.new" => Box::new(NewRightPanel),
         "rightPanel.toggleMaximized" => Box::new(MaximizeRightPanel),
@@ -350,6 +353,10 @@ struct DetailsStamp {
 }
 
 pub struct Root {
+    pr_state: pull_requests::State,
+    pr_search: Entity<InputState>,
+    pr_comment: Entity<TextareaState>,
+    pr_pane: Entity<pull_requests::Pane>,
     diff_view: diff_controls::State,
     git_state: git_controls::State,
     right_panel: right_panel::State,
@@ -618,6 +625,12 @@ impl Root {
         .filter_map(|(section, expanded)| (!expanded).then_some(section))
         .collect();
         Self {
+            pr_state: pull_requests::State::default(),
+            pr_search: cx.new(|cx| InputState::new(window, cx).placeholder("Search pull requests")),
+            pr_comment: cx.new(|cx| TextareaState::new(window, cx).placeholder("Leave a comment")),
+            pr_pane: cx.new(|_| pull_requests::Pane {
+                root: sidebar_root.clone(),
+            }),
             diff_view: diff_controls::State::default(),
             git_state: git_controls::State::default(),
             right_panel: right_panel::State::default(),
@@ -865,6 +878,8 @@ impl Root {
                 self.key_context("terminalFocus", window, cx)
                     || [
                         self.composer.read(cx).focus_handle(cx),
+                        self.pr_search.read(cx).focus_handle(cx),
+                        self.pr_comment.read(cx).focus_handle(cx),
                         self.find_input.read(cx).focus_handle(cx),
                         self.file_find_input.read(cx).focus_handle(cx),
                         self.palette.read(cx).focus_handle(cx),
@@ -1096,6 +1111,12 @@ impl Render for Root {
             self.sidebar_stamp = Some(sidebar_stamp);
             window.mark_view_dirty(self.sidebar_pane.entity_id());
         }
+        if let Some(submitted) = self.pr_state.submitted_comment.take()
+            && self.pr_comment.read(cx).value().as_ref() == submitted
+        {
+            self.pr_comment
+                .update(cx, |state, cx| state.set_value("", window, cx));
+        }
         self.prepare_right_panel(window, cx);
         self.follow_explorer(cx);
         self.follow_workspace();
@@ -1211,6 +1232,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &ToggleFilePicker, window, cx| {
                 root.toggle_file_picker(window, cx)
             }))
+            .on_action(cx.listener(|root, _: &CopyPullRequestNumber, _, cx| root.copy_pull_request_number(cx)))
             .on_action(cx.listener(|root, action: &git_controls::GitAction, window, cx| root.git_action(action, window, cx)))
             .on_action(cx.listener(|root, action: &diff_controls::SelectDiff, _, cx| root.select_diff(action, cx)))
             .on_action(cx.listener(|root, action: &right_panel::TabAction, _, cx| root.panel_tab_action(action, cx)))
@@ -1424,10 +1446,11 @@ impl Render for Root {
                                 ),
                         )
                     })
-                    .when(!(self.right_panel.open && (self.right_panel.maximized || f32::from(window.viewport_size().width) <= 980.)), |row| row.child(v_flex().flex_1().h_full().min_w_0().min_h_0()
+                    .when(!self.pr_state.page && !(self.right_panel.open && (self.right_panel.maximized || f32::from(window.viewport_size().width) <= 980.)), |row| row.child(v_flex().flex_1().h_full().min_w_0().min_h_0()
                         .child(div().flex_1().h_0().min_h_0().child(self.render_workspace_canvas(pane, cx)))
                         .children(terminal_drawer.map(|drawer| drawer.cached(StyleRefinement::default().w_full().h(px(terminal_height)).flex_none()).into_any_element()))))
-                    .when(self.right_panel.open, |row| row
+                    .when(self.pr_state.page, |row| row.child(self.pr_pane.clone().cached(StyleRefinement::default().flex_1().h_full().min_w_0())))
+                    .when(!self.pr_state.page && self.right_panel.open, |row| row
                         .child(div().w(px(4.)).h_full().cursor_col_resize().on_mouse_down(MouseButton::Left, cx.listener(|root, _, _, cx| { root.panel_resizing = true; cx.notify(); })))
                         .child(self.panel_pane.clone().cached(StyleRefinement::default().w(px(self.panel_width(f32::from(window.viewport_size().width)))).h_full().flex_none()))),
             )

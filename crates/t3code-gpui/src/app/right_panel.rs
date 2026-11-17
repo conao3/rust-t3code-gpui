@@ -7,6 +7,7 @@ pub(super) struct State {
     pub launcher: bool,
     pub tabs: Vec<String>,
     pub active: Option<String>,
+    pub pull_requests: HashMap<String, (String, Value)>,
     #[serde(skip)]
     files: HashMap<String, FilePanel>,
 }
@@ -139,6 +140,16 @@ impl Root {
         match self.right_panel.active.clone().as_deref() {
             Some("files") if self.explorer.is_none() => self.toggle_explorer(cx),
             Some("diff") => self.refresh_diff(cx),
+            Some("pull-requests") => self.open_pull_requests(false, cx),
+            Some(id) if id.starts_with("pull-request:") => {
+                if !self.pr_state.views.contains_key(id)
+                    && let Some((environment, reference)) =
+                        self.right_panel.pull_requests.get(id).cloned()
+                {
+                    self.pr_state.page = false;
+                    self.open_pull_request(environment, reference, cx);
+                }
+            }
             Some(id) if id.starts_with("file:") => self.open_file(id[5..].into(), cx),
             _ => {}
         }
@@ -209,6 +220,7 @@ impl Root {
         };
         self.right_panel.tabs.remove(index);
         self.right_panel.files.remove(id);
+        self.right_panel.pull_requests.remove(id);
         if self.right_panel.active.as_deref() == Some(id) {
             self.file_panel = None;
             self.right_panel.active = None;
@@ -272,6 +284,7 @@ impl Root {
         if self.panel_stamp != stamp {
             self.panel_stamp = stamp;
             window.mark_view_dirty(self.panel_pane.entity_id());
+            window.mark_view_dirty(self.pr_pane.entity_id());
         }
     }
 
@@ -367,6 +380,9 @@ impl Root {
             self.render_surface_launcher(cx)
         } else {
             match self.right_panel.active.as_deref() {
+                Some(id) if id.starts_with("pull-request:") || id == "pull-requests" => {
+                    self.render_pull_requests(cx)
+                }
                 Some("diff") => v_flex()
                     .h_full()
                     .min_h_0()
@@ -396,6 +412,8 @@ impl Root {
                     match event.keystroke.key.as_str() {
                         "f" => root.toggle_explorer(cx),
                         "d" => root.toggle_diff(cx),
+                        "p" => root.open_current_pull_request(cx),
+                        "l" => root.open_pull_requests(false, cx),
                         "escape" => {
                             root.right_panel.launcher = false;
                             root.panel_revision += 1;
@@ -434,8 +452,15 @@ impl Root {
                             .border_color(theme.border)
                             .bg(theme.popover)
                             .shadow_lg()
-                            .children([("Files", "F"), ("Diff", "D")].into_iter().map(
-                                |(label, key)| {
+                            .children(
+                                [
+                                    ("Files", "F"),
+                                    ("Diff", "D"),
+                                    ("Pull request", "P"),
+                                    ("Linked pull requests", "L"),
+                                ]
+                                .into_iter()
+                                .map(|(label, key)| {
                                     Button::new(label)
                                         .label(format!("{label}    {key}"))
                                         .accessibility_label(label)
@@ -445,12 +470,16 @@ impl Root {
                                         .on_click(cx.listener(move |root, _, _, cx| {
                                             if label == "Files" {
                                                 root.toggle_explorer(cx);
+                                            } else if label == "Pull request" {
+                                                root.open_current_pull_request(cx);
+                                            } else if label == "Linked pull requests" {
+                                                root.open_pull_requests(false, cx);
                                             } else {
                                                 root.toggle_diff(cx);
                                             }
                                         }))
-                                },
-                            )),
+                                }),
+                            ),
                     )
                 },
             )
@@ -467,22 +496,31 @@ impl Root {
             .gap_1()
             .child(div().text_sm().mb_3().child("Open a surface"))
             .children(
-                [("Files", "F"), ("Diff", "D")]
-                    .into_iter()
-                    .map(|(label, key)| {
-                        Button::new(label)
-                            .label(format!("{label}    {key}"))
-                            .accessibility_label(label)
-                            .ghost()
-                            .w_full()
-                            .on_click(cx.listener(move |root, _, _, cx| {
-                                if label == "Files" {
-                                    root.toggle_explorer(cx);
-                                } else {
-                                    root.toggle_diff(cx);
-                                }
-                            }))
-                    }),
+                [
+                    ("Files", "F"),
+                    ("Diff", "D"),
+                    ("Pull request", "P"),
+                    ("Linked pull requests", "L"),
+                ]
+                .into_iter()
+                .map(|(label, key)| {
+                    Button::new(label)
+                        .label(format!("{label}    {key}"))
+                        .accessibility_label(label)
+                        .ghost()
+                        .w_full()
+                        .on_click(cx.listener(move |root, _, _, cx| {
+                            if label == "Files" {
+                                root.toggle_explorer(cx);
+                            } else if label == "Pull request" {
+                                root.open_current_pull_request(cx);
+                            } else if label == "Linked pull requests" {
+                                root.open_pull_requests(false, cx);
+                            } else {
+                                root.toggle_diff(cx);
+                            }
+                        }))
+                }),
             )
             .into_any_element()
     }
@@ -492,6 +530,10 @@ fn panel_title(id: &str) -> String {
     match id {
         "files" => "Files".into(),
         "diff" => "Diff".into(),
+        "pull-requests" => "Linked pull requests".into(),
+        id if id.starts_with("pull-request:") => {
+            format!("PR #{}", id.rsplit(':').next().unwrap_or_default())
+        }
         _ => id
             .strip_prefix("file:")
             .unwrap_or(id)
