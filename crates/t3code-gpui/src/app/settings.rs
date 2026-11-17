@@ -162,24 +162,16 @@ impl Root {
         &mut self,
         setting: &settings_catalog::Setting,
         search: &Entity<InputState>,
+        expanded: Option<&Entity<bool>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.settings_page = setting.page;
-        if setting.advanced {
-            window
-                .use_keyed_state(
-                    SharedString::from(format!(
-                        "settings-advanced:{}:{}",
-                        setting.page, setting.section
-                    )),
-                    cx,
-                    |_, _| false,
-                )
-                .update(cx, |expanded, cx| {
-                    *expanded = true;
-                    cx.notify();
-                });
+        if let Some(expanded) = expanded {
+            expanded.update(cx, |expanded, cx| {
+                *expanded = true;
+                cx.notify();
+            });
         }
         search.update(cx, |input, cx| input.set_value("", window, cx));
         self.settings_focus.focus(window, cx);
@@ -225,6 +217,21 @@ impl Root {
             |_, _| 0usize,
         );
         let active_result = (*search_index.read(cx)).min(results.len().saturating_sub(1));
+        let result_expansion = results
+            .iter()
+            .map(|setting| {
+                setting.advanced.then(|| {
+                    window.use_keyed_state(
+                        SharedString::from(format!(
+                            "settings-advanced:{}:{}",
+                            setting.page, setting.section
+                        )),
+                        cx,
+                        |_, _| false,
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
         let theme = cx.theme().colors;
         let environment = self.settings_environment();
         let server = self.config_of(&environment).unwrap_or(Value::Null);
@@ -633,7 +640,7 @@ impl Root {
                     )
                     .child(
                         Input::new(&search)
-                            .role(accesskit::Role::ComboBox)
+                            .role(accesskit::Role::EditableComboBox)
                             .aria_label("Search settings")
                             .appearance(false)
                             .flex_1()
@@ -784,6 +791,7 @@ impl Root {
                         .children(results.iter().enumerate().map(|(index, setting)| {
                             let setting = setting.clone();
                             let search = search.clone();
+                            let expanded = result_expansion[index].clone();
                             let page_label = settings_catalog::PAGES
                                 .iter()
                                 .find(|(page, _, _)| *page == setting.page)
@@ -810,7 +818,13 @@ impl Root {
                                         ),
                                 )
                                 .on_click(cx.listener(move |root, _, window, cx| {
-                                    root.open_settings_result(&setting, &search, window, cx)
+                                    root.open_settings_result(
+                                        &setting,
+                                        &search,
+                                        expanded.as_ref(),
+                                        window,
+                                        cx,
+                                    )
                                 }))
                         })),
                 )
@@ -823,7 +837,13 @@ impl Root {
                         "escape" => search.update(cx, |input, cx| input.set_value("", window, cx)),
                         "enter" => {
                             if let Some(setting) = results.get(active_result) {
-                                root.open_settings_result(setting, &search, window, cx);
+                                root.open_settings_result(
+                                    setting,
+                                    &search,
+                                    result_expansion[active_result].as_ref(),
+                                    window,
+                                    cx,
+                                );
                             }
                         }
                         "up" | "down" => {
