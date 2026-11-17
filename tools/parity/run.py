@@ -280,6 +280,7 @@ async def main():
             )
         await reference.viewport(width, height, native.session["display"])
         await native.viewport(width, height)
+        await reference.call("Page.bringToFront")
         reports = {
             "reference": await execute(
                 reference, "reference", scenario, args.output / "reference"

@@ -78,6 +78,7 @@ class Cdp:
         except BaseException:
             await self.socket.close()
             raise
+        await self.call("Accessibility.enable")
         return self
 
     async def wait_document(self):
