@@ -377,8 +377,8 @@ impl Root {
             .into_any_element()
     }
 
-    pub(super) fn render_workspace_mode(&self, _: &Context<Self>) -> AnyElement {
-        self.render_workspace_select()
+    pub(super) fn render_workspace_mode(&self, cx: &Context<Self>) -> AnyElement {
+        self.render_workspace_select(cx)
     }
 
     pub(super) fn workspace_editor(&self) -> Option<String> {

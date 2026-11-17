@@ -1,30 +1,20 @@
 use super::*;
-use gpui_kit::component::{
-    IndexPath,
-    select::{SearchableVec, Select, SelectEvent, SelectItem, SelectState},
-};
+use gpui_kit::component::popover::Popover;
 
 #[derive(Clone)]
-struct Choice {
+struct ContextChoice {
+    kind: &'static str,
     value: String,
-    label: SharedString,
+    label: String,
+    checked: bool,
 }
-impl SelectItem for Choice {
-    type Value = String;
-    fn title(&self) -> SharedString {
-        self.label.clone()
-    }
-    fn value(&self) -> &String {
-        &self.value
-    }
-}
-type State = SelectState<SearchableVec<Choice>>;
 
 pub(super) struct Controls {
     key: Option<(String, String, Value)>,
-    host: Option<Entity<State>>,
-    workspace: Option<Entity<State>>,
-    subscriptions: Vec<Subscription>,
+    choices: Vec<ContextChoice>,
+    open: bool,
+    cursor: usize,
+    focus: FocusHandle,
     pub(super) effort_focus: FocusHandle,
     pub(super) effort_cursor: Option<Value>,
 }
@@ -32,38 +22,18 @@ impl Controls {
     pub(super) fn new(cx: &mut App) -> Self {
         Self {
             key: None,
-            host: None,
-            workspace: None,
-            subscriptions: vec![],
+            choices: vec![],
+            open: false,
+            cursor: 0,
+            focus: cx.focus_handle(),
             effort_focus: cx.focus_handle(),
             effort_cursor: None,
         }
     }
 }
-fn select(
-    choices: Vec<(String, String)>,
-    selected: &str,
-    window: &mut Window,
-    cx: &mut App,
-) -> Entity<State> {
-    let index = choices
-        .iter()
-        .position(|(value, _)| value == selected)
-        .map(IndexPath::new);
-    let items = SearchableVec::new(
-        choices
-            .into_iter()
-            .map(|(value, label)| Choice {
-                value,
-                label: label.into(),
-            })
-            .collect::<Vec<_>>(),
-    );
-    cx.new(|cx| SelectState::new(items, index, window, cx))
-}
 
 impl Root {
-    pub(super) fn sync_composer_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn sync_composer_controls(&mut self, _: &mut Window, _: &mut Context<Self>) {
         let key = self
             .draft_project()
             .zip(self.draft.as_ref())
@@ -72,139 +42,240 @@ impl Root {
             return;
         }
         self.composer_choices.key = key.clone();
-        self.composer_choices.subscriptions.clear();
-        self.composer_choices.host = None;
-        self.composer_choices.workspace = None;
+        self.composer_choices.choices.clear();
+        self.composer_choices.open = false;
         let Some((environment, _, strategy)) = key else {
             return;
         };
-        let groups = self.project_groups();
-        let choices = groups
-            .iter()
-            .find(|g| self.draft.as_ref().and_then(|d| d.group.as_ref()) == Some(&g.key))
-            .map(|g| {
-                g.members
-                    .iter()
-                    .map(|m| (m.environment.clone(), m.environment.clone()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let host = select(choices, &environment, window, cx);
-        let mut workspaces = vec![
-            (
-                "root".into(),
-                if strategy["type"] == "existing_worktree" {
-                    "Current worktree"
-                } else {
-                    "Current checkout"
-                }
-                .into(),
-            ),
-            ("worktree".into(), "New worktree".into()),
-        ];
-        if let Some(previous) = self.previous_worktree() {
-            let label = previous["branch"]
-                .as_str()
-                .map(|branch| format!("Previous worktree ({branch})"))
-                .unwrap_or_else(|| "Previous worktree".into());
-            workspaces.push(("previous".into(), label));
+        let mut choices = vec![];
+        if self.connections.len() > 1
+            && let Some(group) = self
+                .project_groups()
+                .iter()
+                .find(|g| self.draft.as_ref().and_then(|d| d.group.as_ref()) == Some(&g.key))
+        {
+            for member in &group.members {
+                choices.push(ContextChoice {
+                    kind: "host",
+                    value: member.environment.clone(),
+                    label: member.environment.clone(),
+                    checked: member.environment == environment,
+                });
+            }
         }
-        let workspace = select(
-            workspaces,
-            if strategy["type"] == "worktree" {
-                "worktree"
+        choices.push(ContextChoice {
+            kind: "mode",
+            value: "root".into(),
+            label: if strategy["type"] == "existing_worktree" {
+                "Current worktree"
             } else {
-                "root"
-            },
-            window,
-            cx,
-        );
-        for (state, kind) in [(&host, "host"), (&workspace, "mode")] {
-            self.composer_choices.subscriptions.push(cx.subscribe_in(
-                state,
-                window,
-                move |root, _, event: &SelectEvent<_>, window, cx| {
-                    if let SelectEvent::Confirm(Some(value)) = event {
-                        if kind == "mode"
-                            && value == "root"
-                            && root.draft.as_ref().is_some_and(|draft| {
-                                draft.workspace_strategy["type"] == "existing_worktree"
-                            })
-                        {
-                            return;
-                        }
-                        if value == "previous" {
-                            root.use_previous_worktree(window, cx);
-                        } else {
-                            root.workspace_action(
-                                &WorkspaceAction {
-                                    kind: kind.into(),
-                                    value: json!(value),
-                                },
-                                window,
-                                cx,
-                            );
-                        }
-                    }
-                },
-            ));
+                "Current checkout"
+            }
+            .into(),
+            checked: strategy["type"] != "worktree",
+        });
+        choices.push(ContextChoice {
+            kind: "mode",
+            value: "worktree".into(),
+            label: "New worktree".into(),
+            checked: strategy["type"] == "worktree",
+        });
+        if let Some(previous) = self.previous_worktree() {
+            choices.push(ContextChoice {
+                kind: "mode",
+                value: "previous".into(),
+                label: previous["branch"]
+                    .as_str()
+                    .map(|branch| format!("Previous worktree ({branch})"))
+                    .unwrap_or_else(|| "Previous worktree".into()),
+                checked: false,
+            });
         }
-        self.composer_choices.host = Some(host);
-        self.composer_choices.workspace = Some(workspace);
+        self.composer_choices.cursor = choices
+            .iter()
+            .position(|choice| choice.checked)
+            .unwrap_or(0);
+        self.composer_choices.choices = choices;
     }
 
     pub(super) fn render_composer_context(&self, cx: &Context<Self>) -> AnyElement {
         h_flex()
-            .gap_1()
-            .children(
-                self.composer_choices
-                    .host
-                    .as_ref()
-                    .filter(|_| self.connections.len() > 1)
-                    .map(|state| {
-                        Select::new(state)
-                            .accessibility_label("Run on")
-                            .appearance(false)
-                            .w(px(110.))
-                            .small()
-                    }),
+            .when(
+                self.workspace_status.is_repo() || self.connections.len() > 1,
+                |row| row.child(self.render_workspace_mode(cx)),
             )
-            .when(self.workspace_status.is_repo(), |row| {
-                row.child(self.render_workspace_mode(cx))
+            .into_any_element()
+    }
+
+    pub(super) fn render_workspace_select(&self, cx: &Context<Self>) -> AnyElement {
+        let root = cx.entity().downgrade();
+        let label = self
+            .composer_choices
+            .choices
+            .iter()
+            .find(|choice| {
+                choice.checked
+                    && choice.kind
+                        == if self.connections.len() > 1 {
+                            "host"
+                        } else {
+                            "mode"
+                        }
+            })
+            .map(|choice| choice.label.clone())
+            .unwrap_or_default();
+        Popover::new("composer-run-context")
+            .anchor(Anchor::BottomLeft)
+            .open(self.composer_choices.open)
+            .track_focus(&self.composer_choices.focus)
+            .on_open_change(cx.listener(|root, open, _, cx| {
+                root.composer_choices.open = *open;
+                cx.notify();
+            }))
+            .trigger(
+                Button::new("composer-run-context-trigger")
+                    .label(label.clone())
+                    .accessibility_label(label)
+                    .icon(IconName::Folder)
+                    .small()
+                    .ghost()
+                    .compact(),
+            )
+            .content(move |_, _, cx| {
+                root.update(cx, |root, cx| root.render_context_menu(cx))
+                    .expect("composer root is alive")
             })
             .into_any_element()
     }
 
-    pub(super) fn render_workspace_select(&self) -> AnyElement {
-        self.composer_choices
-            .workspace
-            .as_ref()
-            .map(|state| {
-                Select::new(state)
-                    .accessibility_label("Workspace")
-                    .appearance(false)
-                    .w(px(165.))
-                    .small()
-                    .into_any_element()
-            })
-            .unwrap_or_else(|| div().into_any_element())
+    fn render_context_menu(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let mut menu = v_flex()
+            .id("composer-context-menu")
+            .role(accesskit::Role::Menu)
+            .aria_label("Run context")
+            .min_w(px(190.))
+            .p_1()
+            .gap_0p5();
+        let mut previous_kind = None;
+        for (index, choice) in self.composer_choices.choices.iter().enumerate() {
+            if previous_kind != Some(choice.kind) {
+                menu = menu.child(
+                    div()
+                        .px_2()
+                        .py_1()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(if choice.kind == "host" {
+                            "Run on"
+                        } else {
+                            "Workspace"
+                        }),
+                );
+                previous_kind = Some(choice.kind);
+            }
+            menu = menu.child(
+                h_flex()
+                    .id(("context-choice", index))
+                    .role(accesskit::Role::MenuItemRadio)
+                    .aria_label(choice.label.clone())
+                    .aria_toggled(if choice.checked {
+                        accesskit::Toggled::True
+                    } else {
+                        accesskit::Toggled::False
+                    })
+                    .when(index == self.composer_choices.cursor, |row| {
+                        row.track_focus(&self.composer_choices.focus)
+                            .bg(theme.list_active)
+                    })
+                    .px_2()
+                    .h(px(28.))
+                    .gap_2()
+                    .rounded_sm()
+                    .text_sm()
+                    .cursor_pointer()
+                    .child(choice.label.clone())
+                    .child(div().flex_1())
+                    .when(choice.checked, |row| {
+                        row.child(Icon::new(IconName::Check).size(px(14.)))
+                    })
+                    .on_click(cx.listener(move |root, _, window, cx| {
+                        root.choose_context(index, window, cx)
+                    }))
+                    .on_key_down(cx.listener(|root, event: &KeyDownEvent, window, cx| {
+                        match event.keystroke.key.as_str() {
+                            "up" | "down" => {
+                                let count = root.composer_choices.choices.len();
+                                if count > 0 {
+                                    root.composer_choices.cursor = if event.keystroke.key == "down"
+                                    {
+                                        (root.composer_choices.cursor + 1) % count
+                                    } else {
+                                        (root.composer_choices.cursor + count - 1) % count
+                                    };
+                                }
+                                cx.notify();
+                            }
+                            "enter" | "space" => {
+                                root.choose_context(root.composer_choices.cursor, window, cx)
+                            }
+                            "escape" => {
+                                root.composer_choices.open = false;
+                                root.composer
+                                    .update(cx, |state, cx| state.focus(window, cx));
+                                cx.notify();
+                            }
+                            _ => return,
+                        }
+                        cx.stop_propagation();
+                    })),
+            );
+        }
+        menu.into_any_element()
+    }
+
+    fn choose_context(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(choice) = self.composer_choices.choices.get(index).cloned() else {
+            return;
+        };
+        self.composer_choices.open = false;
+        if choice.value == "previous" {
+            self.use_previous_worktree(window, cx);
+        } else if !(choice.value == "root"
+            && self
+                .draft
+                .as_ref()
+                .is_some_and(|draft| draft.workspace_strategy["type"] == "existing_worktree"))
+        {
+            self.workspace_action(
+                &WorkspaceAction {
+                    kind: choice.kind.into(),
+                    value: json!(choice.value),
+                },
+                window,
+                cx,
+            );
+        }
+        self.composer
+            .update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
     }
 
     pub(super) fn open_composer_select(
         &mut self,
-        host: bool,
+        _: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.sync_composer_controls(window, cx);
-        let state = if host {
-            &self.composer_choices.host
-        } else {
-            &self.composer_choices.workspace
-        };
-        if let Some(state) = state {
-            state.update(cx, |state, cx| state.open(window, cx));
+        if self.draft.is_none() || self.composer_choices.choices.is_empty() {
+            return;
         }
+        self.composer_choices.open = !self.composer_choices.open;
+        if self.composer_choices.open {
+            self.composer_choices.focus.focus(window, cx);
+        }
+        cx.notify();
     }
 
     pub(super) fn cycle_composer_host(&mut self, window: &mut Window, cx: &mut Context<Self>) {
