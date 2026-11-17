@@ -6886,6 +6886,17 @@ pub fn run(
                 ..Default::default()
             };
             gpui_kit::open_window(options, cx, |window, cx| {
+                if std::env::var_os("T3CODE_GPUI_RENDERER_INFO").is_some() {
+                    let renderer = window.gpu_specs().map(|gpu| {
+                        json!({
+                            "is_software_emulated": gpu.is_software_emulated,
+                            "device_name": gpu.device_name,
+                            "driver_name": gpu.driver_name,
+                            "driver_info": gpu.driver_info,
+                        })
+                    });
+                    eprintln!("T3CODE_GPUI_RENDERER_INFO {}", json!(renderer));
+                }
                 cx.new(|cx| {
                     Root::new(
                         (config, config_path),

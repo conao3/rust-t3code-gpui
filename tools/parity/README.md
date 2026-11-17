@@ -22,6 +22,8 @@ The native fixture server must already be running independently. Startup verifie
 
 Pass `--display :0` to the desktop launcher to use an existing X11 desktop for physical GPU measurements. Select the measured release or packaged binary with `--native-binary`. Its application process groups belong to that comparison and are cleaned up with the launcher.
 
+The isolated native session enables `T3CODE_GPUI_RENDERER_INFO` and captures the selected GPU, driver and software-emulation flag in `native.log`. `Native.renderer_info()` reads that startup record. Record the original browser's `SystemInfo.getInfo` data alongside it when comparing performance; opening a GPU device during adapter enumeration alone does not identify the selected renderer.
+
 To operate an original desktop on an existing X11 display, start it with its isolated profile and these additional arguments:
 
 ```sh

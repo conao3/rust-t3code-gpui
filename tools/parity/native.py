@@ -20,7 +20,8 @@ def stale_object(error):
 
 class Native:
     def __init__(self, session):
-        self.session = json.loads(Path(session).read_text())
+        self.session_path = Path(session)
+        self.session = json.loads(self.session_path.read_text())
         os.environ["DBUS_SESSION_BUS_ADDRESS"] = self.session["dbus_address"]
         os.environ["DISPLAY"] = self.session["display"]
         import pyatspi
@@ -43,6 +44,13 @@ class Native:
                         "Native fixture did not open its window"
                     ) from None
                 time.sleep(0.1)
+
+    def renderer_info(self):
+        prefix = "T3CODE_GPUI_RENDERER_INFO "
+        for line in self.session_path.with_name("native.log").read_text().splitlines():
+            if line.startswith(prefix):
+                return json.loads(line.removeprefix(prefix))
+        return None
 
     def xdo(self, *args, timeout=10):
         return subprocess.check_output(

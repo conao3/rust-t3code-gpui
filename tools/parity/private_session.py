@@ -73,6 +73,7 @@ def main():
         env = os.environ.copy()
         env["T3CODE_HOME"] = str((args.session.parent / "native-home").resolve())
         env["XDG_STATE_HOME"] = str((args.session.parent / "native-state").resolve())
+        env["T3CODE_GPUI_RENDERER_INFO"] = "1"
         with (args.session.parent / "native.log").open("w") as output:
             app = subprocess.Popen(
                 [str(args.binary.resolve()), "--config", str(args.config.resolve())],
