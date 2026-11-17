@@ -20,11 +20,7 @@
         "role": "button",
         "name": "GPT-6-Luna"
       },
-      "count": 1,
-      "native": {
-        "role": "button",
-        "name": "6 Luna"
-      }
+      "count": 1
     },
     {
       "action": "click",
@@ -39,11 +35,7 @@
         "role": "button",
         "name": "GPT-6-Luna"
       },
-      "count": 1,
-      "native": {
-        "role": "button",
-        "name": "6 Luna"
-      }
+      "count": 1
     }
   ]
 }

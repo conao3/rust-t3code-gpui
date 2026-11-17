@@ -10,6 +10,8 @@ nix develop --command python3 tools/parity/env.py up --slot 1
 nix develop --command python3 tools/parity/env.py status --slot 1
 nix develop --command python3 tools/parity/env.py theme --slot 1 --theme light
 nix develop --command python3 tools/parity/env.py reset --slot 1
+nix develop --command python3 tools/parity/env.py restart --slot 1
+nix develop --command python3 tools/parity/env.py restart --slot 1 --target native
 nix develop --command python3 tools/parity/env.py down --slot 1
 ```
 
@@ -68,7 +70,15 @@ Selectors can include `ancestor: {role, name}` to select a control inside a spec
 
 `sidebar-shelves-empty.json` checks the empty Settled control. `sidebar-shelves.json` opens the completed fixture response and checks pointer, Enter and Space activation, expanded state and child visibility for populated Working, Snoozed and Settled shelves. Prepare one private fixture in each shelf and collapse all three before running it. `sidebar-shelves-restored.json` checks the expanded shelves after restarting both clients with their saved profiles.
 
-For restart comparisons, pass the same `--native-home` and `--native-state-home` to `desktop_session.py`, and explicitly use `--reuse-reference-profile` with the same reference profile. Session output directories must remain fresh. The isolated Electron profile uses `--password-store=basic` to avoid waiting for the desktop keyring service. Native focus and click preparation requests AT-SPI scrolling and rereads the target coordinates before sending pointer input.
+For slot comparisons, `env.py restart --slot N` restarts the two clients with the same profiles, homes, workspaces and server databases. Electron also restarts its owned reference server; the independent native server stays running. `--target native` restarts only GPUI, including after rebuilding its executable. The supervisor verifies process identity and slot ownership before signaling either client. Close reference dialogs before a two-client restart readiness check.
+
+For comparisons using `desktop_session.py` directly, pass the same `--native-home` and `--native-state-home`, and explicitly use `--reuse-reference-profile` with the same reference profile. Session output directories must remain fresh. The isolated Electron profile uses `--password-store=basic` to avoid waiting for the desktop keyring service. Native focus and click preparation requests AT-SPI scrolling and rereads the target coordinates before sending pointer input.
+
+`sidebar-add-project.json` checks source selection, folder browsing, Git URL entry and the clone destination step. It stops before cloning. `sidebar-working-settle.json` checks the running-thread rejection notification, its original error detail, copy feedback and dismissal, and the unchanged Working and Settled shelves.
+
+`sidebar-history.json` checks draft text through Back and Forward, the home link, and repeated New thread actions. Prepare the `Model defaults fixture` thread before running it.
+
+Run `node tools/parity/model_selection_oracle.mjs ORIGINAL_ROOT crates/t3code-gpui/tests/fixtures/model-selection-oracle.json` with Node 24 to regenerate the model-selection table. It executes the pinned original TypeScript for project provider enablement, hidden and custom model resolution, dynamic unavailable selections, aliases and draft carry overrides. The fixture records source hashes and the adapters for Effect collections, branded IDs and unrelated entry metadata; Rust compares all 1,460 cases. Provider usage-limit fallback and the complete composer provider picker are outside this table.
 
 A checkpoint can specify `visible_regions`, with pixel `bounds` and `minimum_pixels`. This rejects blank captures by counting pixels that contrast with the region's most common color. It is independent of the full image comparison, whose thresholds remain unchanged.
 

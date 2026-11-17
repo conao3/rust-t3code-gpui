@@ -30,6 +30,12 @@ def texts(nodes, target):
             continue
         ancestors = node.get("ancestors", [])
         names = {ancestor.get("name") for ancestor in ancestors}
+        popup = any(
+            item["role"] in {"menu", "popup menu", "listbox", "list box"}
+            or item["role"] == "dialog"
+            and item.get("name") == "Command palette"
+            for item in [node, *ancestors]
+        )
         if "T3 Code home" in names:
             continue
         if target == "reference":
@@ -47,11 +53,18 @@ def texts(nodes, target):
             if content is None or sidebar is None:
                 raise ValueError("Native application/sidebar bounds missing")
             bounds = node.get("bounds")
-            if not bounds or "Application content" not in names:
+            if not popup and (not bounds or "Application content" not in names):
                 continue
-            titlebar = bounds["y"] < content["y"] + 40
-            in_scope = titlebar or bounds["x"] < sidebar["x"] + sidebar["width"]
+            titlebar = bool(
+                bounds
+                and content["y"] <= bounds["y"] < content["y"] + 40
+                and "Conversation" not in names
+            )
+            in_scope = titlebar or bool(
+                bounds and bounds["x"] < sidebar["x"] + sidebar["width"]
+            )
             in_scope |= node["name"] == "Resize Sidebar"
+        in_scope |= popup
         if not in_scope or node["name"] in WINDOW_CONTROLS:
             continue
         if titlebar and node["name"] in TITLEBAR_PANEL_CONTROLS:
