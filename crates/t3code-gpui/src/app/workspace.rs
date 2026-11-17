@@ -148,10 +148,7 @@ impl Root {
             .get(&environment)
             .map(|(config, _)| config)
             .unwrap_or(&Value::Null);
-        let label = config["environment"]["label"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string();
+        let label = environment.clone();
         let workspace_label = if self
             .conversation
             .draft
