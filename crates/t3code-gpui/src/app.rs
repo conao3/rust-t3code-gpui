@@ -50,6 +50,7 @@ mod composer_queue;
 mod composer_scratch;
 mod composer_tokens;
 mod conversation;
+mod device_panel;
 mod diff;
 mod diff_controls;
 mod files;
