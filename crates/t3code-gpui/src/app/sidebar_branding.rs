@@ -102,6 +102,21 @@ fn provider_icon(entry: &Entry, previous: bool, light: bool, cx: &App) -> AnyEle
 }
 
 impl Root {
+    pub(super) fn host_label(&self, environment: &str) -> String {
+        let config = self.config_of(environment);
+        let label = config
+            .as_ref()
+            .and_then(|config| config.pointer("/environment/label"))
+            .and_then(Value::as_str)
+            .unwrap_or(environment);
+        match label {
+            "conao-nixos-eos" => "eos",
+            "conao-nixos-helios" => "helios",
+            label => label,
+        }
+        .to_string()
+    }
+
     pub(super) fn render_host_chip(
         &self,
         environment: &str,
@@ -161,7 +176,12 @@ impl Root {
                 crate::appearance::secondary_label(cx)
             })
             .child(machine_icon)
-            .child(div().min_w_0().truncate().child(environment.to_string()))
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .child(settings_controls::text(self.host_label(environment))),
+            )
             .into_any_element()
     }
 

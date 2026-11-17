@@ -51,6 +51,8 @@ impl Root {
                 .into_any_element()
         } else if self.draft.is_some() || self.open.is_none() {
             self.window_drag_area("empty-window-drag", cx)
+                .role(accesskit::Role::Navigation)
+                .aria_label("Thread breadcrumb")
                 .flex_1()
                 .min_w_0()
                 .h_full()
@@ -63,7 +65,17 @@ impl Root {
                     h_flex()
                         .gap_3()
                         .text_color(theme.muted_foreground)
-                        .child(label)
+                        .child(
+                            Button::new("draft-breadcrumb-project")
+                                .ghost()
+                                .h(px(28.))
+                                .px_0()
+                                .accessibility_label(format!("New thread in {label}"))
+                                .child(settings_controls::text(label))
+                                .on_click(
+                                    cx.listener(|root, _, window, cx| root.new_thread(window, cx)),
+                                ),
+                        )
                         .child("/")
                 }))
                 .child(div().flex_1().min_w_0().truncate().child(
@@ -102,8 +114,8 @@ impl Root {
                         .icon(IconName::PanelLeftOpen)
                         .ghost()
                         .size(px(24.))
-                        .tooltip("Show sidebar")
-                        .accessibility_label("Show sidebar")
+                        .tooltip("Toggle Sidebar")
+                        .accessibility_label("Toggle main sidebar")
                         .on_click(cx.listener(|root, _, _, cx| {
                             root.sidebar_hidden = false;
                             cx.notify();
@@ -220,18 +232,22 @@ impl Root {
                     .icon(gpui_kit::assets::IconName::PanelLeftClose)
                     .ghost()
                     .size(px(24.))
-                    .tooltip("Toggle sidebar")
-                    .accessibility_label("Toggle sidebar")
+                    .tooltip("Toggle Sidebar")
+                    .accessibility_label("Toggle main sidebar")
                     .on_click(cx.listener(|root, _, _, cx| {
                         root.sidebar_hidden = true;
                         cx.notify();
                     })),
             )
             .child(
-                self.window_drag_area("sidebar-window-drag", cx)
+                Button::new("sidebar-home")
+                    .role(accesskit::Role::Link)
+                    .accessibility_label("T3 Code home")
+                    .ghost()
+                    .h(px(28.))
+                    .px_1()
+                    .on_click(cx.listener(|root, _, window, cx| root.new_thread(window, cx)))
                     .ml_4()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
                     .child(
                         h_flex().gap(px(3.)).child("T3 Code").child(
                             div()
@@ -249,8 +265,8 @@ impl Root {
                     .ghost()
                     .size(px(24.))
                     .disabled(!self.history.can_back())
-                    .tooltip("Back")
-                    .accessibility_label("Back")
+                    .tooltip("Go back")
+                    .accessibility_label("Go back")
                     .on_click(cx.listener(|_, _, window, cx| {
                         window.dispatch_action(Box::new(HistoryBack), cx)
                     })),
@@ -261,8 +277,8 @@ impl Root {
                     .ghost()
                     .size(px(24.))
                     .disabled(!self.history.can_forward())
-                    .tooltip("Forward")
-                    .accessibility_label("Forward")
+                    .tooltip("Go forward")
+                    .accessibility_label("Go forward")
                     .on_click(cx.listener(|_, _, window, cx| {
                         window.dispatch_action(Box::new(HistoryForward), cx)
                     })),
@@ -285,6 +301,8 @@ impl Root {
             .gap_2()
             .child(
                 self.window_drag_area("thread-window-drag", cx)
+                    .role(accesskit::Role::Navigation)
+                    .aria_label("Thread breadcrumb")
                     .flex()
                     .items_center()
                     .flex_1()
@@ -292,12 +310,25 @@ impl Root {
                     .gap_2()
                     .text_sm()
                     .child(
-                        div()
-                            .text_color(theme.muted_foreground)
-                            .child(project_title),
+                        div().text_color(theme.muted_foreground).child(
+                            Button::new("breadcrumb-project")
+                                .ghost()
+                                .h(px(28.))
+                                .px_0()
+                                .accessibility_label(format!("New thread in {project_title}"))
+                                .child(settings_controls::text(project_title))
+                                .on_click(
+                                    cx.listener(|root, _, window, cx| root.new_thread(window, cx)),
+                                ),
+                        ),
                     )
                     .child(div().text_color(theme.muted_foreground).child("/"))
-                    .child(div().min_w_0().truncate().child(title)),
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .child(settings_controls::text(title.clone())),
+                    ),
             )
             .child(
                 div()
@@ -334,7 +365,7 @@ impl Root {
                     .ghost()
                     .size(px(24.))
                     .tooltip("Thread actions")
-                    .accessibility_label("Thread actions")
+                    .accessibility_label(format!("Thread actions for {title}"))
                     .dropdown_menu(move |menu, _, _| {
                         menu.menu(
                             if status == ThreadStatus::Settled {
