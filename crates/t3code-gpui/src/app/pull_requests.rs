@@ -2289,7 +2289,9 @@ impl Render for ReviewComposer {
                     .when(self.review_mode, |row| {
                         row.child(
                             Select::new(&self.verdict)
-                                .w(px(100.))
+                                .small()
+                                .flex_none()
+                                .w(px(128.))
                                 .accessibility_label("Review verdict")
                                 .disabled(self.busy),
                         )
