@@ -261,11 +261,19 @@ impl Root {
                 .gap_1()
                 .child(
                     Button::new("stash-toggle")
-                        .label(format!("Stash {count}"))
-                        .icon(gpui_kit::assets::IconName::Bookmark)
-                        .justify_start()
-                        .h(px(24.))
-                        .text_xs()
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .gap_2()
+                                .text_xs()
+                                .child(
+                                    Icon::new(gpui_kit::assets::IconName::Bookmark).size(px(12.)),
+                                )
+                                .child("Stash")
+                                .child(div().flex_1())
+                                .child(count.to_string()),
+                        )
+                        .small()
                         .accessibility_label(if open {
                             "Close stash".to_string()
                         } else {
@@ -301,11 +309,18 @@ impl Root {
                                             Button::new(SharedString::from(format!(
                                                 "restore-{id}"
                                             )))
-                                            .label(snippet.clone())
-                                            .icon(IconName::FileText)
-                                            .justify_start()
-                                            .h(px(26.))
-                                            .text_xs()
+                                            .child(
+                                                h_flex()
+                                                    .w_full()
+                                                    .gap_2()
+                                                    .text_xs()
+                                                    .child(
+                                                        Icon::new(IconName::FileText).size(px(12.)),
+                                                    )
+                                                    .child(snippet.clone())
+                                                    .child(div().flex_1()),
+                                            )
+                                            .small()
                                             .accessibility_label(format!(
                                                 "Restore stashed prompt: {snippet}"
                                             ))

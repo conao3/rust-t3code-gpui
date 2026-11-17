@@ -307,6 +307,7 @@ impl Root {
 
     /// Puts the draft of what the composer is for now into it, at the next render.
     pub(super) fn load_composer(&mut self) {
+        self.picker_open = false;
         self.abandon_queue_edit();
         self.attachments = self
             .composer_key()
@@ -1404,7 +1405,7 @@ impl Root {
                 v_flex()
                     .id("composer-reasoning")
                     .role(accesskit::Role::RadioGroup)
-                    .aria_label("Reasoning")
+                    .aria_label(descriptor["label"].as_str().unwrap_or("Effort").to_string())
                     .w(px(192.))
                     .h_full()
                     .border_l_1()
@@ -1417,7 +1418,7 @@ impl Root {
                             .px_1()
                             .text_sm()
                             .text_color(theme.muted_foreground)
-                            .child("Reasoning"),
+                            .child(descriptor["label"].as_str().unwrap_or("Effort").to_string()),
                     )
                     .children(
                         descriptor
@@ -1477,6 +1478,13 @@ impl Root {
                                                         state.focus(window, cx)
                                                     })
                                                 }
+                                                "escape" => {
+                                                    root.picker_open = false;
+                                                    root.composer.update(cx, |state, cx| {
+                                                        state.focus(window, cx)
+                                                    });
+                                                    cx.notify();
+                                                }
                                                 _ => return,
                                             }
                                             cx.stop_propagation();
@@ -1512,7 +1520,7 @@ impl Root {
                 .bottom(px(40.))
                 .right(px(48.))
                 .mb_1()
-                .w(px(if reasoning.is_some() { 554. } else { 362. }))
+                .w(px(554.))
                 .h(px(392.))
                 .rounded_md()
                 .border_1()
@@ -1565,7 +1573,27 @@ impl Root {
                                     .on_cancel(move |window, cx| cancel(window, cx)),
                             ),
                         )
-                        .children(reasoning_column),
+                        .child(reasoning_column.unwrap_or_else(|| {
+                            v_flex()
+                                .id("composer-no-effort")
+                                .w(px(192.))
+                                .h_full()
+                                .border_l_1()
+                                .border_color(theme.border.opacity(0.7))
+                                .p_2()
+                                .text_sm()
+                                .text_color(theme.muted_foreground)
+                                .child(div().h(px(34.)).px_1().child("Effort"))
+                                .child(
+                                    div()
+                                        .id("no-effort-levels")
+                                        .role(accesskit::Role::Label)
+                                        .aria_label("No effort levels")
+                                        .h(px(32.))
+                                        .px_2()
+                                        .child("No effort levels"),
+                                )
+                        })),
                 )
                 .child(
                     h_flex()
@@ -1932,7 +1960,7 @@ impl Root {
                             .w_full()
                             .pb_4()
                             .px_4()
-                            .child(heading),
+                            .children((!self.prompts.open).then_some(heading)),
                     )
                     .children(self.render_message(cx))
                     .child(self.render_composer(cx))

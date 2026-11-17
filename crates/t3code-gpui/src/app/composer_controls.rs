@@ -272,7 +272,42 @@ impl Root {
             self.toggle_model_picker(window, cx);
         }
         self.composer_choices.effort_cursor = None;
-        self.composer_choices.effort_focus.focus(window, cx);
+        let has_options =
+            self.composer_target()
+                .is_some_and(|(environment, selection, ..)| {
+                    let Some(selection) = selection else {
+                        return false;
+                    };
+                    self.model_catalogs
+                        .get(&environment)
+                        .is_some_and(|(_, instances)| {
+                            instances
+                                .iter()
+                                .find(|instance| {
+                                    selection["instanceId"].as_str() == Some(&instance.instance_id)
+                                })
+                                .and_then(|instance| {
+                                    instance.models.iter().find(|model| {
+                                        selection["model"].as_str() == Some(&model.slug)
+                                    })
+                                })
+                                .is_some_and(|model| {
+                                    model.option_descriptors.iter().any(|descriptor| {
+                                        (descriptor["role"] == "reasoning"
+                                            || descriptor["id"] == "reasoningEffort")
+                                            && descriptor["options"]
+                                                .as_array()
+                                                .is_some_and(|options| !options.is_empty())
+                                    })
+                                })
+                        })
+                });
+        if has_options {
+            self.composer_choices.effort_focus.focus(window, cx);
+        } else {
+            self.model_picker
+                .update(cx, |state, cx| state.focus(window, cx));
+        }
     }
 
     pub(super) fn step_effort(
