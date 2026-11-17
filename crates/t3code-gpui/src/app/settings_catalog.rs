@@ -5,6 +5,7 @@ pub(super) enum Control {
     Switch,
     Select(&'static [(&'static str, &'static str)]),
     Number(f64, f64),
+    Font(&'static str, f64, f64),
     Text,
 }
 
@@ -50,8 +51,10 @@ pub(super) fn settings() -> Vec<Setting> {
     let mut values = Vec::new();
     let mut add = |page, section, key, label, description, default, server, control| {
         values.push(Setting {
-            advanced: matches!(key, "showSkillsInSlashMenu" | "browserDefaultAppearance")
-                || section == "Advanced",
+            advanced: matches!(
+                key,
+                "showSkillsInSlashMenu" | "browserDefaultAppearance" | "gpuiSeparateFonts"
+            ) || section == "Advanced",
             page,
             section,
             key,
@@ -197,7 +200,7 @@ pub(super) fn settings() -> Vec<Setting> {
         "Everything outside code blocks and the terminal.",
         json!(16),
         false,
-        Number(12., 20.),
+        Font("fontFamilySans", 12., 20.),
     );
     add(
         "appearance",
@@ -207,17 +210,17 @@ pub(super) fn settings() -> Vec<Setting> {
         "Only the box you write prompts in. Mono works well here.",
         json!(14),
         false,
-        Number(12., 20.),
+        Font("fontFamilyComposer", 12., 20.),
     );
     add(
         "appearance",
         "Typography",
         "fontSizeCode",
-        "Code font",
-        "Code blocks, diffs, and file previews.",
+        "Monospace font",
+        "Code blocks, diffs, file previews, and the terminal.",
         json!(13),
         false,
-        Number(10., 18.),
+        Font("fontFamilyCode", 10., 18.),
     );
     add(
         "appearance",
@@ -227,7 +230,27 @@ pub(super) fn settings() -> Vec<Setting> {
         "Terminal output, independent from code blocks and diffs.",
         json!(12),
         false,
-        Number(8., 20.),
+        Font("fontFamilyTerminal", 8., 20.),
+    );
+    add(
+        "appearance",
+        "Typography",
+        "wordWrap",
+        "Word wrap",
+        "Wrap long lines in code blocks, diffs, and file previews by default.",
+        json!(true),
+        false,
+        Switch,
+    );
+    add(
+        "appearance",
+        "Typography",
+        "gpuiSeparateFonts",
+        "Separate fonts",
+        "Set the prompt, code, and terminal fonts separately instead of one monospace font.",
+        json!(false),
+        false,
+        Switch,
     );
     add(
         "appearance",

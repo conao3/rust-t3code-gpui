@@ -10,7 +10,6 @@ impl Root {
     ) {
         match client_settings::update(&self.settings_path, &[(key, value)]) {
             Ok(settings) => {
-                let (interface, code) = (settings.font_size_interface, settings.font_size_code);
                 self.settings = settings;
                 if key == "sidebarWorkingShelfEnabled" {
                     self.rebuild_entries();
@@ -24,10 +23,7 @@ impl Root {
                 if key == "gpuiAppearance" {
                     crate::appearance::apply(self.settings.light_theme, cx);
                 }
-                Theme::update(cx, |theme| {
-                    theme.font_size = px(interface);
-                    theme.mono_font_size = px(code);
-                });
+                crate::appearance::apply_typography(&self.settings, cx);
             }
             Err(error) => self.message = Some(format!("Saving the settings failed: {error:#}")),
         }
@@ -189,11 +185,12 @@ impl Root {
             .into_iter()
             .filter(|setting| {
                 !setting.server
-                    && self
+                    && (self
                         .settings
                         .values
                         .get(setting.key)
                         .is_some_and(|value| *value != setting.default)
+                        || matches!(setting.control, settings_catalog::Control::Font(key, _, _) if self.settings.values[key].as_str().is_some_and(|value| !value.is_empty())))
             })
             .collect::<Vec<_>>();
         if changed.is_empty() {
@@ -215,6 +212,9 @@ impl Root {
                 .on_ok(move |_, _, cx| {
                     let _ = owner.update(cx, |root, cx| {
                         for setting in &changed {
+                            if let settings_catalog::Control::Font(key, _, _) = setting.control {
+                                root.change_setting(key, json!(""), cx);
+                            }
                             root.change_setting(setting.key, setting.default.clone(), cx);
                         }
                     });
@@ -480,10 +480,18 @@ impl Root {
         };
         let mut section_rows = group();
         let mut advanced_started = false;
-        for definition in settings_catalog::settings()
+        for mut definition in settings_catalog::settings()
             .into_iter()
             .filter(|setting| setting.page == page)
         {
+            let separate_fonts = self.settings.values["gpuiSeparateFonts"] == true;
+            if !separate_fonts && matches!(definition.key, "fontSizePrompt" | "fontSizeTerminal") {
+                continue;
+            }
+            if separate_fonts && definition.key == "fontSizeCode" {
+                definition.label = "Code font";
+                definition.description = "Code blocks, diffs, and file previews.";
+            }
             if section != definition.section {
                 if !section.is_empty() {
                     content = content.child(
@@ -588,10 +596,26 @@ impl Root {
             }
             let root = cx.entity().downgrade();
             let environment = environment.clone();
+            let font_family = match definition.control {
+                settings_catalog::Control::Font(key, _, _) => self.settings.values[key]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                _ => String::new(),
+            };
             let control = window.use_keyed_state(
                 SharedString::from(format!(
-                    "setting:{}:{}:{}:{:?}:{}",
-                    definition.key, definition.label, environment, self.settings_project, value
+                    "setting:{}:{}:{}:{:?}:{}:{}",
+                    definition.key,
+                    definition.label,
+                    environment,
+                    self.settings_project,
+                    value,
+                    match definition.control {
+                        settings_catalog::Control::Font(key, _, _) =>
+                            self.settings.values[key].clone(),
+                        _ => Value::Null,
+                    }
                 )),
                 cx,
                 |window, cx| {
@@ -600,7 +624,7 @@ impl Root {
                         environment,
                         self.settings_project.clone(),
                         definition,
-                        value,
+                        (value, font_family),
                         window,
                         cx,
                     )

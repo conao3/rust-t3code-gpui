@@ -29,6 +29,16 @@ pub(super) fn select(
     window: &mut Window,
     cx: &mut App,
 ) -> Entity<Choices> {
+    select_search(values, selected, false, window, cx)
+}
+
+fn select_search(
+    values: Vec<(String, String)>,
+    selected: &str,
+    searchable: bool,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<Choices> {
     let index = values
         .iter()
         .position(|(value, _)| value == selected)
@@ -48,6 +58,7 @@ pub(super) fn select(
             window,
             cx,
         )
+        .searchable(searchable)
     })
 }
 
@@ -59,6 +70,8 @@ pub(super) struct SettingRow {
     value: Value,
     input: Entity<InputState>,
     select: Option<Entity<choice_select::State>>,
+    font_family: Option<Entity<Choices>>,
+    font_size: Option<Entity<Choices>>,
     subscriptions: Vec<Subscription>,
     validation_error: Option<String>,
 }
@@ -69,17 +82,18 @@ impl SettingRow {
         environment: String,
         project: Option<String>,
         definition: Setting,
-        value: Value,
+        value: (Value, String),
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let (value, font_family_value) = value;
         let text = value
             .as_str()
             .map(str::to_owned)
             .unwrap_or_else(|| value.to_string());
         let input = cx.new(|cx| {
             let input = InputState::new(window, cx).default_value(text);
-            if let Control::Number(min, max) = definition.control {
+            if let Control::Number(min, max) | Control::Font(_, min, max) = definition.control {
                 input.min(min).max(max).step(1.)
             } else {
                 input
@@ -105,6 +119,36 @@ impl SettingRow {
             )),
             _ => None,
         };
+        let font_family = if let Control::Font(key, _, _) = definition.control {
+            let default = if key == "fontFamilySans" || key == "fontFamilyComposer" {
+                UI_FONT.to_string()
+            } else {
+                crate::appearance::default_code_family(cx)
+            };
+            let mut fonts = cx.text_system().all_font_names();
+            fonts.sort();
+            fonts.dedup();
+            if matches!(key, "fontFamilyCode" | "fontFamilyTerminal") {
+                fonts.retain(|family| monospace_family(family, cx));
+            }
+            let mut options = vec![(String::new(), default.to_string())];
+            options.extend(fonts.into_iter().map(|name| (name.clone(), name)));
+            Some(select_search(options, &font_family_value, true, window, cx))
+        } else {
+            None
+        };
+        let font_size = if let Control::Font(_, min, max) = definition.control {
+            Some(self::select(
+                (min as i64..=max as i64)
+                    .map(|size| (size.to_string(), format!("{size} px")))
+                    .collect(),
+                &value.to_string(),
+                window,
+                cx,
+            ))
+        } else {
+            None
+        };
         let mut view = Self {
             root,
             environment,
@@ -113,6 +157,8 @@ impl SettingRow {
             value,
             input,
             select,
+            font_family,
+            font_size,
             subscriptions: vec![],
             validation_error: None,
         };
@@ -128,7 +174,9 @@ impl SettingRow {
             window,
             |view, input, event: &NumberInputEvent, window, cx| {
                 let NumberInputEvent::Step(action) = event;
-                if let Control::Number(min, max) = view.definition.control {
+                if let Control::Number(min, max) | Control::Font(_, min, max) =
+                    view.definition.control
+                {
                     let current = input
                         .read(cx)
                         .value()
@@ -148,6 +196,32 @@ impl SettingRow {
                 }
             },
         ));
+        if let Some(font_family) = &view.font_family {
+            view.subscriptions.push(cx.subscribe_in(
+                font_family,
+                window,
+                |view, _, event: &SelectEvent<_>, _, cx| {
+                    if let SelectEvent::Confirm(Some(value)) = event
+                        && let Control::Font(key, _, _) = view.definition.control
+                    {
+                        let _ = view
+                            .root
+                            .update(cx, |root, cx| root.change_setting(key, json!(value), cx));
+                    }
+                },
+            ));
+        }
+        if let Some(font_size) = &view.font_size {
+            view.subscriptions.push(cx.subscribe_in(
+                font_size,
+                window,
+                |view, _, event: &SelectEvent<_>, _, cx| {
+                    if let SelectEvent::Confirm(Some(value)) = event {
+                        view.save(json!(value.parse::<i64>().expect("font size option")), cx);
+                    }
+                },
+            ));
+        }
         if let Some(select) = &view.select {
             view.subscriptions.push(cx.subscribe_in(
                 select,
@@ -172,7 +246,7 @@ impl SettingRow {
     fn commit(&mut self, cx: &mut Context<Self>) {
         let text = self.input.read(cx).value().to_string();
         let value = match self.definition.control {
-            Control::Number(min, max) => match text.parse::<f64>() {
+            Control::Number(min, max) | Control::Font(_, min, max) => match text.parse::<f64>() {
                 Ok(number) if number.is_finite() && (min..=max).contains(&number) => {
                     json!(number.round() as i64)
                 }
@@ -205,6 +279,9 @@ impl SettingRow {
     }
     fn reset(&mut self, cx: &mut Context<Self>) {
         let _ = self.root.update(cx, |root, cx| {
+            if let Control::Font(key, _, _) = self.definition.control {
+                root.change_setting(key, json!(""), cx);
+            }
             root.save_setting(
                 &self.definition,
                 &self.environment,
@@ -220,6 +297,7 @@ impl Render for SettingRow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let label = self.definition.label;
         let accessible_label = match self.definition.key {
+            "wordWrap" => "Wrap code, diffs, and file previews by default",
             "timestampFormat" => "Timestamp format",
             "confirmThreadUnpin" => "Confirm thread unpinning",
             "confirmThreadArchive" => "Confirm thread archiving",
@@ -310,6 +388,20 @@ impl Render for SettingRow {
                 .w(px(260.))
                 .h(px(32.))
                 .into_any_element(),
+            Control::Font(_, _, _) => h_flex()
+                .gap_2()
+                .child(
+                    Select::new(self.font_family.as_ref().expect("font family selector"))
+                        .search_placeholder("Search fonts…")
+                        .accessibility_label(format!("{label} family"))
+                        .w(px(180.)),
+                )
+                .child(
+                    Select::new(self.font_size.as_ref().expect("font size selector"))
+                        .accessibility_label(accessible_label)
+                        .w(px(88.)),
+                )
+                .into_any_element(),
         };
         h_flex()
             .id(key)
@@ -333,7 +425,13 @@ impl Render for SettingRow {
                     ),
             )
             .when(
-                self.project.is_some() || self.value != self.definition.default,
+                self.project.is_some()
+                    || self.value != self.definition.default
+                    || self.font_family.as_ref().is_some_and(|font| {
+                        font.read(cx)
+                            .selected_value()
+                            .is_some_and(|value| !value.is_empty())
+                    }),
                 |row| {
                     row.child(
                         Button::new("reset")
@@ -435,4 +533,32 @@ pub(super) fn text(value: impl Into<SharedString>) -> gpui::Stateful<gpui::Div> 
         .role(accesskit::Role::Label)
         .aria_value(value.clone())
         .child(value)
+}
+
+fn monospace_family(family: &str, cx: &App) -> bool {
+    let base = font(family.to_string());
+    [
+        base.clone(),
+        base.clone().bold(),
+        base.clone().italic(),
+        base.bold().italic(),
+    ]
+    .into_iter()
+    .all(|font| {
+        let id = cx.text_system().resolve_font(&font);
+        let advances = ['i', 'M', 'W', '0', '@', '#', '.', ' ']
+            .into_iter()
+            .map(|character| {
+                cx.text_system()
+                    .advance(id, px(32.), character)
+                    .map(|advance| f32::from(advance.width))
+            })
+            .collect::<anyhow::Result<Vec<_>>>();
+        advances.is_ok_and(|advances| {
+            advances[0] > 0.
+                && advances
+                    .iter()
+                    .all(|advance| (*advance - advances[0]).abs() < 0.01)
+        })
+    })
 }

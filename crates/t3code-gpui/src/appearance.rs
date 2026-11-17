@@ -4,6 +4,40 @@ use gpui_kit::*;
 pub const MESSAGE: u32 = 0x1e1e1e;
 pub const ROW_INSET: f32 = 10.;
 
+pub fn default_code_family(cx: &App) -> String {
+    let installed = cx.text_system().all_font_names();
+    [
+        "SF Mono",
+        "SFMono-Regular",
+        "Menlo",
+        "Consolas",
+        "Liberation Mono",
+    ]
+    .into_iter()
+    .find(|name| installed.iter().any(|family| family == name))
+    .unwrap_or("monospace")
+    .to_string()
+}
+
+pub fn apply_typography(settings: &crate::client_settings::ClientSettings, cx: &mut App) {
+    let code = settings.values["fontFamilyCode"]
+        .as_str()
+        .filter(|name| !name.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| default_code_family(cx));
+    Theme::update(cx, |theme| {
+        theme.font_family = settings.values["fontFamilySans"]
+            .as_str()
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or("Inter Variable")
+            .to_string()
+            .into();
+        theme.mono_font_family = code.into();
+        theme.font_size = px(settings.font_size_interface);
+        theme.mono_font_size = px(settings.font_size_code);
+    });
+}
+
 pub fn apply(light: bool, cx: &mut App) {
     cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
     cx.text_system()
