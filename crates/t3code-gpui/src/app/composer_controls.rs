@@ -1,5 +1,24 @@
 use super::*;
-use gpui_kit::component::popover::Popover;
+use gpui_kit::component::{
+    IndexPath,
+    popover::Popover,
+    select::{SearchableVec, Select, SelectEvent, SelectItem, SelectState},
+};
+#[derive(Clone)]
+struct Choice {
+    value: String,
+    label: SharedString,
+}
+impl SelectItem for Choice {
+    type Value = String;
+    fn title(&self) -> SharedString {
+        self.label.clone()
+    }
+    fn value(&self) -> &String {
+        &self.value
+    }
+}
+type State = SelectState<SearchableVec<Choice>>;
 
 #[derive(Clone)]
 struct ContextChoice {
@@ -12,6 +31,9 @@ struct ContextChoice {
 pub(super) struct Controls {
     key: Option<(String, String, Value)>,
     choices: Vec<ContextChoice>,
+    host: Option<Entity<State>>,
+    workspace: Option<Entity<State>>,
+    subscriptions: Vec<Subscription>,
     open: bool,
     cursor: usize,
     focus: FocusHandle,
@@ -23,6 +45,9 @@ impl Controls {
         Self {
             key: None,
             choices: vec![],
+            host: None,
+            workspace: None,
+            subscriptions: vec![],
             open: false,
             cursor: 0,
             focus: cx.focus_handle(),
@@ -32,8 +57,30 @@ impl Controls {
     }
 }
 
+fn select(
+    choices: Vec<(String, String)>,
+    selected: &str,
+    window: &mut Window,
+    cx: &mut App,
+) -> Entity<State> {
+    let index = choices
+        .iter()
+        .position(|(value, _)| value == selected)
+        .map(IndexPath::new);
+    let items = SearchableVec::new(
+        choices
+            .into_iter()
+            .map(|(value, label)| Choice {
+                value,
+                label: label.into(),
+            })
+            .collect::<Vec<_>>(),
+    );
+    cx.new(|cx| SelectState::new(items, index, window, cx))
+}
+
 impl Root {
-    pub(super) fn sync_composer_controls(&mut self, _: &mut Window, _: &mut Context<Self>) {
+    pub(super) fn sync_composer_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let key = self
             .draft_project()
             .zip(self.draft.as_ref())
@@ -43,6 +90,9 @@ impl Root {
         }
         self.composer_choices.key = key.clone();
         self.composer_choices.choices.clear();
+        self.composer_choices.host = None;
+        self.composer_choices.workspace = None;
+        self.composer_choices.subscriptions.clear();
         self.composer_choices.open = false;
         let Some((environment, _, strategy)) = key else {
             return;
@@ -95,11 +145,64 @@ impl Root {
             .iter()
             .position(|choice| choice.checked)
             .unwrap_or(0);
+        for (kind, name) in [("host", "host"), ("mode", "workspace")] {
+            let items: Vec<_> = choices
+                .iter()
+                .filter(|choice| choice.kind == kind)
+                .collect();
+            if items.is_empty() {
+                continue;
+            }
+            let selected = items
+                .iter()
+                .find(|choice| choice.checked)
+                .map(|choice| choice.value.as_str())
+                .unwrap_or_default();
+            let state = select(
+                items
+                    .iter()
+                    .map(|choice| (choice.value.clone(), choice.label.clone()))
+                    .collect(),
+                selected,
+                window,
+                cx,
+            );
+            self.composer_choices.subscriptions.push(cx.subscribe_in(
+                &state,
+                window,
+                move |root, _, event: &SelectEvent<_>, window, cx| {
+                    if let SelectEvent::Confirm(Some(value)) = event
+                        && let Some(index) = root
+                            .composer_choices
+                            .choices
+                            .iter()
+                            .position(|choice| choice.kind == kind && &choice.value == value)
+                    {
+                        root.choose_context(index, window, cx);
+                    }
+                },
+            ));
+            if name == "host" {
+                self.composer_choices.host = Some(state);
+            } else {
+                self.composer_choices.workspace = Some(state);
+            }
+        }
         self.composer_choices.choices = choices;
     }
 
     pub(super) fn render_composer_context(&self, cx: &Context<Self>) -> AnyElement {
         h_flex()
+            .gap_1()
+            .when(!self.compact_composer_context(), |row| {
+                row.children(self.composer_choices.host.as_ref().map(|state| {
+                    Select::new(state)
+                        .accessibility_label("Run on")
+                        .appearance(false)
+                        .w(px(110.))
+                        .small()
+                }))
+            })
             .when(
                 self.workspace_status.is_repo() || self.connections.len() > 1,
                 |row| row.child(self.render_workspace_mode(cx)),
@@ -107,7 +210,27 @@ impl Root {
             .into_any_element()
     }
 
+    fn compact_composer_context(&self) -> bool {
+        self.canvas_width - workspace::layout(self.canvas_width, self.details_open).inset_end - 48.
+            < 576.
+    }
+
     pub(super) fn render_workspace_select(&self, cx: &Context<Self>) -> AnyElement {
+        if !self.compact_composer_context() {
+            return self
+                .composer_choices
+                .workspace
+                .as_ref()
+                .map(|state| {
+                    Select::new(state)
+                        .accessibility_label("Workspace")
+                        .appearance(false)
+                        .w(px(165.))
+                        .small()
+                        .into_any_element()
+                })
+                .unwrap_or_else(|| div().into_any_element());
+        }
         let root = cx.entity().downgrade();
         let label = self
             .composer_choices
@@ -263,12 +386,23 @@ impl Root {
 
     pub(super) fn open_composer_select(
         &mut self,
-        _: bool,
+        host: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.sync_composer_controls(window, cx);
         if self.draft.is_none() || self.composer_choices.choices.is_empty() {
+            return;
+        }
+        if !self.compact_composer_context() {
+            let state = if host {
+                &self.composer_choices.host
+            } else {
+                &self.composer_choices.workspace
+            };
+            if let Some(state) = state {
+                state.update(cx, |state, cx| state.open(window, cx));
+            }
             return;
         }
         self.composer_choices.open = !self.composer_choices.open;
