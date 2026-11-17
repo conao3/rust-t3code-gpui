@@ -362,7 +362,11 @@ impl Root {
                                 ] {
                                     menu = menu.menu_with_check(
                                         label,
-                                        scope == selected,
+                                        scope == selected
+                                            || selected == "latest"
+                                                && turns.first().is_some_and(|count| {
+                                                    scope == format!("turn:{count}")
+                                                }),
                                         Box::new(SelectDiff {
                                             scope: selected.into(),
                                             commit: None,
@@ -385,27 +389,30 @@ impl Root {
                                 });
                                 let commit_focus = focus.clone();
                                 let commits = commits.clone();
-                                menu = menu.submenu("Commit", window, cx, move |mut menu, _, _| {
-                                    for commit in &commits {
-                                        menu = menu.menu(
-                                            commit["subject"]
-                                                .as_str()
-                                                .unwrap_or_default()
-                                                .to_string(),
-                                            Box::new(SelectDiff {
-                                                scope: "commit".into(),
-                                                commit: commit["sha"].as_str().map(str::to_string),
-                                            }),
-                                        );
-                                    }
-                                    if commits.is_empty() {
-                                        menu = menu.item(
-                                            PopupMenuItem::new("No commits on this branch.")
-                                                .disabled(true),
-                                        );
-                                    }
-                                    menu.radio_group().action_context(commit_focus.clone())
-                                });
+                                menu =
+                                    menu.submenu("Commits", window, cx, move |mut menu, _, _| {
+                                        for commit in &commits {
+                                            menu = menu.menu(
+                                                commit["subject"]
+                                                    .as_str()
+                                                    .unwrap_or_default()
+                                                    .to_string(),
+                                                Box::new(SelectDiff {
+                                                    scope: "commit".into(),
+                                                    commit: commit["sha"]
+                                                        .as_str()
+                                                        .map(str::to_string),
+                                                }),
+                                            );
+                                        }
+                                        if commits.is_empty() {
+                                            menu = menu.item(
+                                                PopupMenuItem::new("No commits on this branch.")
+                                                    .disabled(true),
+                                            );
+                                        }
+                                        menu.radio_group().action_context(commit_focus.clone())
+                                    });
                                 menu.radio_group().action_context(focus.clone())
                             }),
                     )
