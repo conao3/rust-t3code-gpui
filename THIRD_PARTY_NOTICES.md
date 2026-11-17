@@ -106,6 +106,8 @@ ICU4X date/time formatting and its Unicode/CLDR data are distributed under the U
 
 ## Sidebar provider display
 
+`crates/t3code-gpui/src/shell_presentation.rs` derives the display-facing shell fields from T3 Code's `packages/client-runtime/src/state/models.ts` and `packages/shared/src/orchestrationV2PendingBackgroundWork.ts` at the same revision, under the same MIT License. Its oracle executes the original presentation functions and checks the actual sidebar-entry conversion from raw server shells.
+
 The display rules in `crates/t3code-gpui/src/provider_display.rs` derive from T3 Code's `packages/client-runtime/src/state/{providerInstanceDisplay,models}.ts`, `apps/web/src/providerInstances.ts`, and `packages/contracts/src/server.ts` at revision `24e77473ecf41bc1f7142529c7911c1c1aae1d76`. The activity timestamps and compact labels derive from `packages/client-runtime/src/state/threadSort.ts`, `apps/web/src/timestampFormat.ts` and `apps/web/src/components/sidebar/SidebarThreadRow.tsx`. Provider and machine SVGs in `crates/t3code-gpui/assets/providers/` are extracted from that revision's `packages/provider-*/src/client.ts`, `apps/web/src/components/Icons.tsx` and `EnvironmentMachineIcon.tsx`. They retain the T3 Tools Inc. MIT License reproduced above; Simple Icons marks in `Icons.tsx` are CC0. `assets/providers/sources.json` records source hashes, and `tools/parity/provider_assets.mjs` reproduces the embedded theme variants.
 
 ## Terminal engine

@@ -147,6 +147,7 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
         .iter()
         .filter(|thread| is_listed(thread))
         .map(|thread| {
+            let presentation = crate::shell_presentation::present(thread, None);
             let project_id = text(thread, "projectId");
             let project_title = shell
                 .projects
@@ -181,8 +182,8 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
                         l.get("threadId")?.as_str()?.to_string(),
                     ))
                 }),
-                provider_stack: crate::provider_display::stack(thread),
-                activity_timestamp: activity_timestamp(thread),
+                provider_stack: crate::provider_display::stack(&presentation),
+                activity_timestamp: activity_timestamp(&presentation),
             }
         })
         .collect()

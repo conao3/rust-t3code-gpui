@@ -14,6 +14,7 @@ mod permissions;
 mod projects;
 mod provider_display;
 mod row_view;
+mod shell_presentation;
 mod sidebar;
 mod tables;
 mod terminal;
