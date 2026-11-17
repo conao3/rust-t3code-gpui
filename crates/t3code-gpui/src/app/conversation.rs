@@ -41,6 +41,7 @@ pub struct ConversationState {
     pub(super) composer_sends: HashSet<String>,
     pub(super) dictation: composer_dictation::Dictation,
     pub(super) composer_attachments: HashMap<String, Vec<attachments::Pending>>,
+    pub(super) attachments_dirty: bool,
     pub(super) queue_edit: Option<composer_queue::Edit>,
     pub(super) queue_expanded: bool,
     pub(super) prompts: composer_prompts::Prompts,
@@ -93,6 +94,15 @@ impl ConversationState {
             state.set_auto_grow(1, 12, cx);
             state
         });
+        let (composer_attachments, attachment_error) = match composer_images::load_attachment_drafts(
+            &composer_images::attachment_drafts_path(drafts_path, id),
+        ) {
+            Ok(attachments) => (attachments, None),
+            Err(error) => (
+                HashMap::new(),
+                Some(format!("Could not load draft attachments: {error:#}")),
+            ),
+        };
         let find_input = cx.new(|cx| InputState::new(window, cx).placeholder("Find in thread"));
         let subscriptions = vec![
             cx.subscribe(&composer, move |root, _, event: &InputEvent, cx| {
@@ -144,7 +154,7 @@ impl ConversationState {
             composer,
             composer_controls: cx.new(|_| ComposerControlsPane { root, pane_id: id }),
             composer_controls_stamp: None,
-            message: message.or(prompt_error),
+            message: message.or(prompt_error).or(attachment_error),
             picker_open: false,
             picker_instance: None,
             permissions_menu: None,
@@ -163,7 +173,8 @@ impl ConversationState {
             workspace_status: workspace::Status::default(),
             composer_sends: HashSet::new(),
             dictation: composer_dictation::Dictation::default(),
-            composer_attachments: HashMap::new(),
+            composer_attachments,
+            attachments_dirty: false,
             queue_edit: None,
             queue_expanded: false,
             prompts: composer_prompts::Prompts {

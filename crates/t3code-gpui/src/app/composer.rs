@@ -84,6 +84,7 @@ impl Root {
             Ok(pending) => self.conversation.attachments.push(pending),
             Err(error) => self.conversation.message = Some(format!("{error:#}")),
         }
+        self.stash_composer(cx);
         cx.notify();
         true
     }
@@ -95,6 +96,7 @@ impl Root {
                 Err(error) => self.conversation.message = Some(format!("{error:#}")),
             }
         }
+        self.stash_composer(cx);
         cx.notify();
     }
 
@@ -326,6 +328,14 @@ impl Root {
         };
         let text = self.conversation.composer.read(cx).value().to_string();
         self.conversation.draft_text = text.clone();
+        let attachments_changed = self
+            .conversation
+            .composer_attachments
+            .get(&key)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            != self.conversation.attachments.as_slice();
+        self.conversation.attachments_dirty |= attachments_changed;
         if self.conversation.attachments.is_empty() {
             self.conversation.composer_attachments.remove(&key);
         } else {
@@ -333,7 +343,7 @@ impl Root {
                 .composer_attachments
                 .insert(key.clone(), self.conversation.attachments.clone());
         }
-        if self.drafts.set(&key, &text) {
+        if self.drafts.set(&key, &text) || attachments_changed {
             self.schedule_drafts_save(cx);
         }
     }
@@ -365,12 +375,58 @@ impl Root {
         self.drafts_save_scheduled = true;
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(1)).await;
+            let Ok(snapshots) = this.update(cx, |root, _| {
+                std::iter::once(&mut root.conversation)
+                    .chain(root.panes.values_mut())
+                    .filter(|pane| pane.attachments_dirty)
+                    .map(|pane| {
+                        pane.attachments_dirty = false;
+                        (
+                            pane.id,
+                            composer_images::attachment_drafts_path(&root.drafts_path, pane.id),
+                            pane.composer_attachments.clone(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            }) else {
+                return;
+            };
+            let failures = cx
+                .background_executor()
+                .spawn(async move {
+                    snapshots
+                        .into_iter()
+                        .filter_map(|(id, path, attachments)| {
+                            composer_images::save_attachment_drafts(&path, &attachments)
+                                .err()
+                                .map(|error| {
+                                    (id, format!("Saving draft attachments failed: {error:#}"))
+                                })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .await;
             let _ = this.update(cx, |root, cx| {
                 root.drafts_save_scheduled = false;
                 root.save_conversations();
+                let failed = !failures.is_empty();
+                for (id, message) in failures {
+                    root.with_conversation(id, |root| {
+                        root.conversation.message = Some(message);
+                        root.conversation.attachments_dirty = true;
+                    });
+                    cx.notify();
+                }
                 if let Err(error) = root.drafts.save(&root.drafts_path) {
                     root.conversation.message = Some(format!("Saving drafts failed: {error:#}"));
                     cx.notify();
+                }
+                if !failed
+                    && std::iter::once(&root.conversation)
+                        .chain(root.panes.values())
+                        .any(|pane| pane.attachments_dirty)
+                {
+                    root.schedule_drafts_save(cx);
                 }
             });
         })
@@ -510,8 +566,8 @@ impl Root {
                     root.conversation
                         .composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
-                    root.stash_composer(cx);
                     root.conversation.attachments = pending;
+                    root.stash_composer(cx);
                 }
                 cx.notify();
             });
@@ -722,9 +778,9 @@ impl Root {
         self.conversation
             .composer
             .update(cx, |state, cx| state.set_value("", window, cx));
+        let pending = std::mem::take(&mut self.conversation.attachments);
         self.stash_composer(cx);
         let runtime = self.runtime.clone();
-        let pending = std::mem::take(&mut self.conversation.attachments);
         let root = cx.entity().downgrade();
         self.spawn_pane_in(window, cx, async move |this, cx| {
             let launched = on_runtime(&runtime, {
@@ -772,8 +828,8 @@ impl Root {
                     root.conversation
                         .composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
-                    root.stash_composer(cx);
                     root.conversation.attachments = pending;
+                    root.stash_composer(cx);
                     cx.notify();
                 }
             });
@@ -2060,6 +2116,7 @@ impl Root {
                             .on_click(self.pane_listener(cx, move |root, _, _, cx| {
                                 if i < root.conversation.attachments.len() {
                                     root.conversation.attachments.remove(i);
+                                    root.stash_composer(cx);
                                 }
                                 cx.notify();
                             }))
