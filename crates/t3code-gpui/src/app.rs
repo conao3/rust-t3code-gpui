@@ -1612,7 +1612,11 @@ impl Root {
                     };
                     if matches!(
                         row.kind,
-                        RowKind::Request | RowKind::Plan | RowKind::Subagent | RowKind::Assistant
+                        RowKind::Request
+                            | RowKind::Plan
+                            | RowKind::Subagent
+                            | RowKind::Assistant
+                            | RowKind::Fork
                     ) {
                         kept.insert(
                             row.key.clone(),

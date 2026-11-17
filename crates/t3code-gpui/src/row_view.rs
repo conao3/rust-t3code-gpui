@@ -896,6 +896,56 @@ impl Render for RowView {
                     })
                     .into_any_element()
             }
+            RowKind::Fork => base
+                .py_2()
+                .text_size(px(11.))
+                .text_color(theme.muted_foreground)
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(div().h(px(1.)).flex_1().bg(theme.border.opacity(0.7)))
+                        .child(
+                            Button::new("fork-link")
+                                .accessibility_label(self.row.detail.clone())
+                                .ghost()
+                                .tooltip(self.row.detail.clone())
+                                .h_auto()
+                                .text_size(px(11.))
+                                .gap(px(6.))
+                                .px(px(10.))
+                                .py_1()
+                                .rounded_full()
+                                .border_1()
+                                .border_color(theme.border.opacity(0.7))
+                                .bg(theme.background)
+                                .text_color(theme.muted_foreground)
+                                .font_weight(FontWeight::MEDIUM)
+                                .cursor_pointer()
+                                .hover_style(
+                                    StyleRefinement::default()
+                                        .bg(theme.accent)
+                                        .text_color(theme.foreground)
+                                        .border_color(theme.border.opacity(0.7)),
+                                )
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    if let Some(thread_id) = &view.row.link {
+                                        cx.emit(RowEvent::OpenChild {
+                                            thread_id: thread_id.clone(),
+                                        });
+                                    }
+                                }))
+                                .child(
+                                    h_flex()
+                                        .gap(px(6.))
+                                        .text_size(px(11.))
+                                        .line_height(px(16.))
+                                        .child(Icon::new(IconName::GitFork).size(px(12.)))
+                                        .child(self.row.text.clone()),
+                                ),
+                        )
+                        .child(div().h(px(1.)).flex_1().bg(theme.border.opacity(0.7))),
+                )
+                .into_any_element(),
             RowKind::Notice => base
                 .py_2()
                 .text_xs()

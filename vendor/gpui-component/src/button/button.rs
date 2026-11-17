@@ -11,9 +11,9 @@ use crate::{
 };
 use gpui::{
     AnyElement, App, Background, ClickEvent, Corners, Edges, ElementId, FocusHandle, Hsla,
-    InteractiveElement, Interactivity, IntoElement, MouseButton, ParentElement, Pixels, RenderOnce,
-    Role, SharedString, StatefulInteractiveElement as _, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder as _, relative, transparent_white,
+    InteractiveElement, Interactivity, IntoElement, MouseButton, ParentElement, Pixels, Refineable,
+    RenderOnce, Role, SharedString, StatefulInteractiveElement as _, StyleRefinement, Styled,
+    Window, div, prelude::FluentBuilder as _, relative, transparent_white,
 };
 
 /// Ink of the focus line a filled button draws inside its fill: its own
@@ -213,6 +213,7 @@ pub struct Button {
     hover_group_held: bool,
     size: Size,
     content_style: StyleRefinement,
+    hover_style: Option<Box<StyleRefinement>>,
     icon_size: Option<Size>,
     compact: bool,
     tooltip: Option<(
@@ -266,6 +267,7 @@ impl Button {
             border_edges: Edges::all(true),
             size: Size::Medium,
             content_style: StyleRefinement::default(),
+            hover_style: None,
             icon_size: None,
             tooltip: None,
             tooltip_placement: None,
@@ -374,6 +376,12 @@ impl Button {
     /// Set label to the Button, if no label is set, the button will be in Icon Button mode.
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
         self.label = Some(label.into());
+        self
+    }
+
+    #[allow(missing_docs)]
+    pub fn hover_style(mut self, style: StyleRefinement) -> Self {
+        self.hover_style = Some(Box::new(style));
         self
     }
 
@@ -629,6 +637,7 @@ impl RenderOnce for Button {
         let tooltip_show_delay = self.tooltip_show_delay;
         let hover_group = self.hover_group;
         let hover_group_held = self.hover_group_held;
+        let hover_override = self.hover_style;
         let mut base = self.base;
         let children = self.children;
         let instance_style = base.style().clone();
@@ -756,9 +765,14 @@ impl RenderOnce for Button {
                     return this;
                 }
                 let hover_style = style.hovered(self.outline, cx);
-                this.bg(hover_style.bg)
+                let mut result = this
+                    .bg(hover_style.bg)
                     .border_color(hover_style.border)
-                    .text_color(hover_style.fg)
+                    .text_color(hover_style.fg);
+                if let Some(hover_override) = &hover_override {
+                    result.refine(hover_override);
+                }
+                result
             })
             .line_height(relative(1.25))
             .refine_style(&instance_style);

@@ -18,6 +18,7 @@ pub enum RowKind {
     Subagent,
     Working,
     Worked,
+    Fork,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -829,6 +830,36 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
                 children: Vec::new(),
                 link: None,
             }),
+            "fork" => {
+                let from_run = item.pointer("/source/type").and_then(Value::as_str) == Some("run");
+                rows.push(Row {
+                    message_part: None,
+                    key: id.to_string(),
+                    kind: RowKind::Fork,
+                    text: if from_run {
+                        "Forked from conversation"
+                    } else {
+                        "Conversation fork"
+                    }
+                    .into(),
+                    live: false,
+                    pending: None,
+                    detail: if from_run {
+                        "Open source conversation"
+                    } else {
+                        "Open fork"
+                    }
+                    .into(),
+                    link: (if from_run {
+                        item.pointer("/source/threadId")
+                    } else {
+                        item.get("targetThreadId")
+                    })
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                    children: Vec::new(),
+                });
+            }
             "subagent" => rows.push(Row {
                 message_part: None,
                 key: id.to_string(),
@@ -1043,6 +1074,27 @@ pub fn find_rows(rows: &[Row], query: &str) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn forks_keep_both_navigation_directions_in_visible_history() {
+        let projection = state(vec![
+            json!({"id":"source-fork", "type":"fork", "ordinal":0,
+                "source":{"type":"node", "nodeId":"node"},
+                "targetThreadId":"child"}),
+            json!({"id":"child-fork", "type":"fork", "ordinal":1,
+                "source":{"type":"run", "threadId":"source", "runId":"run"},
+                "targetThreadId":"child"}),
+        ]);
+        let rows = rows(&projection);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].kind, RowKind::Fork);
+        assert_eq!(rows[0].text, "Conversation fork");
+        assert_eq!(rows[0].detail, "Open fork");
+        assert_eq!(rows[0].link.as_deref(), Some("child"));
+        assert_eq!(rows[1].text, "Forked from conversation");
+        assert_eq!(rows[1].detail, "Open source conversation");
+        assert_eq!(rows[1].link.as_deref(), Some("source"));
+    }
+
     #[test]
     fn work_duration_matches_t3_rounding_and_units() {
         for (millis, expected) in [
