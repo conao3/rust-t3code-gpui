@@ -6,6 +6,7 @@ mod completion;
 mod drafts;
 mod explorer;
 mod keymap;
+mod lineage;
 mod markdown_directives;
 mod models;
 mod navigation;

@@ -1,0 +1,17 @@
+{
+  "name": "lineage-panel-navigation",
+  "viewport": [1400, 900],
+  "theme": "dark",
+  "settle_ms": 1200,
+  "steps": [
+    {"action": "click", "selector": {"role": "button", "name": "Fixture response fork, UI parity", "index": 0}},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Fixture response Done"}, "count": 1},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Merge back to Fixture response", "disabled": true}, "count": 1},
+    {"action": "click", "selector": {"role": "button", "name": "Fixture response Done"}},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Fixture response"}, "count": 1},
+    {"action": "click", "selector": {"role": "button", "name": "Fixture response fork, UI parity", "index": 0}},
+    {"action": "focus", "selector": {"role": "button", "name": "Fixture response Done"}},
+    {"action": "press", "value": "enter"},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Fixture response"}, "count": 1}
+  ]
+}

@@ -38,6 +38,8 @@ use crate::tables;
 use crate::timeline::{self, Pending, Row, RowKind};
 use crate::workspace;
 
+mod lineage;
+
 type CommandFuture =
     std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<u64>> + std::marker::Send>>;
 
@@ -410,6 +412,7 @@ struct DetailsStamp {
     branch_count: usize,
     light: bool,
     preferred_editor: Option<String>,
+    lineage_revision: u64,
 }
 
 struct DetailsPane {
@@ -424,6 +427,12 @@ impl Render for DetailsPane {
 }
 
 pub struct Root {
+    lineage_data: crate::lineage::Details,
+    lineage_target: Option<(String, String)>,
+    lineage_revision: u64,
+    lineage_counts: [usize; 4],
+    lineage_previous: bool,
+    lineage_busy: Option<(String, String)>,
     terminal_store: crate::terminal::Store,
     terminal_drawers: HashMap<String, Entity<crate::terminal::Drawer>>,
     terminal_subscriptions: HashMap<String, Subscription>,
@@ -649,6 +658,12 @@ impl Root {
             crate::terminal::Store::load(drafts_path.with_file_name("terminals.json"));
         let terminal_error = terminal_store.error.take();
         Self {
+            lineage_data: crate::lineage::Details::default(),
+            lineage_target: None,
+            lineage_revision: 0,
+            lineage_counts: [6; 4],
+            lineage_previous: false,
+            lineage_busy: None,
             terminal_store,
             terminal_drawers: HashMap::new(),
             terminal_subscriptions: HashMap::new(),
@@ -1457,6 +1472,7 @@ impl Root {
         if std::mem::take(&mut self.thread_dirty) {
             self.rebuild_rows(window, cx);
         }
+        self.sync_lineage();
     }
 
     /// The keybindings of the primary host that has sent its configuration, as T3 uses the primary
@@ -1934,6 +1950,7 @@ impl Root {
         let watch = connection.watch_thread(&self.runtime, &thread_id);
         self.open = Some(OpenThread { environment, watch });
         self.draft = None;
+        self.sync_lineage();
         self.rows.clear();
         self.row_views.clear();
         self.row_subscriptions.clear();
@@ -3280,6 +3297,7 @@ impl Root {
 
     fn close_thread(&mut self, cx: &mut Context<Self>) {
         self.open = None;
+        self.sync_lineage();
         self.rows.clear();
         self.row_views.clear();
         self.row_subscriptions.clear();
@@ -5255,16 +5273,19 @@ impl Root {
 
     fn render_workspace_canvas(&self, pane: AnyElement, cx: &Context<Self>) -> AnyElement {
         let layout = workspace::layout(self.canvas_width, self.details_open);
-        let card_height =
-            52. + if self.workspace_editor().is_some() {
+        let card_height = self.lineage_height()
+            + 52.
+            + if self.workspace_editor().is_some() {
                 32.
             } else {
                 0.
-            } + if self.workspace_status.is_repo() {
+            }
+            + if self.workspace_status.is_repo() {
                 83.
             } else {
                 0.
-            } + if self.workspace_status.error.is_some() {
+            }
+            + if self.workspace_status.error.is_some() {
                 32.
             } else {
                 0.
@@ -5569,6 +5590,7 @@ impl Root {
                         .child(error),
                 )
             })
+            .child(self.render_lineage(cx))
             .into_any_element()
     }
 
@@ -5869,6 +5891,10 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match action.kind.as_str() {
+            "detach-agent" => {
+                self.lineage_action("detach", window, cx);
+                return;
+            }
             "choose-editor" => {
                 self.change_setting("gpuiPreferredEditor", action.value.clone(), cx);
                 return;
@@ -6534,6 +6560,7 @@ impl Render for Root {
             branch_count: self.branch_refs.len(),
             light: self.settings.light_theme,
             preferred_editor: self.settings.preferred_editor.clone(),
+            lineage_revision: self.lineage_revision,
         };
         if self.details_stamp.as_ref() != Some(&details_stamp) {
             self.details_stamp = Some(details_stamp);

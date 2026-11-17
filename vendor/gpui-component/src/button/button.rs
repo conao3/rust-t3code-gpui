@@ -391,6 +391,12 @@ impl Button {
         self
     }
 
+    #[allow(missing_docs)]
+    pub fn aria_expanded(mut self, expanded: bool) -> Self {
+        self.base = self.base.aria_expanded(expanded);
+        self
+    }
+
     /// Set the name a screen reader announces, when the visible content is not
     /// it.
     ///

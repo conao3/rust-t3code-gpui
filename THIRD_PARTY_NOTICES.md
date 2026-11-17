@@ -1,5 +1,7 @@
 # Third-party notices
 
+`vendor/accesskit_atspi_common/` is AccessKit's AT-SPI translation layer 0.19.1 at commit c88605b96d04431f9c3c792464a0f2f253480e94, used under Apache-2.0 or MIT. Its license files and Chromium-derived code notice are retained in that directory. The local patch keeps disabled buttons and menu items from reporting AT-SPI Enabled and Sensitive states.
+
 `crates/t3-client/src/{error,http,projection,rpc}.rs` and `crates/t3-client/src/rpc/` derive from [t3term](https://github.com/krishhgg/t3term) (commit d1d33e8), used under the MIT License:
 
 ```
@@ -30,7 +32,7 @@ SOFTWARE.
 
 `crates/t3code-gpui/assets/InterVariable.ttf` is Inter 4.1 by the Inter Project Authors, distributed under the SIL Open Font License 1.1. The license is in `crates/t3code-gpui/assets/Inter-LICENSE.txt`. Source: https://github.com/rsms/inter/tree/v4.1.
 
-Provider icon SVGs and the stop glyph derive from T3 Code `apps/web/src/components/Icons.tsx` and `ComposerPrimaryActions.tsx` at commit 322f6544df.
+Provider icon SVGs and the stop glyph derive from T3 Code `apps/web/src/components/Icons.tsx` and `ComposerPrimaryActions.tsx` at commit 322f6544df. The relationship graph in `crates/t3code-gpui/src/lineage.rs` and its generated oracle fixture derive from `packages/client-runtime/src/state/threadRelationships.ts` at commit 24e77473ecf41bc1f7142529c7911c1c1aae1d76. The native Lineage controls follow `apps/web/src/components/chat/ThreadRelationshipsControl.tsx` at the same revision.
 
 ```text
 MIT License

@@ -4,6 +4,7 @@ check:
 	ruff check tools/parity
 	python3 -m unittest discover -s tools/parity -p 'test_*.py'
 	cargo clippy --all-targets -- -D warnings
+	cargo test -p accesskit_atspi_common
 	cargo test
 
 .PHONY: integration

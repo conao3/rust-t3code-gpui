@@ -4,6 +4,10 @@ Run inside `nix develop`. The reference is the actual T3 Code Electron 0.1.9 des
 
 `cdp.py` controls an isolated Electron renderer over a loopback Chrome DevTools Protocol endpoint. It locates controls through the accessibility tree and sends mouse/key/text input. `native.py` locates native controls through AT-SPI and sends X11 input. The scenario runner uses these same user input paths and observes the resulting accessible content and images.
 
+`lineage-panel.json` compares the parent link in the actual details panel, the disabled merge control on an empty fork, and pointer/Enter navigation. `lineage.json` also checks the timeline divider using pointer, Enter and Space. Enter and Space send browser character events in addition to key down/up so the original browser performs its normal button activation.
+
+The relationship graph oracle is generated from the pinned original TypeScript, retaining its source hash. Run `node tools/parity/lineage_oracle.mjs PATH/TO/threadRelationships.ts crates/t3code-gpui/tests/fixtures/lineage-oracle.json` with Node 24. Its only date adapter converts decoded UTC shell dates to JavaScript Date for `isDateTime`/`toEpochMillis`. Rust tests compare all 137 graph cases, including omitted parents, authoritative live shells, rolled-back subagents, status precedence, transfers and ordering. GUI controls, server effects and images are checked separately.
+
 Create two independent server fixtures from the same initial data. Each must have its own database, provider state, credentials and writable workspace. Point the original desktop at the first fixture with `T3CODE_HOME`, and point the GPUI configuration at the second. Use an isolated desktop profile (`XDG_CONFIG_HOME`) and test-owned provider homes. Keep fixture configuration files mode 600. Sending scenarios require a deterministic test provider.
 
 Use a fresh session directory and Electron profile for each comparison, and restore server fixtures before scenarios that change server or workspace state. The private desktop launcher owns Xvfb, its window manager, Electron and the native accessibility session:
