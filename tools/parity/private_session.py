@@ -93,8 +93,8 @@ def main():
         print(json.dumps({"pid": app.pid, "session": str(args.session)}), flush=True)
         signal.signal(signal.SIGTERM, lambda *_: app.terminate())
         result = app.wait()
-        if result > 0:
-            raise SystemExit(result)
+        if result != 0:
+            raise SystemExit(result if result > 0 else 128 - result)
     finally:
         for child in reversed(children):
             if child.poll() is None:

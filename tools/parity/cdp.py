@@ -11,6 +11,13 @@ from urllib.request import urlopen
 
 import websockets
 
+MODIFIERS = {
+    "ctrl": ("Control", "ControlLeft", 17, 2),
+    "alt": ("Alt", "AltLeft", 18, 1),
+    "shift": ("Shift", "ShiftLeft", 16, 8),
+    "super": ("Meta", "MetaLeft", 91, 4),
+}
+
 
 class Cdp:
     def __init__(self, endpoint):
@@ -28,7 +35,11 @@ class Cdp:
             try:
                 pages = await asyncio.to_thread(list_pages)
                 pages = [p for p in pages if p.get("type") == "page"]
-                if pages or time.monotonic() >= deadline:
+                ready = len(pages) == 1 and pages[0].get("url", "") not in [
+                    "",
+                    "about:blank",
+                ]
+                if len(pages) > 1 or ready or time.monotonic() >= deadline:
                     break
             except (URLError, TimeoutError) as error:
                 reason = error.reason if isinstance(error, URLError) else error
@@ -40,6 +51,10 @@ class Cdp:
             await asyncio.sleep(0.1)
         if len(pages) != 1:
             raise RuntimeError(f"Expected one isolated renderer, got {len(pages)}")
+        if not ready:
+            raise RuntimeError(
+                "The isolated renderer did not navigate to its application"
+            )
         self.page_url = pages[0]["url"]
         self.socket = await websockets.connect(
             pages[0]["webSocketDebuggerUrl"], max_size=32 * 1024 * 1024
@@ -47,7 +62,10 @@ class Cdp:
         return self
 
     async def __aexit__(self, *_):
-        await self.socket.close()
+        try:
+            await self.release_modifiers()
+        finally:
+            await self.socket.close()
 
     async def call(self, method, **params):
         self.next_id += 1
@@ -139,7 +157,13 @@ class Cdp:
             "content"
         ]
         x, y = sum(box[::2]) / 4, sum(box[1::2]) / 4
-        await self.call("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y)
+        await self.call(
+            "Input.dispatchMouseEvent",
+            type="mouseMoved",
+            x=x,
+            y=y,
+            modifiers=getattr(self, "held_modifiers", 0),
+        )
         await asyncio.sleep(0.1)
         for kind in ["mousePressed", "mouseReleased"]:
             await self.call(
@@ -149,17 +173,13 @@ class Cdp:
                 y=y,
                 button="left",
                 clickCount=1,
+                modifiers=getattr(self, "held_modifiers", 0),
             )
             await asyncio.sleep(0.08)
 
     async def press(self, chord):
         parts = chord.lower().split("+")
-        aliases = {
-            "ctrl": ("Control", "ControlLeft", 17, 2),
-            "alt": ("Alt", "AltLeft", 18, 1),
-            "shift": ("Shift", "ShiftLeft", 16, 8),
-            "super": ("Meta", "MetaLeft", 91, 4),
-        }
+        aliases = MODIFIERS
         key = parts[-1]
         named = {
             "enter": ("Enter", "Enter", 13),
@@ -192,11 +212,13 @@ class Cdp:
             )
         else:
             raise ValueError(f"Unsupported key: {key}")
-        modifiers = 0
+        modifiers = getattr(self, "held_modifiers", 0)
         held = []
         try:
             for part in parts[:-1]:
                 modifier_key, modifier_code, modifier_vk, bit = aliases[part]
+                if modifiers & bit:
+                    continue
                 modifiers |= bit
                 held.append((modifier_key, modifier_code, modifier_vk, bit))
                 await self.call(
@@ -230,6 +252,29 @@ class Cdp:
                     modifiers=modifiers,
                 )
 
+    async def modifier(self, key, held):
+        if key not in MODIFIERS or type(held) is not bool:
+            raise ValueError("Expected a modifier key and a boolean held state")
+        name, code, vk, bit = MODIFIERS[key]
+        current = getattr(self, "held_modifiers", 0)
+        if bool(current & bit) == held:
+            return
+        modifiers = current | bit if held else current & ~bit
+        await self.call(
+            "Input.dispatchKeyEvent",
+            type="rawKeyDown" if held else "keyUp",
+            key=name,
+            code=code,
+            windowsVirtualKeyCode=vk,
+            modifiers=modifiers,
+        )
+        self.held_modifiers = modifiers
+
+    async def release_modifiers(self):
+        for key, (_, _, _, bit) in MODIFIERS.items():
+            if getattr(self, "held_modifiers", 0) & bit:
+                await self.modifier(key, False)
+
     async def pointer(self, kind, x, y, button="left"):
         kinds = {"move": "mouseMoved", "down": "mousePressed", "up": "mouseReleased"}
         if kind not in kinds or button not in ["left", "middle", "right"]:
@@ -250,6 +295,7 @@ class Cdp:
             y=y,
             button=button if kind != "move" else held or "none",
             buttons=bits[held],
+            modifiers=getattr(self, "held_modifiers", 0),
             clickCount=1 if kind != "move" else 0,
         )
         self.pointer_button = held

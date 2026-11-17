@@ -176,7 +176,34 @@ class Native:
         }
         parts = chord.lower().split("+")
         parts[-1] = keys.get(parts[-1], parts[-1])
-        self.xdo("key", "--clearmodifiers", "+".join(parts))
+        if getattr(self, "held_modifiers", set()):
+            self.xdo("key", "+".join(parts))
+        else:
+            self.xdo("key", "--clearmodifiers", "+".join(parts))
+
+    def modifier(self, key, held):
+        keys = {
+            "ctrl": "Control_L",
+            "alt": "Alt_L",
+            "shift": "Shift_L",
+            "super": "Super_L",
+        }
+        if key not in keys or type(held) is not bool:
+            raise ValueError("Expected a modifier key and a boolean held state")
+        current = getattr(self, "held_modifiers", set()).copy()
+        if (key in current) == held:
+            return
+        self.focus()
+        self.xdo("keydown" if held else "keyup", keys[key])
+        if held:
+            current.add(key)
+        else:
+            current.discard(key)
+        self.held_modifiers = current
+
+    def release_modifiers(self):
+        for key in list(getattr(self, "held_modifiers", set())):
+            self.modifier(key, False)
 
     def pointer(self, kind, x, y, button="left"):
         if kind not in ["move", "down", "up"] or button not in [

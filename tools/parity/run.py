@@ -94,6 +94,8 @@ async def execute(app, target, scenario, directory):
                 )
             elif action in ["press", "type"]:
                 await invoke(app, action, step["value"])
+            elif action == "modifier":
+                await invoke(app, "modifier", step["key"], step["held"])
             elif action == "pointer":
                 await invoke(
                     app,
@@ -141,6 +143,7 @@ async def execute(app, target, scenario, directory):
     (directory / "actions.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=2) + "\n"
     )
+    await invoke(app, "release_modifiers")
     return results
 
 

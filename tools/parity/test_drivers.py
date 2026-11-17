@@ -22,6 +22,36 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    async def test_held_control_applies_to_a_number_and_is_released(self):
+        app = Cdp("http://127.0.0.1:39991")
+        app.call = AsyncMock()
+        await app.modifier("ctrl", True)
+        await app.press("1")
+        await app.press("ctrl+2")
+        await app.release_modifiers()
+        events = [call.kwargs for call in app.call.await_args_list]
+        self.assertEqual(
+            [event["key"] for event in events],
+            ["Control", "1", "1", "2", "2", "Control"],
+        )
+        self.assertEqual([event["modifiers"] for event in events], [2, 2, 2, 2, 2, 0])
+        self.assertEqual(app.held_modifiers, 0)
+
+    def test_native_number_keeps_held_control_and_cleanup_releases_it(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.xdo = Mock()
+        app.modifier("ctrl", True)
+        app.press("1")
+        app.release_modifiers()
+        self.assertEqual(
+            [call.args for call in app.xdo.call_args_list],
+            [("keydown", "Control_L"), ("key", "1"), ("keyup", "Control_L")],
+        )
+        self.assertEqual(app.held_modifiers, set())
+
     async def test_reference_pointer_preserves_a_drag_and_rejects_outside_coordinates(
         self,
     ):
@@ -195,6 +225,13 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
                     side_effect=[
                         URLError(ConnectionRefusedError()),
                         [],
+                        [
+                            {
+                                "type": "page",
+                                "url": "about:blank",
+                                "webSocketDebuggerUrl": "ws://127.0.0.1:1/initial",
+                            }
+                        ],
                         [
                             {
                                 "type": "page",
