@@ -1,5 +1,6 @@
 mod keyboard;
 mod runtime;
+pub mod session;
 mod terminal;
 
 pub use keyboard::{KeyboardEvent, key_for_code};

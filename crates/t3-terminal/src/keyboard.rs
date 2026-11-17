@@ -38,6 +38,55 @@ pub fn key_for_code(code: &str) -> i32 {
 }
 
 impl KeyboardEvent {
+    pub fn is_copy(&self) -> bool {
+        if self.key.eq_ignore_ascii_case("insert") && !self.mac {
+            return self.control && !self.shift && !self.meta;
+        }
+        self.key.eq_ignore_ascii_case("c") && if self.mac { self.meta } else { self.control }
+    }
+
+    pub fn is_paste(&self) -> bool {
+        if self.key.eq_ignore_ascii_case("insert") && !self.mac {
+            return self.shift && !self.control && !self.meta;
+        }
+        self.key.eq_ignore_ascii_case("v")
+            && if self.mac {
+                self.meta
+            } else {
+                self.control && self.shift
+            }
+    }
+
+    pub fn local_data(&self) -> Option<&'static str> {
+        if self.release || self.composing || self.shift {
+            return None;
+        }
+        let left = self.key.eq_ignore_ascii_case("ArrowLeft");
+        if left || self.key.eq_ignore_ascii_case("ArrowRight") {
+            if self.alt && !self.meta && !self.control {
+                return Some(if left { "\u{1b}b" } else { "\u{1b}f" });
+            }
+            if self.mac && self.meta && !self.alt && !self.control {
+                return Some(if left { "\u{1}" } else { "\u{5}" });
+            }
+        }
+        if self.mac
+            && self.meta
+            && !self.control
+            && !self.alt
+            && self.key.eq_ignore_ascii_case("Backspace")
+        {
+            return Some("\u{15}");
+        }
+        if !self.alt
+            && ((self.key.eq_ignore_ascii_case("l") && self.control && !self.meta)
+                || (self.mac && self.key.eq_ignore_ascii_case("k") && self.meta && !self.control))
+        {
+            return Some("\u{c}");
+        }
+        None
+    }
+
     pub fn encoded(&self) -> Key {
         let key = key_for_code(&self.code);
         Key {

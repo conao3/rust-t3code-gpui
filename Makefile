@@ -9,6 +9,7 @@ check:
 .PHONY: integration
 integration:
 	export T3_BIN="$$(command -v t3)" && cargo test -p t3-client --test live_server -- --ignored
+	export T3_BIN="$$(command -v t3)" && cargo test -p t3-terminal --test live_session -- --ignored
 
 .PHONY: fmt
 fmt:
