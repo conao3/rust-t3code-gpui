@@ -39,9 +39,11 @@ pub(super) struct Pane {
 }
 
 impl Render for Pane {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
-            .update(cx, |root, cx| root.render_panel_contents(cx))
+            .update(cx, |root, cx| {
+                root.render_panel_contents(f32::from(window.viewport_size().width), cx)
+            })
             .expect("panel root")
     }
 }
@@ -587,14 +589,14 @@ impl Root {
             .into_any_element()
     }
 
-    fn render_panel_contents(&self, cx: &Context<Self>) -> AnyElement {
+    fn render_panel_contents(&self, width: f32, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let body = if self.right_panel.active.is_none() {
             self.render_surface_launcher(cx)
         } else {
             match self.right_panel.active.as_deref() {
                 Some(id) if id.starts_with("pull-request:") || id == "pull-requests" => {
-                    self.render_pull_requests(cx)
+                    self.render_pull_requests(width, cx)
                 }
                 Some(id) if id.starts_with("terminal:") => self
                     .right_panel
