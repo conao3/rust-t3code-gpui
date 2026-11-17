@@ -22,6 +22,57 @@ from run import compare, matches, wait_for
 
 
 class KeyInputTests(unittest.IsolatedAsyncioTestCase):
+    async def test_focus_uses_the_selected_control_and_rejects_disabled_targets(self):
+        app = Cdp("http://127.0.0.1:39991")
+        app.call = AsyncMock()
+        app.tree = AsyncMock(
+            return_value=[
+                {
+                    "role": "textbox",
+                    "name": "Message",
+                    "backend_id": 1,
+                    "disabled": True,
+                },
+                {
+                    "role": "textbox",
+                    "name": "Message",
+                    "backend_id": 2,
+                    "disabled": False,
+                },
+            ]
+        )
+        with self.assertRaisesRegex(RuntimeError, "disabled"):
+            await app.focus_control("textbox", "Message")
+        app.call.assert_not_awaited()
+        await app.focus_control("textbox", "Message", 1)
+        app.call.assert_awaited_once_with("DOM.focus", backendNodeId=2)
+
+    def test_native_focus_rejects_unfocusable_nodes_without_sending_pointer_input(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        app.focus = Mock()
+        app.xdo = Mock()
+        app.atspi = SimpleNamespace(
+            STATE_ENABLED="enabled", STATE_FOCUSABLE="focusable"
+        )
+        node = Mock(name="entry")
+        node.name = "Message"
+        node.getRoleName.return_value = "entry"
+        node.getState.return_value.contains.side_effect = lambda state: (
+            state == "enabled"
+        )
+        app.nodes = Mock(return_value=[node])
+        with self.assertRaisesRegex(RuntimeError, "cannot take focus"):
+            app.focus_control("entry", "Message")
+        node.queryComponent.assert_not_called()
+        node.getState.return_value.contains.return_value = True
+        node.getState.return_value.contains.side_effect = None
+        node.queryComponent.return_value.grabFocus.return_value = True
+        app.focus_control("entry", "Message")
+        node.queryComponent.return_value.grabFocus.assert_called_once()
+        app.xdo.assert_not_called()
+
     async def test_held_control_applies_to_a_number_and_is_released(self):
         app = Cdp("http://127.0.0.1:39991")
         app.call = AsyncMock()

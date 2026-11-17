@@ -73,6 +73,8 @@ The native text driver keeps ASCII input at 20 ms and gives Unicode keymap subst
 
 Both drivers also accept `pointer move|down|up X Y --button left|middle|right`, with coordinates relative to the content viewport. A shared scenario can use `{"action":"pointer","kind":"down","x":300,"y":650}` and matching move/up steps for a drag. The original driver preserves pressed-button state within a connection; use a scenario or one Python connection for a complete gesture. Verify terminal mouse protocols using a raw PTY input recorder as well as the resulting screen.
 
+`focus ROLE NAME` and the scenario action `focus` request focus through DOM/CDP or the native OS accessibility interface. They do not inject a pointer click, select text or change a value. Use a subsequent focused checkpoint to confirm the result. This is useful when preparing a typing workload on a shared X11 desktop, where a pointer click can arrive after a later keyboard event. Record this setup explicitly; it does not certify physical click timing. The `click` and `pointer` actions remain separate tests of pointer input.
+
 Use `modifier("ctrl", True)` and `modifier("ctrl", False)` on either Python driver to hold and release a modifier around checkpoints or other input. Scenarios accept `{"action":"modifier","key":"ctrl","held":true}`. Supported keys are `ctrl`, `alt`, `shift` and `super`. A `press("1")` while Control is held sends Ctrl+1; it preserves the held state. Scenario completion and failure release tracked modifiers. Inspect images for shortcut badges: the original marks their text as hidden from accessibility.
 
 Inventory the reference commands separately:

@@ -79,7 +79,7 @@ async def execute(app, target, scenario, directory):
         result = {"index": index, "step": step, "status": "failed"}
         try:
             action = step["action"]
-            if action == "click":
+            if action in ["click", "focus"]:
                 selector = step.get(target, step.get("selector"))
                 await wait_for(app, selector)
                 role = selector["role"]
@@ -90,7 +90,11 @@ async def execute(app, target, scenario, directory):
                         "region": "landmark",
                     }.get(role, role)
                 await invoke(
-                    app, "click", role, selector["name"], selector.get("index", 0)
+                    app,
+                    "focus_control" if action == "focus" else "click",
+                    role,
+                    selector["name"],
+                    selector.get("index", 0),
                 )
             elif action in ["press", "type"]:
                 await invoke(app, action, step["value"])

@@ -166,6 +166,18 @@ class Cdp:
             if not n.get("ignored")
         ]
 
+    async def focus_control(self, role, name, index=0):
+        matches = [
+            n for n in await self.tree() if n["role"] == role and n["name"] == name
+        ]
+        if not 0 <= index < len(matches):
+            raise RuntimeError(
+                f"Cannot find {role} {name!r} #{index}; matches={len(matches)}"
+            )
+        if matches[index]["disabled"]:
+            raise RuntimeError(f"Target is disabled: {role} {name!r}")
+        await self.call("DOM.focus", backendNodeId=matches[index]["backend_id"])
+
     async def click(self, role, name, index=0):
         matches = [
             n for n in await self.tree() if n["role"] == role and n["name"] == name
@@ -344,10 +356,11 @@ async def main():
     parser.add_argument("--endpoint", default="http://127.0.0.1:39991")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("tree")
-    p = sub.add_parser("click")
-    p.add_argument("role")
-    p.add_argument("name")
-    p.add_argument("--index", type=int, default=0)
+    for command in ["click", "focus"]:
+        p = sub.add_parser(command)
+        p.add_argument("role")
+        p.add_argument("name")
+        p.add_argument("--index", type=int, default=0)
     p = sub.add_parser("press")
     p.add_argument("chord")
     p = sub.add_parser("type")
@@ -367,6 +380,8 @@ async def main():
             print(json.dumps(await page.tree(), ensure_ascii=False, indent=2))
         elif args.command == "click":
             await page.click(args.role, args.name, args.index)
+        elif args.command == "focus":
+            await page.focus_control(args.role, args.name, args.index)
         elif args.command == "press":
             await page.press(args.chord)
         elif args.command == "type":

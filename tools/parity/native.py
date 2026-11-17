@@ -138,6 +138,26 @@ class Native:
         self.xdo("windowfocus", "--sync", self.window)
         time.sleep(0.1)
 
+    def focus_control(self, role, name, index=0):
+        self.focus()
+        matches = [
+            node
+            for node in self.nodes()
+            if node.getRoleName() == role and node.name == name
+        ]
+        if not 0 <= index < len(matches):
+            raise RuntimeError(
+                f"Cannot find {role} {name!r} #{index}; matches={len(matches)}"
+            )
+        node = matches[index]
+        state = node.getState()
+        if not state.contains(self.atspi.STATE_ENABLED):
+            raise RuntimeError(f"Target is disabled: {role} {name!r}")
+        if not state.contains(self.atspi.STATE_FOCUSABLE):
+            raise RuntimeError(f"Target cannot take focus: {role} {name!r}")
+        if not node.queryComponent().grabFocus():
+            raise RuntimeError(f"Focus request failed: {role} {name!r}")
+
     def click(self, role, name, index=0):
         self.focus()
         matches = [
@@ -319,10 +339,11 @@ def main():
     parser.add_argument("--session", type=Path, required=True)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("tree")
-    p = sub.add_parser("click")
-    p.add_argument("role")
-    p.add_argument("name")
-    p.add_argument("--index", type=int, default=0)
+    for command in ["click", "focus"]:
+        p = sub.add_parser(command)
+        p.add_argument("role")
+        p.add_argument("name")
+        p.add_argument("--index", type=int, default=0)
     p = sub.add_parser("press")
     p.add_argument("chord")
     p = sub.add_parser("type")
@@ -340,6 +361,8 @@ def main():
         print(json.dumps(app.tree(), ensure_ascii=False, indent=2))
     elif args.command == "click":
         app.click(args.role, args.name, args.index)
+    elif args.command == "focus":
+        app.focus_control(args.role, args.name, args.index)
     elif args.command == "press":
         app.press(args.chord)
     elif args.command == "type":
