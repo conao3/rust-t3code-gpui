@@ -1,8 +1,30 @@
+<p align="center">
+  <img src="docs/assets/banner.png" alt="T3 Code GPUI: an unofficial native frontend for T3 Code servers" width="880">
+</p>
+
+<p align="center"><strong>An unofficial native desktop frontend for T3 Code servers, built with GPUI</strong></p>
+
+<p align="center">
+  <a href="https://github.com/conao3/rust-t3code-gpui/actions/workflows/ci.yml"><img src="https://github.com/conao3/rust-t3code-gpui/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/conao3/rust-t3code-gpui" alt="License: Apache-2.0"></a>
+  <a href="Cargo.toml"><img src="https://img.shields.io/badge/Rust-edition%202024-orange" alt="Rust edition 2024"></a>
+  <a href="https://github.com/conao3/rust-t3code-gpui/stargazers"><img src="https://img.shields.io/github/stars/conao3/rust-t3code-gpui?style=flat" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="#layout">Layout</a> ·
+  <a href="#setup">Setup</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#license">License</a> ·
+  <a href="THIRD_PARTY_NOTICES.md">Third-party notices</a>
+</p>
+
 # T3 Code GPUI (Unofficial)
 
 **This is an independent, unofficial project. It is not affiliated with, endorsed by, or maintained by T3 Code, T3 Tools Inc., or the upstream T3 Code team.**
 
-A native desktop frontend for [T3 Code](https://github.com/pingdotgg/t3code), built with GPUI through [gpui-kit](https://github.com/longbridge/gpui-kit). It talks to unmodified `t3 serve` servers over T3's WebSocket protocol (orchestration protocol 2) and renders the sidebar, a thread's timeline and a composer.
+T3 Code GPUI is a native desktop frontend for [T3 Code](https://github.com/pingdotgg/t3code), built with GPUI through [gpui-kit](https://github.com/longbridge/gpui-kit). It talks to unmodified `t3 serve` servers over T3's WebSocket protocol (orchestration protocol 2) and renders the sidebar, a thread's timeline and a composer.
 
 Redraws are batched: stream updates land in the client state as they arrive, and the window repaints at most every 250 ms. A streaming assistant message is split into blocks at blank lines, so only its last block is re-laid out. On X11 the window presents frames without waiting for vblank, so a frame never holds up key input (see `THIRD_PARTY_NOTICES.md` for the patched `gpui-pre-linux`).
 
