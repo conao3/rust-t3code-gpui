@@ -1,5 +1,22 @@
 use super::*;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum SubmissionIntent {
+    Foreground,
+    Alternate,
+    Background,
+}
+
+fn delivery(running: bool, alternate: bool, steer: bool, can_steer: bool) -> Delivery {
+    if !running {
+        Delivery::Start
+    } else if can_steer && (steer != alternate) {
+        Delivery::Steer
+    } else {
+        Delivery::Queue
+    }
+}
+
 pub(super) struct ComposerControlsPane {
     pub(super) root: WeakEntity<Root>,
 }
@@ -300,9 +317,58 @@ impl Root {
         .detach();
     }
 
+    pub(super) fn composer_composing(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.composer.update(cx, |state, cx| {
+            state.marked_text_range(window, cx).is_some()
+        })
+    }
+
+    pub(super) fn composer_delivery(&self, alternate: bool) -> Delivery {
+        let running = self.open_entry().is_some_and(|entry| {
+            matches!(
+                entry.status,
+                ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval
+            )
+        });
+        let approval = self
+            .open_entry()
+            .is_some_and(|entry| entry.status == ThreadStatus::Approval);
+        let compacting = self.open.as_ref().is_some_and(|open| {
+            let state = open.watch.state();
+            let state = state.lock().expect("thread state");
+            state
+                .projection
+                .get("turnItems")
+                .and_then(Value::as_array)
+                .is_some_and(|items| {
+                    items
+                        .iter()
+                        .any(|item| item["type"] == "compaction" && item["status"] == "running")
+                })
+        });
+        delivery(
+            running,
+            alternate,
+            approval || self.settings.steer_follow_ups,
+            !compacting,
+        )
+    }
+
     pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.send_intent(SubmissionIntent::Foreground, window, cx);
+    }
+
+    pub(super) fn send_intent(
+        &mut self,
+        intent: SubmissionIntent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.composer_composing(window, cx) {
+            return;
+        }
         if self.draft.is_some() {
-            self.launch(window, cx);
+            self.launch(intent, window, cx);
             return;
         }
         if let Some((view, request_id)) = self.pending_question() {
@@ -319,13 +385,21 @@ impl Root {
         let Some(connection) = self.connection(&environment) else {
             return;
         };
-        let delivery = match self.open_entry().map(|e| e.status) {
-            Some(ThreadStatus::Working) if self.settings.steer_follow_ups => Delivery::Steer,
-            Some(ThreadStatus::Working | ThreadStatus::Input | ThreadStatus::Approval) => {
-                Delivery::Queue
-            }
-            _ => Delivery::Start,
+        let delivery = self.composer_delivery(intent == SubmissionIntent::Alternate);
+        let approvals: Vec<String> = self
+            .rows
+            .iter()
+            .filter_map(|row| match &row.pending {
+                Some(Pending::Approval { request_id, .. }) => Some(request_id.clone()),
+                _ => None,
+            })
+            .collect();
+        let Some(origin) = self.composer_key() else {
+            return;
         };
+        if !self.composer_sends.insert(origin.clone()) {
+            return;
+        }
         let runtime = self.runtime.clone();
         let pending = std::mem::take(&mut self.attachments);
         self.composer
@@ -337,6 +411,11 @@ impl Root {
                 let pending = pending.clone();
                 async move {
                     let attachments = upload_all(&connection, &pending).await?;
+                    for request_id in approvals {
+                        connection
+                            .respond(&thread_id, &request_id, "decline")
+                            .await?;
+                    }
                     connection
                         .send_message(&thread_id, &text, attachments, delivery)
                         .await
@@ -344,7 +423,14 @@ impl Root {
             })
             .await;
             let _ = this.update_in(cx, |root, window, cx| {
+                root.composer_sends.remove(&origin);
                 root.message = sent.as_ref().err().map(|e| format!("Send failed: {e:#}"));
+                if sent.is_ok()
+                    && intent == SubmissionIntent::Background
+                    && root.composer_key().as_ref() == Some(&origin)
+                {
+                    root.new_thread(window, cx);
+                }
                 if sent.is_err() {
                     root.composer
                         .update(cx, |state, cx| state.set_value(text, window, cx));
@@ -498,9 +584,9 @@ impl Root {
         }
     }
 
-    fn launch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn launch(&mut self, intent: SubmissionIntent, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.composer.read(cx).value().trim().to_string();
-        if text.is_empty() {
+        if text.is_empty() && self.attachments.is_empty() {
             return;
         }
         let Some((environment, project_id, model, runtime_mode)) = self.draft_target() else {
@@ -532,7 +618,9 @@ impl Root {
             .map(|draft| draft.id.clone())
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let promoting = (environment.clone(), thread_id.clone());
-        self.promoting.insert(promoting.clone());
+        if !self.promoting.insert(promoting.clone()) {
+            return;
+        }
         self.rebuild_entries();
         self.schedule_wake(window, cx);
         let title = projects::title_seed(&text);
@@ -568,7 +656,16 @@ impl Root {
                 root.rebuild_entries();
                 root.schedule_wake(window, cx);
                 match launched {
-                    Ok(thread_id) => root.open_thread(environment, thread_id, cx),
+                    Ok(thread_id) => {
+                        if root.draft.as_ref().map(|draft| &draft.id) != Some(&promoting.1) {
+                            return;
+                        }
+                        if intent == SubmissionIntent::Background {
+                            root.new_thread(window, cx);
+                        } else {
+                            root.open_thread(environment, thread_id, cx);
+                        }
+                    }
                     Err(error) => {
                         root.message = Some(format!("New thread failed: {error:#}"));
                         root.composer
@@ -981,9 +1078,11 @@ impl Root {
                     },
                 )
                 .tooltip("Send")
-                .accessibility_label("Send")
+                .accessibility_label("Submit message")
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.launch(window, cx)));
+                .on_click(cx.listener(|root, _, window, cx| {
+                    root.launch(SubmissionIntent::Foreground, window, cx)
+                }));
         }
         let working = self.open_entry().is_some_and(|entry| {
             matches!(
@@ -995,8 +1094,22 @@ impl Root {
             Button::new("answer")
                 .label("Answer")
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
-        } else if working {
+                .on_click(cx.listener(|root, _, window, cx| {
+                    let alternate = window.modifiers().control || window.modifiers().platform;
+                    root.send_intent(
+                        if alternate {
+                            SubmissionIntent::Alternate
+                        } else {
+                            SubmissionIntent::Foreground
+                        },
+                        window,
+                        cx,
+                    );
+                }))
+        } else if working
+            && self.composer.read(cx).value().trim().is_empty()
+            && self.attachments.is_empty()
+        {
             Button::new("stop")
                 .icon(Icon::empty().path("icons/t3-stop.svg"))
                 .tooltip("Interrupt")
@@ -1007,7 +1120,11 @@ impl Root {
                 .on_click(cx.listener(|root, _, _, cx| root.stop(cx)))
         } else {
             Button::new("send")
-                .icon(IconName::ArrowUp)
+                .icon(Icon::empty().path(match self.composer_delivery(false) {
+                    Delivery::Start => "icons/t3-submit.svg",
+                    Delivery::Steer => "icons/t3-steer.svg",
+                    Delivery::Queue => "icons/t3-queue.svg",
+                }))
                 .disabled(
                     self.composer.read(cx).value().trim().is_empty() && self.attachments.is_empty(),
                 )
@@ -1020,11 +1137,26 @@ impl Root {
                     },
                 )
                 .tooltip("Send")
-                .accessibility_label("Send")
+                .accessibility_label(match self.composer_delivery(false) {
+                    Delivery::Start => "Submit message",
+                    Delivery::Steer => "Steer message",
+                    Delivery::Queue => "Queue message",
+                })
                 .size(px(32.))
                 .rounded(px(16.))
                 .primary()
-                .on_click(cx.listener(|root, _, window, cx| root.send(window, cx)))
+                .on_click(cx.listener(|root, _, window, cx| {
+                    let alternate = window.modifiers().control || window.modifiers().platform;
+                    root.send_intent(
+                        if alternate {
+                            SubmissionIntent::Alternate
+                        } else {
+                            SubmissionIntent::Foreground
+                        },
+                        window,
+                        cx,
+                    );
+                }))
         }
     }
 
@@ -1657,4 +1789,35 @@ async fn upload_all(
         );
     }
     Ok(uploaded)
+}
+
+#[cfg(test)]
+mod send_tests {
+    use super::delivery;
+    use serde_json::Value;
+    use t3_client::session::Delivery;
+    #[test]
+    fn dispatch_modes_match_reference() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/composer-dispatch.json"))
+                .unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let expected = match case["result"].as_str().unwrap() {
+                "auto" => Delivery::Start,
+                "steer" => Delivery::Steer,
+                "queue" => Delivery::Queue,
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                delivery(
+                    case["running"].as_bool().unwrap(),
+                    case["alternateModifier"].as_bool().unwrap(),
+                    case["activeTurnDefault"] == "steer",
+                    case["canSteer"].as_bool().unwrap()
+                ),
+                expected,
+                "{case}"
+            );
+        }
+    }
 }

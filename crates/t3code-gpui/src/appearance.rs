@@ -378,6 +378,15 @@ impl AssetSource for Assets {
             return Ok(Some(std::borrow::Cow::Borrowed(*data)));
         }
         match path {
+            "icons/t3-queue.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/queue.svg"
+            )))),
+            "icons/t3-steer.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/steer.svg"
+            )))),
+            "icons/t3-submit.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/submit.svg"
+            )))),
             "icons/t3-stop.svg" => Ok(Some(std::borrow::Cow::Borrowed(include_bytes!(
                 "../assets/stop.svg"
             )))),
@@ -403,6 +412,9 @@ impl AssetSource for Assets {
                 "icons/t3-openai.svg",
                 "icons/t3-claude.svg",
                 "icons/t3-stop.svg",
+                "icons/t3-queue.svg",
+                "icons/t3-steer.svg",
+                "icons/t3-submit.svg",
             ]
             .into_iter()
             .filter(|p| p.starts_with(path))

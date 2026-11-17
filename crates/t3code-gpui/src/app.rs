@@ -79,6 +79,9 @@ actions!(
     t3code_gpui,
     [
         Send,
+        SendAlternate,
+        SendBackground,
+        SendAndNewThread,
         NextDone,
         PreviousDone,
         ToggleSidebar,
@@ -136,6 +139,9 @@ fn action_for(command: &str) -> Option<Box<dyn Action>> {
         "navigation.back" => Box::new(HistoryBack),
         "navigation.forward" => Box::new(HistoryForward),
         "modelPicker.toggle" => Box::new(ToggleModelPicker),
+        "composer.sendAlternate" => Box::new(SendAlternate),
+        "composer.sendBackground" => Box::new(SendBackground),
+        "composer.sendAndNewThread" => Box::new(SendAndNewThread),
         "composer.mode" => Box::new(OpenPermissions),
         "composer.effort" => Box::new(ToggleModelPicker),
         "sidebar.toggle" => Box::new(ToggleSidebar),
@@ -314,6 +320,7 @@ struct ComposerControlsStamp {
     current: Option<(String, String)>,
     draft: bool,
     status: Option<ThreadStatus>,
+    delivery: Delivery,
     question: bool,
     empty: bool,
     attachments: bool,
@@ -408,6 +415,7 @@ pub struct Root {
     permissions_subscription: Option<Subscription>,
     model_picker: Entity<CommandState>,
     attachments: Vec<attachments::Pending>,
+    composer_sends: HashSet<String>,
     queued: Vec<timeline::Queued>,
     thread_loading: bool,
     completion: Option<Completion>,
@@ -663,6 +671,7 @@ impl Root {
             permissions_subscription: None,
             model_picker: cx.new(|cx| CommandState::new(window, cx)),
             attachments: Vec::new(),
+            composer_sends: HashSet::new(),
             queued: Vec::new(),
             thread_loading: false,
             completion: None,
@@ -724,6 +733,9 @@ impl Root {
         cx: &mut Context<Self>,
     ) -> bool {
         if window.has_active_dialog(cx) {
+            return false;
+        }
+        if self.composer_composing(window, cx) {
             return false;
         }
         let keystroke = &event.keystroke;
@@ -839,6 +851,9 @@ impl Root {
                         .iter()
                         .any(|input| input.read(cx).focus_handle(cx).is_focused(window))
             }
+            "composerRequiresModifier" => self
+                .settings
+                .requires_modifier(&self.composer.read(cx).value()),
             "draftThreadRoute" => self.draft.is_some(),
             "turnRunning" => self
                 .open_entry()
@@ -1090,6 +1105,7 @@ impl Render for Root {
             current: self.current(),
             draft: self.draft.is_some(),
             status: self.open_entry().map(|entry| entry.status),
+            delivery: self.composer_delivery(false),
             question: self.pending_question().is_some(),
             empty: self.composer.read(cx).value().trim().is_empty(),
             attachments: !self.attachments.is_empty(),
@@ -1252,6 +1268,13 @@ impl Render for Root {
             }))
             .on_action(cx.listener(|root, _: &CycleRuntimeMode, _, cx| root.cycle_runtime_mode(cx)))
             .on_action(cx.listener(|root, _: &Send, window, cx| root.send(window, cx)))
+            .on_action(cx.listener(|root, _: &SendAlternate, window, cx| root.send_intent(composer::SubmissionIntent::Alternate, window, cx)))
+            .on_action(cx.listener(|root, _: &SendBackground, window, cx| {
+                if root.draft.is_some() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
+            }))
+            .on_action(cx.listener(|root, _: &SendAndNewThread, window, cx| {
+                if root.draft.is_none() { root.send_intent(composer::SubmissionIntent::Background, window, cx); }
+            }))
             .on_action(
                 cx.listener(|root, _: &NextUserMessage, _, cx| root.jump_user_message(true, cx)),
             )

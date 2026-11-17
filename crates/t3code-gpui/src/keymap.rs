@@ -14,6 +14,7 @@ pub struct Rule {
     pub chord: Chord,
     pub command: String,
     pub when: Option<Value>,
+    pub alternate_mod_enter: bool,
 }
 
 fn flag(shortcut: &Value, key: &str) -> bool {
@@ -80,6 +81,15 @@ pub fn rules(config: &Value) -> Vec<Rule> {
                 chord: chord(r.get("shortcut")?)?,
                 command: r.get("command")?.as_str()?.to_string(),
                 when: r.get("whenAst").cloned(),
+                alternate_mod_enter: r.get("command").and_then(Value::as_str)
+                    == Some("composer.sendAlternate")
+                    && r.get("shortcut").is_some_and(|s| {
+                        s.get("key").and_then(Value::as_str) == Some("enter")
+                            && flag(s, "modKey")
+                            && !["metaKey", "ctrlKey", "altKey", "shiftKey"]
+                                .iter()
+                                .any(|key| flag(s, key))
+                    }),
             })
         })
         .collect();
@@ -95,6 +105,19 @@ pub fn command_for<'a>(
     known: impl Fn(&str) -> bool,
 ) -> Option<&'a str> {
     resolve(rules, typed, &|_| false).filter(|c| known(c))
+}
+
+fn effective_chord<'a>(
+    rule: &'a Rule,
+    context: &impl Fn(&str) -> bool,
+) -> std::borrow::Cow<'a, Chord> {
+    if rule.alternate_mod_enter && context("composerRequiresModifier") {
+        let mut chord = rule.chord.clone();
+        chord.shift = true;
+        std::borrow::Cow::Owned(chord)
+    } else {
+        std::borrow::Cow::Borrowed(&rule.chord)
+    }
 }
 
 pub fn resolve<'a>(
@@ -117,7 +140,8 @@ pub fn resolve<'a>(
     rules
         .iter()
         .find(|r| {
-            (r.chord == *typed || r.chord == normalized) && holds_in(r.when.as_ref(), context)
+            let chord = effective_chord(r, context);
+            (*chord == *typed || *chord == normalized) && holds_in(r.when.as_ref(), context)
         })
         .map(|r| r.command.as_str())
 }
@@ -138,9 +162,9 @@ pub fn command_label(
     let rule = rules.iter().find(|rule| {
         rule.command == command
             && holds_in(rule.when.as_ref(), context)
-            && resolve(rules, &rule.chord, context) == Some(command)
+            && resolve(rules, &effective_chord(rule, context), context) == Some(command)
     })?;
-    let chord = &rule.chord;
+    let chord = effective_chord(rule, context);
     let mut parts = Vec::new();
     if chord.control {
         parts.push("Ctrl");
@@ -179,6 +203,36 @@ pub fn jump_hints_held(rules: &[Rule], modifiers: &Chord, context: &impl Fn(&str
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn send_preference_only_moves_the_default_alternate_chord() {
+        let config = serde_json::json!({"keybindings":[
+            {"command":"composer.sendAlternate","shortcut":{"key":"enter","modKey":true}},
+        ]});
+        let rules = super::rules(&config);
+        let plain = super::chord(&serde_json::json!({"key":"enter","modKey":true})).unwrap();
+        let mut shifted = plain.clone();
+        shifted.shift = true;
+        assert_eq!(
+            super::resolve(&rules, &plain, &|_| false),
+            Some("composer.sendAlternate")
+        );
+        assert_eq!(
+            super::resolve(&rules, &plain, &|key| key == "composerRequiresModifier"),
+            None
+        );
+        assert_eq!(
+            super::resolve(&rules, &shifted, &|key| key == "composerRequiresModifier"),
+            Some("composer.sendAlternate")
+        );
+        let explicit = super::rules(&serde_json::json!({"keybindings":[
+            {"command":"composer.sendAlternate","shortcut":{"key":"enter","ctrlKey":true}},
+        ]}));
+        assert_eq!(
+            super::resolve(&explicit, &plain, &|_| true),
+            Some("composer.sendAlternate")
+        );
+    }
+
     use super::*;
     use serde_json::json;
 
