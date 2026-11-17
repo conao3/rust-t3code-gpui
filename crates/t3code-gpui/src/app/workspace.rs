@@ -57,6 +57,7 @@ impl Root {
     ) -> AnyElement {
         let layout = workspace::layout(self.canvas_width, self.details_open);
         let card_height = self.lineage_height()
+            + self.thread_extra_height()
             + 52.
             + if self.workspace_editor().is_some() {
                 32.
@@ -374,7 +375,9 @@ impl Root {
                         .child(error),
                 )
             })
+            .child(self.render_thread_pull_requests(cx))
             .child(self.render_lineage(cx))
+            .child(self.render_thread_usage(cx))
             .into_any_element()
     }
 

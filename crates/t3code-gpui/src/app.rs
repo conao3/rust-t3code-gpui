@@ -58,6 +58,7 @@ mod sidebar_view;
 mod snooze_controls;
 mod snooze_options;
 mod terminal;
+mod thread_details;
 #[path = "app/timeline.rs"]
 mod timeline_view;
 mod titlebar;
@@ -339,6 +340,8 @@ struct ComposerControlsStamp {
 
 #[derive(PartialEq)]
 struct DetailsStamp {
+    usage_sequence: Option<(String, String, u64)>,
+    pull_requests: Value,
     target: Option<workspace::Target>,
     status_revision: u64,
     catalog_revision: u64,
@@ -353,6 +356,8 @@ struct DetailsStamp {
 }
 
 pub struct Root {
+    context_usage_stamp: Option<(String, String, u64)>,
+    context_usage: Option<Value>,
     pr_state: pull_requests::State,
     pr_search: Entity<InputState>,
     pr_comment: Entity<TextareaState>,
@@ -625,6 +630,8 @@ impl Root {
         .filter_map(|(section, expanded)| (!expanded).then_some(section))
         .collect();
         Self {
+            context_usage_stamp: None,
+            context_usage: None,
             pr_state: pull_requests::State::default(),
             pr_search: cx.new(|cx| InputState::new(window, cx).placeholder("Search pull requests")),
             pr_comment: cx.new(|cx| TextareaState::new(window, cx).placeholder("Leave a comment")),
@@ -1120,7 +1127,14 @@ impl Render for Root {
         self.prepare_right_panel(window, cx);
         self.follow_explorer(cx);
         self.follow_workspace();
+        self.follow_context_usage();
         let details_stamp = DetailsStamp {
+            usage_sequence: self.context_usage_stamp.clone(),
+            pull_requests: self
+                .current()
+                .and_then(|(environment, id)| self.thread_value(&environment, &id))
+                .map(|thread| thread["pullRequests"].clone())
+                .unwrap_or(Value::Null),
             target: self
                 .workspace_watch
                 .as_ref()
