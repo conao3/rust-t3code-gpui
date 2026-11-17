@@ -1,0 +1,100 @@
+{
+  "name": "usage-area-and-time-breakdown",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {
+      "action": "press",
+      "value": "ctrl+u"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Usage"
+      }
+    },
+    {
+      "action": "press",
+      "value": "c"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Refresh usage"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+2"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "image",
+        "name": "Daily cost by provider"
+      },
+      "native": {
+        "role": "image",
+        "name": "Daily cost by provider"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Day"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Day"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "region",
+        "name": "Usage breakdown by time"
+      }
+    },
+    {
+      "action": "press",
+      "value": "t"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "image",
+        "name": "Daily processed tokens by provider"
+      },
+      "native": {
+        "role": "image",
+        "name": "Daily processed tokens by provider"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+1"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "image",
+        "name": "Hourly processed tokens by provider"
+      },
+      "native": {
+        "role": "image",
+        "name": "Hourly processed tokens by provider"
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    }
+  ]
+}

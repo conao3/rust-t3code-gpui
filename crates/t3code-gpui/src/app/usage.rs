@@ -35,6 +35,8 @@ pub(super) struct UsagePage {
     errors: Vec<String>,
     loading: bool,
     generation: u64,
+    hovered_period: Option<usize>,
+    breakdown_time: bool,
     workers: Vec<tokio::task::JoinHandle<()>>,
 }
 impl Drop for UsagePage {
@@ -97,6 +99,8 @@ impl UsagePage {
             errors: vec![],
             loading: false,
             generation: 0,
+            hovered_period: None,
+            breakdown_time: false,
             workers: vec![],
         };
         view.focus.focus(window, cx);
@@ -431,68 +435,286 @@ impl UsagePage {
                 total.cost
             }
         };
-        let maximum = self
-            .merged
-            .periods
-            .values()
-            .map(|providers| providers.values().map(metric).sum::<f64>())
-            .fold(0f64, f64::max)
-            .max(1.);
         let theme = cx.theme().colors;
-        v_flex()
-            .gap_2()
-            .child(div().text_sm().child(if self.days == 1 {
-                "Hourly usage"
+        let mut series = PROVIDERS
+            .iter()
+            .filter(|(provider, _, _)| self.merged.providers.contains_key(*provider))
+            .map(|(provider, label, color)| {
+                let values = periods
+                    .iter()
+                    .map(|period| {
+                        self.merged
+                            .periods
+                            .get(period)
+                            .and_then(|entries| entries.get(*provider))
+                            .map(metric)
+                            .unwrap_or(0.)
+                    })
+                    .collect::<Vec<_>>();
+                let color: Hsla = if *provider == "codex" {
+                    theme.foreground
+                } else {
+                    rgb(*color).into()
+                };
+                (*label, values, color)
+            })
+            .collect::<Vec<_>>();
+        series.sort_by(|a, b| b.1.iter().sum::<f64>().total_cmp(&a.1.iter().sum::<f64>()));
+        let peak = series
+            .iter()
+            .flat_map(|(_, values, _)| values)
+            .copied()
+            .fold(0., f64::max);
+        let (maximum, ticks) = data::chart_scale(peak);
+        let plot_series = series.clone();
+        let plot_ticks = ticks.clone();
+        let hovered = self.hovered_period.filter(|index| *index < periods.len());
+        let count = periods.len();
+        let format = |value| {
+            if self.metric == "tokens" {
+                data::tokens(value)
             } else {
-                "Daily usage"
-            }))
+                data::usd(value)
+            }
+        };
+        let mut chart = div()
+            .id("usage-chart")
+            .relative()
+            .flex_1()
+            .h(px(224.))
             .child(
-                h_flex()
-                    .id("usage-chart")
-                    .role(accesskit::Role::GraphicsDocument)
-                    .aria_label("Usage by provider")
-                    .h(px(220.))
-                    .items_end()
-                    .gap(px(3.))
-                    .border_b_1()
-                    .border_color(theme.border)
-                    .children(periods.iter().enumerate().map(|(index, period)| {
-                        let values = self.merged.periods.get(period);
-                        v_flex()
-                            .id(("usage-period", index))
-                            .role(accesskit::Role::Group)
-                            .aria_label(period.clone())
-                            .flex_1()
-                            .h_full()
-                            .justify_end()
-                            .children(PROVIDERS.iter().filter_map(|(provider, label, color)| {
-                                let total = values?.get(*provider)?;
-                                let height = (metric(total) / maximum * 200.).max(0.) as f32;
-                                Some(
-                                    div()
-                                        .id(SharedString::from(*provider))
-                                        .role(accesskit::Role::GraphicsSymbol)
-                                        .aria_label(format!("{label}: {}", self.value(total)))
-                                        .w_full()
-                                        .h(px(height))
-                                        .bg(if *provider == "codex" {
-                                            theme.foreground
+                div()
+                    .id("usage-chart-image")
+                    .role(accesskit::Role::Image)
+                    .aria_label(format!(
+                        "{} {} by provider",
+                        if self.days == 1 { "Hourly" } else { "Daily" },
+                        if self.metric == "tokens" {
+                            "processed tokens"
+                        } else {
+                            "cost"
+                        }
+                    ))
+                    .size_full()
+                    .child(
+                        canvas(
+                            |_, _, _| {},
+                            move |bounds, _, window, _| {
+                                let width = f32::from(bounds.size.width);
+                                let height = f32::from(bounds.size.height);
+                                let y = |value: f64| {
+                                    height
+                                        - if maximum > 0. {
+                                            (value / maximum) as f32 * height * (252. / 260.)
                                         } else {
-                                            rgb(*color).into()
-                                        }),
-                                )
-                            }))
-                    })),
+                                            0.
+                                        }
+                                };
+                                for tick in &plot_ticks {
+                                    window.paint_quad(fill(
+                                        Bounds::new(
+                                            point(bounds.left(), bounds.top() + px(y(*tick))),
+                                            size(bounds.size.width, px(1.)),
+                                        ),
+                                        theme.border,
+                                    ));
+                                }
+                                for (_, values, color) in &plot_series {
+                                    if values.len() < 2 {
+                                        continue;
+                                    }
+                                    let dx = width / (values.len() - 1) as f32;
+                                    let points = values
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(index, value)| (index as f32 * dx, y(*value)))
+                                        .collect::<Vec<_>>();
+                                    let tangents = data::chart_tangents(&points);
+                                    for filled in [true, false] {
+                                        let mut path = if filled {
+                                            PathBuilder::fill()
+                                        } else {
+                                            PathBuilder::stroke(px(2.))
+                                        };
+                                        let position = |x, y| {
+                                            point(bounds.left() + px(x), bounds.top() + px(y))
+                                        };
+                                        path.move_to(position(points[0].0, points[0].1));
+                                        for index in 0..points.len() - 1 {
+                                            let (x, y) = points[index];
+                                            let (next_x, next_y) = points[index + 1];
+                                            path.cubic_bezier_to(
+                                                position(next_x, next_y),
+                                                position(
+                                                    x + dx / 3.,
+                                                    y + tangents[index] * dx / 3.,
+                                                ),
+                                                position(
+                                                    next_x - dx / 3.,
+                                                    next_y - tangents[index + 1] * dx / 3.,
+                                                ),
+                                            );
+                                        }
+                                        if filled {
+                                            path.line_to(position(width, height));
+                                            path.line_to(position(0., height));
+                                            path.close();
+                                        }
+                                        window.paint_path(
+                                            path.build().expect("valid provider usage curve"),
+                                            if filled { color.opacity(0.12) } else { *color },
+                                        );
+                                    }
+                                }
+                                if let Some(index) = hovered
+                                    && count > 1
+                                {
+                                    window.paint_quad(fill(
+                                        Bounds::new(
+                                            point(
+                                                bounds.left()
+                                                    + px(index as f32 / (count - 1) as f32 * width),
+                                                bounds.top(),
+                                            ),
+                                            size(px(1.), bounds.size.height),
+                                        ),
+                                        theme.muted_foreground,
+                                    ));
+                                }
+                            },
+                        )
+                        .size_full(),
+                    ),
             )
             .child(
                 h_flex()
+                    .absolute()
+                    .inset_0()
+                    .children(periods.iter().enumerate().map(|(index, _)| {
+                        div()
+                            .id(("usage-period", index))
+                            .h_full()
+                            .flex_grow(if index == 0 || index + 1 == count {
+                                0.5
+                            } else {
+                                1.
+                            })
+                            .on_hover(cx.listener(move |view, over: &bool, _, cx| {
+                                let next = if *over { Some(index) } else { None };
+                                if next != view.hovered_period {
+                                    view.hovered_period = next;
+                                    cx.notify();
+                                }
+                            }))
+                    })),
+            );
+        if let Some(index) = hovered {
+            let mut tooltip = v_flex()
+                .absolute()
+                .top_2()
+                .right_2()
+                .min_w(px(144.))
+                .p_2()
+                .gap_1()
+                .rounded_lg()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.popover)
+                .text_xs()
+                .child(
+                    settings_controls::text(self.period_label(&periods[index]))
+                        .text_color(theme.muted_foreground),
+                );
+            for (label, values, _) in &series {
+                tooltip = tooltip.child(
+                    h_flex()
+                        .id(SharedString::from(*label))
+                        .justify_between()
+                        .gap_3()
+                        .child(settings_controls::text(*label))
+                        .child(settings_controls::text(format(values[index]))),
+                );
+            }
+            tooltip = tooltip.child(
+                h_flex()
+                    .id("usage-tooltip-total")
+                    .border_t_1()
+                    .border_color(theme.border)
+                    .justify_between()
+                    .child(settings_controls::text("Total"))
+                    .child(settings_controls::text(format(
+                        series.iter().map(|(_, values, _)| values[index]).sum(),
+                    ))),
+            );
+            chart = chart.child(tooltip);
+        }
+        v_flex()
+            .gap_2()
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .relative()
+                            .w(px(56.))
+                            .h(px(224.))
+                            .children(ticks.iter().map(|tick| {
+                                settings_controls::text(if *tick == 0. {
+                                    "0".to_string()
+                                } else {
+                                    format(*tick)
+                                })
+                                .absolute()
+                                .right_0()
+                                .top(px(224.
+                                    - if maximum > 0. {
+                                        (*tick / maximum) as f32 * 224. * (252. / 260.)
+                                    } else {
+                                        0.
+                                    }
+                                    - 8.))
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                            })),
+                    )
+                    .child(chart),
+            )
+            .child(
+                h_flex()
+                    .pl(px(64.))
                     .justify_between()
                     .text_xs()
                     .text_color(theme.muted_foreground)
-                    .child(text(&self.window, "sinceDay").to_string())
-                    .child(text(&self.window, "untilDay").to_string()),
+                    .children(
+                        [0, periods.len() / 2, periods.len().saturating_sub(1)]
+                            .into_iter()
+                            .enumerate()
+                            .filter_map(|(index, period)| {
+                                periods.get(period).map(|period| {
+                                    div()
+                                        .id(("usage-axis", index))
+                                        .child(settings_controls::text(self.period_label(period)))
+                                })
+                            }),
+                    ),
             )
             .into_any_element()
+    }
+    fn period_label(&self, period: &str) -> String {
+        if self.days == 1 {
+            chrono::DateTime::parse_from_rfc3339(period)
+                .map(|value| {
+                    value
+                        .with_timezone(&chrono::Local)
+                        .format("%-I %p")
+                        .to_string()
+                })
+                .unwrap_or_else(|_| period.to_string())
+        } else {
+            chrono::NaiveDate::parse_from_str(period, "%Y-%m-%d")
+                .map(|date| date.format("%b %-d").to_string())
+                .unwrap_or_else(|_| period.to_string())
+        }
     }
     fn render_limits(&self, cx: &Context<Self>) -> AnyElement {
         let mut accounts = Vec::<(String, Value)>::new();
@@ -753,42 +975,145 @@ impl Render for UsagePage {
                     })),
             );
             body = body.child(
-                div()
-                    .text_lg()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child("Models"),
-            );
-            let mut models = self.merged.models.iter().collect::<Vec<_>>();
-            models.sort_by(|(_, a), (_, b)| {
-                if self.metric == "tokens" {
-                    b.total_tokens().total_cmp(&a.total_tokens())
-                } else {
-                    b.cost.total_cmp(&a.cost)
-                }
-            });
-            body = body.children(models.into_iter().enumerate().map(|(index, (key, total))| {
-                let key = key.clone();
                 h_flex()
-                    .gap_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(theme.border)
+                    .justify_between()
                     .child(
-                        Button::new(("usage-model", index))
-                            .label(key.1.clone())
-                            .ghost()
-                            .on_click(cx.listener(move |view, _, window, cx| {
-                                view.open_model(&key, window, cx)
-                            })),
+                        settings_controls::text("Breakdown")
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM),
                     )
-                    .child(div().flex_1())
-                    .child(if total.records > 0. && total.unpriced >= total.records {
-                        "Unknown".to_string()
+                    .child(
+                        div()
+                            .id("usage-breakdown-group")
+                            .role(accesskit::Role::Group)
+                            .aria_label("Usage breakdown")
+                            .child(
+                                ToggleGroup::new("usage-breakdown")
+                                    .segmented()
+                                    .single()
+                                    .children([
+                                        Toggle::new("model")
+                                            .label("Model")
+                                            .tooltip("Model")
+                                            .checked(!self.breakdown_time),
+                                        Toggle::new("time")
+                                            .label(if self.days == 1 { "Hour" } else { "Day" })
+                                            .tooltip(if self.days == 1 { "Hour" } else { "Day" })
+                                            .checked(self.breakdown_time),
+                                    ])
+                                    .on_click(cx.listener(|view, selected: &Vec<bool>, _, cx| {
+                                        if selected.iter().any(|selected| *selected) {
+                                            view.breakdown_time =
+                                                selected.get(1).copied().unwrap_or(false);
+                                            cx.notify();
+                                        }
+                                    })),
+                            ),
+                    ),
+            );
+            if self.breakdown_time {
+                let providers = PROVIDERS
+                    .iter()
+                    .filter(|(provider, _, _)| self.merged.providers.contains_key(*provider))
+                    .collect::<Vec<_>>();
+                let mut table = v_flex()
+                    .id("usage-time-breakdown")
+                    .role(accesskit::Role::Region)
+                    .aria_label("Usage breakdown by time")
+                    .child(
+                        h_flex()
+                            .gap_4()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(theme.border)
+                            .child(
+                                settings_controls::text(if self.days == 1 {
+                                    "Hour"
+                                } else {
+                                    "Day"
+                                })
+                                .flex_1(),
+                            )
+                            .children(providers.iter().map(|(_, label, _)| {
+                                settings_controls::text(*label).w(px(100.)).text_right()
+                            }))
+                            .child(settings_controls::text("Total").w(px(100.)).text_right())
+                            .child(settings_controls::text("Tokens").w(px(100.)).text_right()),
+                    );
+                if self.merged.periods.is_empty() {
+                    table =
+                        table.child(settings_controls::text("No activity in this window.").py_6());
+                }
+                for (period, values) in self.merged.periods.iter().rev() {
+                    let cost = values.values().map(|value| value.cost).sum();
+                    let tokens = values.values().map(Totals::total_tokens).sum();
+                    let label = self.period_label(period);
+                    table = table.child(
+                        h_flex()
+                            .id(SharedString::from(format!("usage-time:{period}")))
+                            .gap_4()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(theme.border)
+                            .child(settings_controls::text(label).flex_1())
+                            .children(providers.iter().map(|(provider, _, _)| {
+                                div()
+                                    .id(SharedString::from(*provider))
+                                    .child(settings_controls::text(data::usd(
+                                        values.get(*provider).map(|value| value.cost).unwrap_or(0.),
+                                    )))
+                                    .w(px(100.))
+                                    .text_right()
+                            }))
+                            .child(
+                                div()
+                                    .id("total")
+                                    .child(settings_controls::text(data::usd(cost)))
+                                    .w(px(100.))
+                                    .text_right(),
+                            )
+                            .child(
+                                settings_controls::text(data::tokens(tokens))
+                                    .w(px(100.))
+                                    .text_right(),
+                            ),
+                    );
+                }
+                body = body.child(table);
+            } else {
+                let mut models = self.merged.models.iter().collect::<Vec<_>>();
+                models.sort_by(|(_, a), (_, b)| {
+                    if self.metric == "tokens" {
+                        b.total_tokens().total_cmp(&a.total_tokens())
                     } else {
-                        data::usd(total.cost)
-                    })
-                    .child(data::tokens(total.total_tokens()))
-            }));
+                        b.cost.total_cmp(&a.cost)
+                    }
+                });
+                body =
+                    body.children(models.into_iter().enumerate().map(|(index, (key, total))| {
+                        let key = key.clone();
+                        h_flex()
+                            .gap_3()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(theme.border)
+                            .child(
+                                Button::new(("usage-model", index))
+                                    .label(key.1.clone())
+                                    .ghost()
+                                    .on_click(cx.listener(move |view, _, window, cx| {
+                                        view.open_model(&key, window, cx)
+                                    })),
+                            )
+                            .child(div().flex_1())
+                            .child(if total.records > 0. && total.unpriced >= total.records {
+                                "Unknown".to_string()
+                            } else {
+                                data::usd(total.cost)
+                            })
+                            .child(data::tokens(total.total_tokens()))
+                    }));
+            }
         }
         v_flex()
             .id("usage-dialog")
