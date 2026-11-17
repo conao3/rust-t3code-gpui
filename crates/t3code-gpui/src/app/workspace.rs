@@ -354,7 +354,8 @@ impl Root {
                     .pt_2()
                     .pb_2p5()
                     .child(host)
-                    .children(editor_button),
+                    .children(editor_button)
+                    .child(self.render_project_scripts(cx)),
             )
             .when(self.conversation.workspace_status.is_repo(), |card| {
                 let changes = &self.conversation.workspace_status.local["workingTree"];
@@ -366,6 +367,7 @@ impl Root {
                         .border_t_1()
                         .border_color(theme.border.opacity(0.65))
                         .child(self.render_branch_control("details-branch", cx))
+                        .child(self.render_git_controls(cx))
                         .child(
                             Button::new("workspace-changes")
                                 .child(
@@ -409,8 +411,7 @@ impl Root {
                                 .on_click(
                                     self.pane_listener(cx, |root, _, _, cx| root.toggle_diff(cx)),
                                 ),
-                        )
-                        .child(self.render_git_controls(cx)),
+                        ),
                 )
             })
             .when_some(
