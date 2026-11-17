@@ -1420,6 +1420,11 @@ impl Root {
             .child(div().flex_1())
             .child(
                 Button::new("model")
+                    .accessibility_label(
+                        selected_model
+                            .map(|model| model.full_name.clone())
+                            .unwrap_or_else(|| "Pick a model".into()),
+                    )
                     .label(label)
                     .text_color(theme.foreground.opacity(0.8))
                     .icon(
@@ -1870,13 +1875,13 @@ impl Root {
                                 if self.conversation.dictation.recording.is_some() {
                                     "Stop dictation"
                                 } else {
-                                    "Start dictation"
+                                    "Start voice input"
                                 },
                             )
                             .tooltip(if self.conversation.dictation.recording.is_some() {
                                 "Stop dictation"
                             } else {
-                                "Start dictation"
+                                "Start voice input"
                             })
                             .disabled(self.conversation.dictation.busy)
                             .on_click(self.pane_listener(cx, |root, _, window, cx| {
@@ -1897,12 +1902,18 @@ impl Root {
             .unwrap_or_default();
         let (runtime_label, description, icon) = permissions::presentation(&runtime_mode);
         let trigger = Button::new("permissions")
-            .label(runtime_label)
+            .child(
+                h_flex()
+                    .gap(px(6.))
+                    .child(Icon::new(icon).size(px(12.)))
+                    .child(div().text_size(px(12.)).child(runtime_label)),
+            )
             .accessibility_label(format!("Permissions: {runtime_label}"))
-            .icon(icon)
             .tooltip(format!("Permissions: {runtime_label}. {description}"))
             .compact()
             .ghost()
+            .h(px(24.))
+            .px(px(7.))
             .text_size(px(12.))
             .text_color(theme.muted_foreground)
             .selected(self.conversation.permissions_menu.is_some())
@@ -2028,6 +2039,9 @@ impl Root {
             })
             .into_any_element();
         h_flex()
+            .id("composer-input")
+            .role(accesskit::Role::Region)
+            .aria_label("Message input")
             .w_full()
             .px_4()
             .justify_center()
@@ -2044,24 +2058,34 @@ impl Root {
         let selected = groups
             .iter()
             .find(|group| draft.group.as_ref() == Some(&group.key));
+        let scratch = self.is_scratch_draft();
         let title = selected
             .map(|group| group.title.clone())
             .unwrap_or_else(|| "Choose a project".into());
+        let title = if scratch { "No project".into() } else { title };
+        let heading_label = if scratch {
+            "What should we work on?".to_string()
+        } else if selected.is_some() {
+            format!("What should we build in {title} ?")
+        } else {
+            format!("{title} to start")
+        };
         let choices = groups.to_vec();
         let selected_key = draft.group.clone();
         let focus = self.focus.clone();
         let project = Button::new("draft-project")
             .child(
                 div()
-                    .text_size(px(30.))
-                    .line_height(px(36.))
+                    .text_size(px(if scratch { 14. } else { 30. }))
+                    .line_height(px(if scratch { 24. } else { 36. }))
                     .font_weight(FontWeight::MEDIUM)
-                    .child(title),
+                    .child(title.clone()),
             )
-            .accessibility_label("Choose project")
+            .accessibility_label(title)
+            .role(accesskit::Role::ComboBox)
             .ghost()
             .compact()
-            .h(px(36.))
+            .h(px(if scratch { 24. } else { 36. }))
             .px_0()
             .text_size(px(30.))
             .font_weight(FontWeight::MEDIUM)
@@ -2077,24 +2101,61 @@ impl Root {
                 }
                 menu.action_context(focus.clone())
             });
+        let mut project = Some(project);
         let heading = h_flex()
+            .id("draft-heading")
+            .role(accesskit::Role::Heading)
+            .aria_label(heading_label)
             .justify_center()
             .items_center()
             .flex_wrap()
             .gap_2()
             .text_size(px(30.))
             .line_height(px(36.))
-            .child(if selected.is_some() {
+            .child(if scratch {
+                "What should we work on?"
+            } else if selected.is_some() {
                 "What should we build in"
             } else {
                 ""
             })
-            .child(
-                h_flex()
-                    .items_center()
-                    .child(project)
-                    .child(if selected.is_some() { "?" } else { " to start" }),
-            );
+            .when(!scratch, |heading| {
+                heading.child(
+                    h_flex()
+                        .items_center()
+                        .child(project.take().expect("project selector"))
+                        .child(if selected.is_some() { "?" } else { " to start" }),
+                )
+            });
+        let heading = v_flex().items_center().child(heading).when(
+            self.can_start_without_project(),
+            |heading| {
+                heading.child(
+                    h_flex()
+                        .mt_2()
+                        .h(px(24.))
+                        .justify_center()
+                        .child(if scratch {
+                            project
+                                .take()
+                                .expect("scratch project selector")
+                                .into_any_element()
+                        } else {
+                            Button::new("draft-without-project")
+                                .label("or start without a project")
+                                .ghost()
+                                .compact()
+                                .h(px(24.))
+                                .text_size(px(14.))
+                                .text_color(cx.theme().muted_foreground)
+                                .on_click(self.pane_listener(cx, |root, _, window, cx| {
+                                    root.new_without_project(window, cx);
+                                }))
+                                .into_any_element()
+                        }),
+                )
+            },
+        );
         v_flex()
             .flex_1()
             .h_full()
@@ -2109,7 +2170,11 @@ impl Root {
                             .absolute()
                             .bottom_full()
                             .w_full()
-                            .pb_4()
+                            .pb(px(if self.conversation.prompts.store.entries.is_empty() {
+                                16.
+                            } else {
+                                0.
+                            }))
                             .px_4()
                             .children((!self.conversation.prompts.open).then_some(heading)),
                     )
@@ -2118,20 +2183,19 @@ impl Root {
                     .child(
                         h_flex().w_full().justify_center().px_4().child(
                             h_flex()
+                                .id("composer-context")
+                                .role(accesskit::Role::Region)
+                                .aria_label("Message input")
                                 .w_full()
                                 .max_w(px(736.))
                                 .h(px(52.))
                                 .px_2()
                                 .items_start()
-                                .pt_1()
+                                .pt_2()
                                 .child(self.render_composer_context(cx))
                                 .child(div().flex_1())
                                 .when(self.conversation.workspace_status.is_repo(), |row| {
-                                    row.child(
-                                        div().w(px(140.)).child(
-                                            self.render_branch_control("composer-branch", cx),
-                                        ),
-                                    )
+                                    row.child(self.render_branch_control("composer-branch", cx))
                                 })
                                 .child(self.render_permissions_control(false, cx)),
                         ),
