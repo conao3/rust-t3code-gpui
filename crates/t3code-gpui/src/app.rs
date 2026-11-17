@@ -905,6 +905,9 @@ impl Root {
             platform: modifiers.platform,
             key: keystroke.key.clone(),
         };
+        if self.project_script_key(&typed, window, cx) {
+            return true;
+        }
         if let Some(command) = keymap::resolve(&self.key_rules, &typed, &|name| {
             self.key_context(name, window, cx)
         })

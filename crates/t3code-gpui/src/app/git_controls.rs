@@ -16,6 +16,45 @@ pub(super) struct State {
 }
 
 impl Root {
+    pub(super) fn project_script_key(
+        &mut self,
+        typed: &keymap::Chord,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.palette_open || self.settings_open || self.pr_state.page {
+            return false;
+        }
+        let context = |name: &str| self.key_context(name, window, cx);
+        if keymap::resolve(&self.key_rules, typed, &context)
+            .is_some_and(|command| !command.starts_with("script.") || !command.ends_with(".run"))
+        {
+            return false;
+        }
+        let Some((environment, _)) = self.current_project() else {
+            return false;
+        };
+        let Some(config) = self.config_of(&environment) else {
+            return false;
+        };
+        let rules = keymap::rules(&config);
+        let Some(id) = keymap::resolve(&rules, typed, &context)
+            .and_then(|command| command.strip_prefix("script."))
+            .and_then(|command| command.strip_suffix(".run"))
+        else {
+            return false;
+        };
+        let Some(script) = self
+            .project_scripts()
+            .into_iter()
+            .find(|script| script["id"] == id)
+        else {
+            return false;
+        };
+        self.run_project_script(script, window, cx);
+        true
+    }
+
     pub(super) fn git_action(
         &mut self,
         action: &GitAction,
@@ -374,6 +413,21 @@ impl Root {
             );
             input
         });
+        let script_command = original["id"].as_str().map(|id| format!("script.{id}.run"));
+        let config = self.config_of(&environment).unwrap_or(Value::Null);
+        let previous_key = config["keybindings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .rev()
+            .find(|binding| binding["command"].as_str() == script_command.as_deref())
+            .map(script_keybinding)
+            .unwrap_or_default();
+        let keybinding = cx.new(|cx| {
+            let mut input = InputState::new(window, cx).placeholder("Press shortcut");
+            input.set_value(previous_key, window, cx);
+            input
+        });
         let editing = original["id"].is_string();
         let root = cx.entity().downgrade();
         let editor = cx.new(|_| ScriptEditor {
@@ -383,6 +437,7 @@ impl Root {
             name,
             command,
             preview,
+            keybinding,
             icon: match original["icon"].as_str() {
                 Some("test") => "test",
                 Some("lint") => "lint",
@@ -466,7 +521,11 @@ impl Root {
         let script_focus = focus.clone();
         let script_root = cx.entity().downgrade();
         let no_scripts = scripts.is_empty();
-        let primary_script = scripts.first().cloned();
+        let primary_script = scripts
+            .iter()
+            .find(|script| script["runOnWorktreeCreate"] != true && script["runOnSettle"] != true)
+            .or_else(|| scripts.iter().find(|script| script["runOnSettle"] != true))
+            .cloned();
         let local = self.conversation.workspace_status.local.clone();
         let remote = self.conversation.workspace_status.remote.clone();
         v_flex()
@@ -858,6 +917,7 @@ struct ScriptEditor {
     name: Entity<InputState>,
     command: Entity<TextareaState>,
     preview: Entity<InputState>,
+    keybinding: Entity<InputState>,
     icon: &'static str,
     flags: [bool; 5],
     error: Option<String>,
@@ -957,6 +1017,43 @@ impl ScriptEditor {
             .unwrap_or_default();
         overrides.insert("defaultProjectScripts".into(), json!(scripts));
         let patch = json!({"projectSettingsOverrides":{&self.project:overrides}});
+        let command_id = format!("script.{id}.run");
+        let key = if delete {
+            String::new()
+        } else {
+            self.keybinding.read(cx).value().trim().to_string()
+        };
+        let previous = config["keybindings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|binding| binding["command"] == command_id && binding["whenAst"].is_null())
+            .map(|binding| json!({"command": command_id, "key": script_keybinding(binding)}))
+            .collect::<Vec<_>>();
+        let retained_elsewhere = delete
+            && (config["settings"]["defaultProjectScripts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|script| script["id"] == id)
+                || config["settings"]["projectSettingsOverrides"]
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .any(|(project, entry)| {
+                        project != &self.project
+                            && entry["defaultProjectScripts"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .any(|script| script["id"] == id)
+                    }));
+        let reconcile_key = !retained_elsewhere
+            && previous
+                .last()
+                .and_then(|value| value["key"].as_str())
+                .unwrap_or_default()
+                != key;
         self.saving = true;
         self.error = None;
         cx.notify();
@@ -964,7 +1061,27 @@ impl ScriptEditor {
             let result = on_runtime(&runtime, async move {
                 connection
                     .request("server.updateSettings", json!({"patch":patch}))
-                    .await
+                    .await?;
+                if reconcile_key {
+                    let remove_count = if key.is_empty() {
+                        previous.len()
+                    } else {
+                        previous.len().saturating_sub(1)
+                    };
+                    for rule in previous.iter().take(remove_count) {
+                        connection
+                            .request("server.removeKeybinding", rule.clone())
+                            .await?;
+                    }
+                    if !key.is_empty() {
+                        let mut input = json!({"command": command_id, "key": key});
+                        if let Some(previous) = previous.last() {
+                            input["replace"] = previous.clone();
+                        }
+                        connection.request("server.upsertKeybinding", input).await?;
+                    }
+                }
+                Ok(())
             })
             .await;
             let _ = this.update_in(cx, |view, window, cx| {
@@ -990,6 +1107,22 @@ impl Render for ScriptEditor {
         let weak = cx.entity().downgrade();
         let editing = self.original["id"].is_string();
         v_flex()
+            .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                if !view.keybinding.read(cx).focus_handle(cx).is_focused(window) || event.keystroke.key == "tab" { return; }
+                cx.stop_propagation();
+                let stroke = &event.keystroke;
+                let key = if stroke.key == "backspace" || stroke.key == "delete" { String::new() } else {
+                    let mut parts = Vec::new();
+                    if stroke.modifiers.control { parts.push(if cfg!(target_os = "macos") { "ctrl" } else { "mod" }); }
+                    if stroke.modifiers.platform { parts.push(if cfg!(target_os = "macos") { "mod" } else { "meta" }); }
+                    if stroke.modifiers.alt { parts.push("alt"); }
+                    if stroke.modifiers.shift { parts.push("shift"); }
+                    parts.push(match stroke.key.as_str() { "escape" => "esc", "up" => "arrowup", "down" => "arrowdown", "left" => "arrowleft", "right" => "arrowright", key => key });
+                    parts.join("+")
+                };
+                view.keybinding.update(cx, |input, cx| input.set_value(key, window, cx));
+                cx.notify();
+            }))
             .gap_3()
             .child(text!(
                 "Actions are project-scoped commands you can run from the top bar or keybindings."
@@ -1026,6 +1159,9 @@ impl Render for ScriptEditor {
                     )
                     .child(Input::new(&self.name).aria_label("Name")),
             )
+            .child(text!("Keybinding"))
+            .child(Input::new(&self.keybinding).aria_label("Keybinding").readonly(true))
+            .child(div().text_xs().child("Press a shortcut. Use Backspace to clear. Shortcuts are environment-wide. Projects using the same action share its shortcut."))
             .child(text!("Command"))
             .child(
                 Textarea::new(&self.command)
@@ -1116,6 +1252,28 @@ impl Render for ScriptEditor {
                     ),
             )
     }
+}
+
+fn script_keybinding(binding: &Value) -> String {
+    let shortcut = &binding["shortcut"];
+    let mut parts = Vec::new();
+    for (field, label) in [
+        ("modKey", "mod"),
+        ("ctrlKey", "ctrl"),
+        ("metaKey", "meta"),
+        ("altKey", "alt"),
+        ("shiftKey", "shift"),
+    ] {
+        if shortcut[field] == true {
+            parts.push(label);
+        }
+    }
+    parts.push(match shortcut["key"].as_str().unwrap_or_default() {
+        " " => "space",
+        "escape" => "esc",
+        key => key,
+    });
+    parts.join("+")
 }
 
 #[cfg(test)]
