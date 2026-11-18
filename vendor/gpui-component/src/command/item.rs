@@ -8,6 +8,7 @@ use crate::{Disableable, Icon};
 ///
 pub struct CommandItem {
     label: Option<SharedString>,
+    accessibility_label: Option<SharedString>,
     keywords: Vec<SharedString>,
     /// Boxed: an [`Icon`] carries a whole `StyleRefinement`, which would make
     /// every item — and so the palette's item vector — kilobytes wide.
@@ -22,6 +23,7 @@ impl Clone for CommandItem {
     fn clone(&self) -> Self {
         Self {
             label: self.label.clone(),
+            accessibility_label: self.accessibility_label.clone(),
             keywords: self.keywords.clone(),
             icon: self.icon.clone(),
             action: self.action.as_ref().map(|action| action.boxed_clone()),
@@ -37,6 +39,7 @@ impl CommandItem {
     pub fn new() -> Self {
         Self {
             label: None,
+            accessibility_label: None,
             keywords: Vec::new(),
             icon: None,
             action: None,
@@ -50,6 +53,15 @@ impl CommandItem {
     pub fn label(mut self, label: impl Into<SharedString>) -> Self {
         self.label = Some(label.into());
         self
+    }
+
+    pub fn accessibility_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label = Some(label.into());
+        self
+    }
+
+    pub(crate) fn accessible_name(&self) -> Option<&SharedString> {
+        self.accessibility_label.as_ref().or(self.label.as_ref())
     }
 
     /// Set the leading icon.
@@ -142,6 +154,7 @@ impl CommandItem {
         self.content.is_none()
             && other.content.is_none()
             && self.label == other.label
+            && self.accessibility_label == other.accessibility_label
             && self.keywords == other.keywords
             && match (&self.icon, &other.icon) {
                 (Some(icon), Some(other)) => icon.same_layout(other),
@@ -351,4 +364,19 @@ mod tests {
         assert!(item.matches("Account"));
         assert!(!item.matches("billing"));
     }
+    #[test]
+    fn accessible_controls_do_not_change_model_search() {
+        let item = CommandItem::new()
+            .label("GPT-6-Luna")
+            .accessibility_label("GPT-6-Luna , Codex Add to favorites Ctrl+1");
+        assert!(item.matches("luna"));
+        assert!(!item.matches("favorites"));
+        assert!(!item.matches("Ctrl+1"));
+        assert_eq!(item.clone().accessible_name(), item.accessible_name());
+        assert_eq!(
+            item.accessible_name(),
+            Some(&"GPT-6-Luna , Codex Add to favorites Ctrl+1".into())
+        );
+    }
+
 }

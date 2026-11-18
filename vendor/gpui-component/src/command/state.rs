@@ -849,7 +849,7 @@ impl CommandState {
             .role(Role::ListBoxOption)
             // The row's text is drawn by a child that isn't an accessibility
             // node, so the row names itself.
-            .when_some(item.label_text().cloned(), |this, label| {
+            .when_some(item.accessible_name().cloned(), |this, label| {
                 this.aria_label(label)
             })
             .aria_selected(selected)

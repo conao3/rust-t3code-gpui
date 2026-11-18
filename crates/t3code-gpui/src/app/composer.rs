@@ -1756,7 +1756,8 @@ impl Root {
                     };
                     group = group.item(
                         CommandItem::new()
-                            .label(label)
+                            .label(name.clone())
+                            .accessibility_label(label)
                             .checked(
                                 instance.instance_id == current_instance
                                     && model.slug == current_slug,
@@ -1870,7 +1871,7 @@ impl Root {
                     .bg(theme.muted.opacity(0.4))
                     .p_2()
                     .child(
-                        div()
+                        h_flex()
                             .h(px(34.))
                             .px_1()
                             .text_sm()
@@ -1878,6 +1879,7 @@ impl Root {
                             .child(text!(
                                 descriptor["label"].as_str().unwrap_or("Effort").to_string()
                             ))
+                            .child(div().flex_1())
                             .child(div().text_xs().child(text!(
                                 selected_model.expect("reasoning model").name.clone()
                             ))),
@@ -2054,7 +2056,10 @@ impl Root {
                                         .size(px(36.))
                                         .tooltip(instance.name.clone())
                                         .accessibility_label(instance.name.clone())
-                                        .selected(shown.is_some_and(|i| i.instance_id == id))
+                                        .selected(
+                                            !favorite_tab
+                                                && shown.is_some_and(|i| i.instance_id == id),
+                                        )
                                         .on_click(self.pane_listener(
                                             cx,
                                             move |root, _, window, cx| {
@@ -2092,7 +2097,18 @@ impl Root {
                                 .p_2()
                                 .text_sm()
                                 .text_color(theme.muted_foreground)
-                                .child(div().h(px(34.)).px_1().child(text!("Effort")))
+                                .child(
+                                    h_flex()
+                                        .h(px(34.))
+                                        .px_1()
+                                        .child(text!("Effort"))
+                                        .child(div().flex_1())
+                                        .when_some(selected_model, |header, model| {
+                                            header.child(
+                                                div().text_xs().child(text!(model.name.clone())),
+                                            )
+                                        }),
+                                )
                                 .child(
                                     div()
                                         .id("no-effort-levels")
