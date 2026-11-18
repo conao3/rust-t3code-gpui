@@ -540,9 +540,39 @@ pub(super) fn settings() -> Vec<Setting> {
     add(
         "labs",
         "Beta",
+        "guestSharingEnabled",
+        "Guest links",
+        "Share a thread with a guest who watches it live in a browser and sends messages you approve. Needs T3 Connect: sign in and link this machine in Sharing & access. Turning it off stops every guest link.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "labs",
+        "Beta",
         "linkedEnvironmentsEnabled",
         "Linked environments",
-        "Let agents here work on your other machines, and theirs here.",
+        "Let agents here work on your other machines, and theirs here. Turn it on for each machine, then link them in Connections. While off, nothing new starts over a link; running tasks finish.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "labs",
+        "Beta",
+        "promptSuggestionsEnabled",
+        "Suggest next prompt",
+        "Show a predicted next message in the empty composer after a Claude or Codex turn. Tab uses it. Each is an extra cached request on your plan. Needs Codex 0.165+. Claude threads update on restart.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "labs",
+        "Beta",
+        "simlockDeviceHostsEnabled",
+        "Simlock device hosts (alpha)",
+        "Let the Device panel lease simulators and emulators from your own Simlock pool, added in Devices. An alpha that may change or break. T3 Code never installs Simlock.",
         json!(false),
         true,
         Switch,

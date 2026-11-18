@@ -440,6 +440,7 @@ impl Render for SettingRow {
             "timestampFormat" => "Timestamp format",
             "defaultAutoPull" => "Default automatic pull",
             "pullRequestMergeMethod" => "Default pull request merge method",
+            "simlockDeviceHostsEnabled" => "Simlock device hosts",
             "confirmThreadUnpin" => "Confirm thread unpinning",
             "confirmThreadArchive" => "Confirm thread archiving",
             "confirmThreadDelete" => "Confirm thread deletion",
@@ -458,6 +459,13 @@ impl Render for SettingRow {
         };
         let value = self.value.clone();
         let key = self.definition.key;
+        let denial = (key == "guestSharingEnabled" && value != true)
+            .then(|| {
+                self.root.upgrade().and_then(|root| {
+                    settings_labs::guest_links_denial(root.read(cx), &self.environment)
+                })
+            })
+            .flatten();
         let description = if key == "defaultAutoPull" && self.project.is_some() {
             "Keeps this project's default branch current when the checkout has no local changes or commits.".to_string()
         } else if key == "pullRequestMergeMethod" && self.project.is_some() {
@@ -492,6 +500,7 @@ impl Render for SettingRow {
         let control = match self.definition.control {
             Control::Switch => Switch::new(key)
                 .accessibility_label(accessible_label)
+                .disabled(denial.is_some())
                 .checked(if key == "sidebarAutoSettleAfterDays" {
                     !value.is_null()
                 } else if key == "sidebarProjectGroupingMode" {
@@ -606,10 +615,20 @@ impl Render for SettingRow {
                     .gap(px(2.))
                     .child(text(label).text_sm())
                     .child(
-                        text(description)
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground),
-                    ),
+                        settings_labs::description(key, &self.root, cx).unwrap_or_else(|| {
+                            text(description)
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .into_any_element()
+                        }),
+                    )
+                    .when_some(denial, |view, denial| {
+                        view.child(
+                            text(denial)
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground),
+                        )
+                    }),
             )
             .when(
                 self.project.is_some()
