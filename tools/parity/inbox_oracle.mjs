@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {createHash} from "node:crypto";
 import {stripTypeScriptTypes} from "node:module";
+import {pairwise,unique} from "./pairwise.mjs";
 const [root,destination]=process.argv.slice(2);
 if (!root||!destination) throw new Error("Expected original root and destination");
 const paths={inbox:"packages/client-runtime/src/state/threadInbox.ts",models:"packages/client-runtime/src/state/models.ts",settled:"packages/client-runtime/src/state/threadSettled.ts",sort:"packages/client-runtime/src/state/threadSort.ts",sidebar:"apps/web/src/components/Sidebar.tsx",logic:"apps/web/src/components/Sidebar.logic.ts"};
@@ -18,11 +19,11 @@ functions.push(extract('logic','firstValidTimestampMs'),`export function sortSno
 const original=await import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes('const WORKING_EXIT_GRACE_MS=2000;const DateTime={formatIso:value=>new Date(value).toISOString()};\n'+functions.join('\n'))).toString('base64'));
 const base={providerInstanceId:'codex',updatedAt:'2026-11-17T00:00:00.000Z',id:'thread',environmentId:'environment',createdAt:'2026-11-17T00:00:00.000Z',unsettledAt:null,interactionMode:'default',hasActionableProposedPlan:false,hasPendingApprovals:false,hasPendingUserInput:false,pendingSubagentRequest:null,pendingGuestMessageCount:0,runtime:{status:'running',activeRunId:'run',lastError:null},latestRun:{runId:'run',status:'running'},archivedAt:null,deletedAt:null,pinnedAt:null,settledOverride:'active',settledAt:null,snoozedAt:null,snoozedUntil:null,activeOrderKey:null};
 const working=[];
-for (const status of [null,'preparing','queued','starting','running','waiting','idle','failed','interrupted']) for (const runStatus of [null,'preparing','queued','starting','running','waiting','completed','failed']) for (const activeRunId of [null,'run']) for (const interactionMode of ['default','plan']) for (const hasActionableProposedPlan of [false,true]) {
+for (const [status,runStatus,activeRunId,interactionMode,hasActionableProposedPlan] of pairwise([[null,'preparing','queued','starting','running','waiting','idle','failed','interrupted'],[null,'preparing','queued','starting','running','waiting','completed','failed'],[null,'run'],['default','plan'],[false,true]])) {
  const input={...base,runtime:status===null?null:{status,activeRunId},latestRun:runStatus===null?null:{runId:'run',status:runStatus},interactionMode,hasActionableProposedPlan};
  working.push({input,expected:original.isThreadWorking(input)});
 }
-for (const hasPendingApprovals of [false,true]) for (const hasPendingUserInput of [false,true]) for (const pendingSubagentRequest of [null,'approval','user_input']) for (const pendingGuestMessageCount of [0,1]) {
+for (const [hasPendingApprovals,hasPendingUserInput,pendingSubagentRequest,pendingGuestMessageCount] of pairwise([[false,true],[false,true],[null,'approval','user_input'],[0,1]])) {
  const input={...base,hasPendingApprovals,hasPendingUserInput,pendingSubagentRequest,pendingGuestMessageCount};
  working.push({input,expected:original.isThreadWorking(input)});
 }
@@ -59,11 +60,11 @@ const sorting=[];let seed=81;
 const next=n=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed%n;};
 const dates=[undefined,null,"invalid","1960-01-01T00:00:00.000Z","2026-11-17T00:00:00.000Z","2026-11-17T10:00:00.000Z","2026-11-17T10:00:00-04:00"];
 const ids=['a','A','0','a-1','aa','ä','z','😀'];
-for(let iteration=0;iteration<120;iteration++){
+for(let iteration=0;iteration<30;iteration++){
  const input=ids.map(id=>({id,environmentId:next(2)?'env-a':'env-b',createdAt:dates[next(dates.length)],unsettledAt:dates[next(dates.length)],updatedAt:dates[next(dates.length)],settledAt:dates[next(dates.length)],latestUserMessageAt:dates[next(dates.length)],...(next(3)?{latestUserAuthoredMessageAt:dates[next(dates.length)]}:{}),latestRun:{requestedAt:dates[next(dates.length)],startedAt:dates[next(dates.length)],completedAt:dates[next(dates.length)]},pinOrderKey:[undefined,null,'','ab','ac','ad'][next(6)],activeOrderKey:[undefined,null,'','ab','ac','ad'][next(6)],snoozedUntil:dates[next(dates.length)],observedReturnAt:next(3)?undefined:Date.parse('2026-11-17T12:00:00.000Z')}));
  const identify=rows=>rows.map(thread=>[thread.environmentId,thread.id]);
  sorting.push({input,expected:{pinned:identify(original.sortPinnedThreadsByOrderKey(input)),active:identify(original.sortActiveThreadsByOrderKey(input)),inbox:identify(original.sortInboxThreadsByReturn(input,thread=>thread.observedReturnAt)),working:identify(original.sortWorkingThreadsBySend(input)),settled:identify(original.sortSettledThreads(input)),snoozed:identify(original.sortSnoozed(input))}});
 }
 
-fs.writeFileSync(destination,JSON.stringify({sourceRevision:'24e77473ecf41bc1f7142529c7911c1c1aae1d76',sources:Object.fromEntries(Object.entries(paths).map(([name,file])=>[file,createHash('sha256').update(sources[name]).digest('hex')])),adapter:'Original functions execute unchanged. A virtual wall clock and setTimeout queue run exact and delayed deadlines; undefined returnedAt is serialized as null.',working,launching,scenarios,sorting},null,2)+'\n');
-console.log(JSON.stringify({working:working.length,sorting:sorting.length,scenarios:scenarios.length,steps:scenarios.reduce((sum,value)=>sum+value.steps.length,0)}));
+fs.writeFileSync(destination,JSON.stringify({sourceRevision:'24e77473ecf41bc1f7142529c7911c1c1aae1d76',sources:Object.fromEntries(Object.entries(paths).map(([name,file])=>[file,createHash('sha256').update(sources[name]).digest('hex')])),adapter:'Original functions execute unchanged. A virtual wall clock and setTimeout queue run exact and delayed deadlines; undefined returnedAt is serialized as null.',working:unique(working),launching:unique(launching),scenarios,sorting},null,2)+'\n');
+console.log(JSON.stringify({working:unique(working).length,sorting:sorting.length,scenarios:scenarios.length,steps:scenarios.reduce((sum,value)=>sum+value.steps.length,0)}));

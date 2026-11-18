@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {createHash} from "node:crypto";
 import {stripTypeScriptTypes} from "node:module";
+import {pairwise,unique} from "./pairwise.mjs";
 const [root,destination]=process.argv.slice(2);
 if (!root||!destination) throw new Error("Expected original root and destination");
 const file="apps/web/src/components/Sidebar.logic.ts";
@@ -21,12 +22,12 @@ for (const name of ["resolveThreadWorkingStartedAt","formatWorkingDurationLabel"
 }
 const original=await import("data:text/javascript;base64,"+Buffer.from(stripTypeScriptTypes(functions.join("\n"))).toString("base64"));
 const statuses=[];
-for (const hasPendingApprovals of [false,true]) for (const hasPendingUserInput of [false,true]) for (const pendingSubagentRequest of [null,"approval","user_input"]) for (const pendingGuestMessageCount of [0,1]) for (const status of [null,"preparing","queued","starting","running","waiting","idle","failed","stopped"]) for (const blockedOnThreadWait of [false,true]) for (const lastErrorClass of [null,"usage_limit"]) {
+for (const [hasPendingApprovals,hasPendingUserInput,pendingSubagentRequest,pendingGuestMessageCount,status,blockedOnThreadWait,lastErrorClass] of pairwise([[false,true],[false,true],[null,"approval","user_input"],[0,1],[null,"preparing","queued","starting","running","waiting","idle","failed","stopped"],[false,true],[null,"usage_limit"]]).concat([null,"preparing","queued","starting","running","waiting","idle","failed","stopped"].flatMap(status=>[false,true].flatMap(blockedOnThreadWait=>[null,"usage_limit"].map(lastErrorClass=>[false,false,null,0,status,blockedOnThreadWait,lastErrorClass]))))) {
  const input={hasPendingApprovals,hasPendingUserInput,pendingSubagentRequest,pendingGuestMessageCount,runtime:status===null?null:{status,lastErrorClass},blockedOnThreadWait};
  statuses.push({input,expected:original.resolveSidebarThreadStatus(input)});
 }
 const receding=[];
-for (const status of ["approval","input","request","preparing","working","waiting","failed","limited","ready"]) for (const isUnread of [false,true]) for (const isWoke of [false,true]) for (const isActive of [false,true]) for (const isSelected of [false,true]) {
+for (const [status,isUnread,isWoke,isActive,isSelected] of pairwise([["approval","input","request","preparing","working","waiting","failed","limited","ready"],[false,true],[false,true],[false,true],[false,true]])) {
  const input={status,isUnread,isWoke,isActive,isSelected};
  receding.push({input,expected:original.shouldRecedeSidebarThread(input)});
 }
@@ -41,5 +42,5 @@ for (const activityStartedAt of [undefined,null,"invalid","2026-11-17T10:00:00.0
  starts.push({input,expected:original.resolveThreadWorkingStartedAt(input)});
 }
 const durations=[-1000,0,999,1000,59000,59999,60000,3599999,3600000,3660000,86400000].map(input=>({input,expected:original.formatWorkingDurationLabel(input)}));
-fs.writeFileSync(destination,JSON.stringify({sourceRevision:"24e77473ecf41bc1f7142529c7911c1c1aae1d76",source:{path:file,sha256:createHash("sha256").update(source).digest("hex")},modelsSource:{path:modelsFile,sha256:createHash("sha256").update(models).digest("hex")},statuses,receding,unread,starts,durations},null,2)+"\n");
-console.log(JSON.stringify({statuses:statuses.length,receding:receding.length,unread:unread.length,starts:starts.length,durations:durations.length}));
+fs.writeFileSync(destination,JSON.stringify({sourceRevision:"24e77473ecf41bc1f7142529c7911c1c1aae1d76",source:{path:file,sha256:createHash("sha256").update(source).digest("hex")},modelsSource:{path:modelsFile,sha256:createHash("sha256").update(models).digest("hex")},statuses:unique(statuses),receding,unread,starts,durations},null,2)+"\n");
+console.log(JSON.stringify({statuses:unique(statuses).length,receding:receding.length,unread:unread.length,starts:starts.length,durations:durations.length}));

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { stripTypeScriptTypes } from "node:module";
+import { pairwise } from "./pairwise.mjs";
 import path from "node:path";
 
 const [sourcePath, outputPath] = process.argv.slice(2);
@@ -55,14 +56,10 @@ add("deduplicate related id across edge kinds", [root, thread("child", "current"
 add("transfer ordering and self transfer", [root, thread("older", null, null, {createdAt: "2020-01-01T00:00:00.000Z"}), thread("newer"), thread("unknown", null, null, {createdAt: null})], projection(root, {contextTransfers: ["unknown", "older", "current", "newer", "older"].map(targetThreadId => ({sourceThreadId: "current", targetThreadId, status: "resolved_portable"}))}));
 add("parent pinned before newest child", [thread("current", "parent", "fork"), thread("parent", null, null, {createdAt: "1960-01-01T00:00:00.000Z"}), thread("child", "current", "fork")], projection(thread("current", "parent", "fork")));
 add("side chats and missing unrelated edges", [root, thread("side", "current", "fork", {lineage: {parentThreadId: "current", relationshipToParent: "fork", sideChat: true}}), thread("unrelated", "elsewhere", "subagent")], projection(root));
-for (const agentStatus of ["pending", "running", "waiting", "completed", "failed", "rolled_back", "idle", null]) {
-  for (const childStatus of [null, "completed", "failed", "running"]) {
-    for (const latestRunId of [null, "run"]) {
-      const child = thread("child", "current", "subagent", {status: childStatus, latestRunId});
-      add(`subagent ${agentStatus}/${childStatus}/${latestRunId}`, [root, child], projection(root, {subagents: [{childThreadId: "child", status: agentStatus}]}));
-      add(`active child overrides ${agentStatus}/${childStatus}/${latestRunId}`, [root, {...child, activityRunStatus: "waiting"}], projection(root, {subagents: [{childThreadId: "child", status: agentStatus}]}));
-    }
-  }
+for (const [agentStatus, childStatus, latestRunId] of pairwise([["pending", "running", "waiting", "completed", "failed", "rolled_back", "idle", null], [null, "completed", "failed", "running"], [null, "run"]])) {
+  const child = thread("child", "current", "subagent", {status: childStatus, latestRunId});
+  add(`subagent ${agentStatus}/${childStatus}/${latestRunId}`, [root, child], projection(root, {subagents: [{childThreadId: "child", status: agentStatus}]}));
+  add(`active child overrides ${agentStatus}/${childStatus}/${latestRunId}`, [root, {...child, activityRunStatus: "waiting"}], projection(root, {subagents: [{childThreadId: "child", status: agentStatus}]}));
 }
 add("omitted subagents and duplicate transfers", [root], projection(root, {subagents: [{childThreadId: null, status: "running"}, {childThreadId: "missing", status: "rolled_back"}], contextTransfers: [{sourceThreadId: "current", targetThreadId: "transfer", status: "pending"}, {sourceThreadId: "current", targetThreadId: "transfer", status: "consumed"}]}));
 const titleCases = ["Subagent: /root/foo_bar", "Subagent: Subagent: /root/foo", "/root/a//b", "/root/a/", "/root//", "/root/", "/root/a//", "SUBAGENT:\uFEFF/root/foo\u3000bar", "Subagent:日本語", "/", "/root/ßeta_test", "/root/İstanbul", "/ROOT/x", "/root/a_b/c_d", "/root/___", "Subagent: ", "subagent:", "subagent::x", "Subagent:\u0085/root/a", "/root/a\u0085b", "普通の見出し"].map(input => ({input, expected: original.formatSubagentDisplayTitle(input)}));

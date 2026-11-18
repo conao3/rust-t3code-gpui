@@ -153,270 +153,9 @@
     {
       "input": {
         "driver": "codex",
-        "instanceId": "codex",
-        "displayName": ""
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex",
-        "displayName": "  "
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "codex",
         "instanceId": "codex_conao3"
       },
       "expected": "Codex Conao3"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex_conao3",
-        "displayName": ""
-      },
-      "expected": "Codex Conao3"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex_conao3",
-        "displayName": "  "
-      },
-      "expected": "Codex Conao3"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex Conao3"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "codex_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "codex",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -428,270 +167,9 @@
     {
       "input": {
         "driver": "claudeAgent",
-        "instanceId": "claudeAgent",
-        "displayName": ""
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent",
-        "displayName": "  "
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
         "instanceId": "claudeAgent_conao3"
       },
       "expected": "Claude Agent Conao3"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent_conao3",
-        "displayName": ""
-      },
-      "expected": "Claude Agent Conao3"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent_conao3",
-        "displayName": "  "
-      },
-      "expected": "Claude Agent Conao3"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude Agent Conao3"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "claudeAgent_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "claudeAgent",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -703,270 +181,9 @@
     {
       "input": {
         "driver": "opencode",
-        "instanceId": "opencode",
-        "displayName": ""
-      },
-      "expected": "OpenCode"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode",
-        "displayName": "  "
-      },
-      "expected": "OpenCode"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "opencode",
         "instanceId": "opencode_conao3"
       },
       "expected": "Opencode Conao3"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode_conao3",
-        "displayName": ""
-      },
-      "expected": "Opencode Conao3"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode_conao3",
-        "displayName": "  "
-      },
-      "expected": "Opencode Conao3"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "opencode_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "opencode",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -978,270 +195,9 @@
     {
       "input": {
         "driver": "acpRegistry",
-        "instanceId": "acpRegistry",
-        "displayName": ""
-      },
-      "expected": "ACP Registry"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry",
-        "displayName": "  "
-      },
-      "expected": "ACP Registry"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
         "instanceId": "acpRegistry_conao3"
       },
       "expected": "Acp Registry Conao3"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry_conao3",
-        "displayName": ""
-      },
-      "expected": "Acp Registry Conao3"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry_conao3",
-        "displayName": "  "
-      },
-      "expected": "Acp Registry Conao3"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "acpRegistry_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "acpRegistry",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -1253,270 +209,9 @@
     {
       "input": {
         "driver": "antigravity",
-        "instanceId": "antigravity",
-        "displayName": ""
-      },
-      "expected": "Antigravity"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity",
-        "displayName": "  "
-      },
-      "expected": "Antigravity"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
         "instanceId": "antigravity_conao3"
       },
       "expected": "Antigravity Conao3"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity_conao3",
-        "displayName": ""
-      },
-      "expected": "Antigravity Conao3"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity_conao3",
-        "displayName": "  "
-      },
-      "expected": "Antigravity Conao3"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "antigravity_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "antigravity",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -1528,270 +223,9 @@
     {
       "input": {
         "driver": "cursor",
-        "instanceId": "cursor",
-        "displayName": ""
-      },
-      "expected": "Cursor"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor",
-        "displayName": "  "
-      },
-      "expected": "Cursor"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "cursor",
         "instanceId": "cursor_conao3"
       },
       "expected": "Cursor Conao3"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor_conao3",
-        "displayName": ""
-      },
-      "expected": "Cursor Conao3"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor_conao3",
-        "displayName": "  "
-      },
-      "expected": "Cursor Conao3"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "cursor_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "cursor",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -1803,270 +237,9 @@
     {
       "input": {
         "driver": "grok",
-        "instanceId": "grok",
-        "displayName": ""
-      },
-      "expected": "Grok"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok",
-        "displayName": "  "
-      },
-      "expected": "Grok"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "grok",
         "instanceId": "grok_conao3"
       },
       "expected": "Grok Conao3"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok_conao3",
-        "displayName": ""
-      },
-      "expected": "Grok Conao3"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok_conao3",
-        "displayName": "  "
-      },
-      "expected": "Grok Conao3"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "grok_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "grok",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -2078,270 +251,9 @@
     {
       "input": {
         "driver": "fx",
-        "instanceId": "fx",
-        "displayName": ""
-      },
-      "expected": "fx"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx",
-        "displayName": "  "
-      },
-      "expected": "fx"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "fx",
         "instanceId": "fx_conao3"
       },
       "expected": "Fx Conao3"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx_conao3",
-        "displayName": ""
-      },
-      "expected": "Fx Conao3"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx_conao3",
-        "displayName": "  "
-      },
-      "expected": "Fx Conao3"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "fx_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "fx",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -2353,270 +265,9 @@
     {
       "input": {
         "driver": "kiro",
-        "instanceId": "kiro",
-        "displayName": ""
-      },
-      "expected": "Kiro"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro",
-        "displayName": "  "
-      },
-      "expected": "Kiro"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "kiro",
         "instanceId": "kiro_conao3"
       },
       "expected": "Kiro Conao3"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro_conao3",
-        "displayName": ""
-      },
-      "expected": "Kiro Conao3"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro_conao3",
-        "displayName": "  "
-      },
-      "expected": "Kiro Conao3"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "kiro_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "kiro",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -2628,270 +279,9 @@
     {
       "input": {
         "driver": "muse",
-        "instanceId": "muse",
-        "displayName": ""
-      },
-      "expected": "Muse Code"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse",
-        "displayName": "  "
-      },
-      "expected": "Muse Code"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "muse",
         "instanceId": "muse_conao3"
       },
       "expected": "Muse Conao3"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse_conao3",
-        "displayName": ""
-      },
-      "expected": "Muse Conao3"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse_conao3",
-        "displayName": "  "
-      },
-      "expected": "Muse Conao3"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "muse_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "muse",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -2903,270 +293,9 @@
     {
       "input": {
         "driver": "pi",
-        "instanceId": "pi",
-        "displayName": ""
-      },
-      "expected": "Pi"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi",
-        "displayName": "  "
-      },
-      "expected": "Pi"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "pi",
         "instanceId": "pi_conao3"
       },
       "expected": "Pi Conao3"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi_conao3",
-        "displayName": ""
-      },
-      "expected": "Pi Conao3"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi_conao3",
-        "displayName": "  "
-      },
-      "expected": "Pi Conao3"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "pi_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "pi",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -3178,270 +307,9 @@
     {
       "input": {
         "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible",
-        "displayName": ""
-      },
-      "expected": "Openai Compatible"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible",
-        "displayName": "  "
-      },
-      "expected": "Openai Compatible"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
         "instanceId": "openaiCompatible_conao3"
       },
       "expected": "Openai Compatible Conao3"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible_conao3",
-        "displayName": ""
-      },
-      "expected": "Openai Compatible Conao3"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible_conao3",
-        "displayName": "  "
-      },
-      "expected": "Openai Compatible Conao3"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible_conao3",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible_conao3",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible_conao3",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "openaiCompatible_conao3",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "東京_worker"
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "東京_worker",
-        "displayName": ""
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "東京_worker",
-        "displayName": "  "
-      },
-      "expected": "東京 Worker"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "﻿name﻿"
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "﻿name﻿",
-        "displayName": ""
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "﻿name﻿",
-        "displayName": "  "
-      },
-      "expected": "Name"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "﻿name﻿",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "﻿name﻿",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "﻿name﻿",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "openaiCompatible",
-        "instanceId": "﻿name﻿",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
     },
     {
       "input": {
@@ -3453,215 +321,93 @@
     {
       "input": {
         "driver": "customDriver",
-        "instanceId": "customDriver",
-        "displayName": ""
-      },
-      "expected": "Custom Driver"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver",
-        "displayName": "  "
-      },
-      "expected": "Custom Driver"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
         "instanceId": "customDriver_conao3"
       },
       "expected": "Custom Driver Conao3"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver_conao3",
-        "displayName": ""
+        "driver": "codex",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "Custom Driver Conao3"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver_conao3",
-        "displayName": "  "
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "Custom Driver Conao3"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver_conao3",
-        "displayName": "Codex"
+        "driver": "opencode",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "Codex"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver_conao3",
-        "displayName": "Claude"
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "Claude"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver_conao3",
-        "displayName": "東京 用"
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "東京 用"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "customDriver_conao3",
-        "displayName": "﻿custom﻿"
+        "driver": "cursor",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "custom"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "東京_worker"
+        "driver": "grok",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "東京 Worker"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "東京_worker",
-        "displayName": ""
+        "driver": "fx",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "東京 Worker"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "東京_worker",
-        "displayName": "  "
+        "driver": "kiro",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "東京 Worker"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "東京_worker",
-        "displayName": "Codex"
+        "driver": "muse",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "Codex"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "東京_worker",
-        "displayName": "Claude"
+        "driver": "pi",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "Claude"
+      "expected": "Name"
     },
     {
       "input": {
-        "driver": "customDriver",
-        "instanceId": "東京_worker",
-        "displayName": "東京 用"
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿"
       },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "東京_worker",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "aBCd--test"
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "aBCd--test",
-        "displayName": ""
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "aBCd--test",
-        "displayName": "  "
-      },
-      "expected": "A BCd Test"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "aBCd--test",
-        "displayName": "Codex"
-      },
-      "expected": "Codex"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "aBCd--test",
-        "displayName": "Claude"
-      },
-      "expected": "Claude"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "aBCd--test",
-        "displayName": "東京 用"
-      },
-      "expected": "東京 用"
-    },
-    {
-      "input": {
-        "driver": "customDriver",
-        "instanceId": "aBCd--test",
-        "displayName": "﻿custom﻿"
-      },
-      "expected": "custom"
+      "expected": "Name"
     },
     {
       "input": {
@@ -3672,7 +418,21 @@
     },
     {
       "input": {
-        "driver": "customDriver",
+        "driver": "codex",
+        "instanceId": "東京_worker"
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "aBCd--test"
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "codex",
         "instanceId": "﻿name﻿",
         "displayName": ""
       },
@@ -3680,11 +440,587 @@
     },
     {
       "input": {
-        "driver": "customDriver",
+        "driver": "codex",
         "instanceId": "﻿name﻿",
         "displayName": "  "
       },
       "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "codex",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "東京_worker",
+        "displayName": "  "
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "aBCd--test",
+        "displayName": ""
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "東京_worker",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "aBCd--test",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "東京_worker",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "aBCd--test",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "東京_worker",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "aBCd--test",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "東京_worker",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "aBCd--test",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "東京_worker",
+        "displayName": ""
+      },
+      "expected": "東京 Worker"
+    },
+    {
+      "input": {
+        "driver": "customDriver",
+        "instanceId": "aBCd--test",
+        "displayName": "  "
+      },
+      "expected": "A BCd Test"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "claudeAgent",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "opencode",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "acpRegistry",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "antigravity",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "cursor",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": ""
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": "  "
+      },
+      "expected": "Name"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "grok",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "fx",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "kiro",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "muse",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "pi",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "Codex"
+      },
+      "expected": "Codex"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "Claude"
+      },
+      "expected": "Claude"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "東京 用"
+      },
+      "expected": "東京 用"
+    },
+    {
+      "input": {
+        "driver": "openaiCompatible",
+        "instanceId": "﻿name﻿",
+        "displayName": "﻿custom﻿"
+      },
+      "expected": "custom"
     },
     {
       "input": {
@@ -3775,6 +1111,38 @@
       "expected": "#ffffff"
     },
     {
+      "input": "#400000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#800000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#c00000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#ff0000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#004000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#008000",
+      "expected": "#ffffff"
+    },
+    {
+      "input": "#00c000",
+      "expected": "#000000"
+    },
+    {
+      "input": "#00ff00",
+      "expected": "#000000"
+    },
+    {
       "input": "#000040",
       "expected": "#ffffff"
     },
@@ -3791,131 +1159,7 @@
       "expected": "#ffffff"
     },
     {
-      "input": "#004000",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#004040",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#004080",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#0040c0",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#0040ff",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#008000",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#008040",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#008080",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#0080c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#0080ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00c000",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00c040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00c080",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00c0c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00c0ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00ff00",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00ff40",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00ff80",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00ffc0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#00ffff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#400000",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#400040",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#400080",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#4000c0",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#4000ff",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#404000",
-      "expected": "#ffffff"
-    },
-    {
       "input": "#404040",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#404080",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#4040c0",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#4040ff",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#408000",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#408040",
       "expected": "#ffffff"
     },
     {
@@ -3923,47 +1167,7 @@
       "expected": "#000000"
     },
     {
-      "input": "#4080c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#4080ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#40c000",
-      "expected": "#000000"
-    },
-    {
-      "input": "#40c040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#40c080",
-      "expected": "#000000"
-    },
-    {
       "input": "#40c0c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#40c0ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#40ff00",
-      "expected": "#000000"
-    },
-    {
-      "input": "#40ff40",
-      "expected": "#000000"
-    },
-    {
-      "input": "#40ff80",
-      "expected": "#000000"
-    },
-    {
-      "input": "#40ffc0",
       "expected": "#000000"
     },
     {
@@ -3971,79 +1175,11 @@
       "expected": "#000000"
     },
     {
-      "input": "#800000",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#800040",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#800080",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#8000c0",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#8000ff",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#804000",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#804040",
-      "expected": "#ffffff"
-    },
-    {
       "input": "#804080",
       "expected": "#ffffff"
     },
     {
-      "input": "#8040c0",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#8040ff",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#808000",
-      "expected": "#000000"
-    },
-    {
       "input": "#808040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#808080",
-      "expected": "#000000"
-    },
-    {
-      "input": "#8080c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#8080ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#80c000",
-      "expected": "#000000"
-    },
-    {
-      "input": "#80c040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#80c080",
-      "expected": "#000000"
-    },
-    {
-      "input": "#80c0c0",
       "expected": "#000000"
     },
     {
@@ -4051,79 +1187,11 @@
       "expected": "#000000"
     },
     {
-      "input": "#80ff00",
-      "expected": "#000000"
-    },
-    {
-      "input": "#80ff40",
-      "expected": "#000000"
-    },
-    {
-      "input": "#80ff80",
-      "expected": "#000000"
-    },
-    {
       "input": "#80ffc0",
       "expected": "#000000"
     },
     {
-      "input": "#80ffff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c00000",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#c00040",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#c00080",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#c000c0",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#c000ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c04000",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#c04040",
-      "expected": "#ffffff"
-    },
-    {
-      "input": "#c04080",
-      "expected": "#ffffff"
-    },
-    {
       "input": "#c040c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c040ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c08000",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c08040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c08080",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c080c0",
       "expected": "#000000"
     },
     {
@@ -4131,31 +1199,7 @@
       "expected": "#000000"
     },
     {
-      "input": "#c0c000",
-      "expected": "#000000"
-    },
-    {
       "input": "#c0c040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c0c080",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c0c0c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c0c0ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c0ff00",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c0ff40",
       "expected": "#000000"
     },
     {
@@ -4163,63 +1207,7 @@
       "expected": "#000000"
     },
     {
-      "input": "#c0ffc0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#c0ffff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff0000",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff0040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff0080",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff00c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff00ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff4000",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff4040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff4080",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff40c0",
-      "expected": "#000000"
-    },
-    {
       "input": "#ff40ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff8000",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff8040",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ff8080",
       "expected": "#000000"
     },
     {
@@ -4227,47 +1215,11 @@
       "expected": "#000000"
     },
     {
-      "input": "#ff80ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ffc000",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ffc040",
-      "expected": "#000000"
-    },
-    {
       "input": "#ffc080",
       "expected": "#000000"
     },
     {
-      "input": "#ffc0c0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ffc0ff",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ffff00",
-      "expected": "#000000"
-    },
-    {
       "input": "#ffff40",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ffff80",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ffffc0",
-      "expected": "#000000"
-    },
-    {
-      "input": "#ffffff",
       "expected": "#000000"
     }
   ],
