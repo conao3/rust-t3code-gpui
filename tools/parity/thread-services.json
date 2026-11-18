@@ -1,0 +1,157 @@
+{
+  "name": "thread-services",
+  "fixture": "services",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      },
+      "count": 1
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Resume Parity automation"
+      },
+      "count": 1,
+      "native": {
+        "role": "toggle button",
+        "name": "Resume Parity automation"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "switch",
+        "name": "Resume Parity automation"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Resume Parity automation"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Pause Parity automation"
+      },
+      "count": 1,
+      "native": {
+        "role": "toggle button",
+        "name": "Pause Parity automation"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "switch",
+        "name": "Pause Parity automation"
+      },
+      "native": {
+        "role": "toggle button",
+        "name": "Pause Parity automation"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "switch",
+        "name": "Resume Parity automation"
+      },
+      "count": 1,
+      "native": {
+        "role": "toggle button",
+        "name": "Resume Parity automation"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Edit Parity automation"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Name"
+      },
+      "count": 1,
+      "value": "Parity automation",
+      "native": {
+        "role": "textbox",
+        "name": "Task name"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "textbox",
+        "name": "Name"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Task name"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "type",
+      "value": "Renamed parity automation"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Save task"
+      },
+      "native": {
+        "role": "button",
+        "name": "Save"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Name"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Task name"
+      },
+      "count": 0
+    }
+  ],
+  "automation_result": {
+    "id": "parity-automation",
+    "title": "Renamed parity automation",
+    "enabled": false,
+    "threadId": "88888888-8888-4888-8888-888888888888",
+    "schedule": {
+      "type": "interval",
+      "everyMs": 3600000
+    }
+  }
+}

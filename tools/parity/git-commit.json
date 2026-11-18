@@ -8,6 +8,34 @@
   "settle_ms": 1200,
   "steps": [
     {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+d"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Copy file path"
+      },
+      "count": 2
+    },
+    {
       "action": "press",
       "value": "ctrl+alt+b"
     },
@@ -67,5 +95,10 @@
       },
       "count": 0
     }
-  ]
+  ],
+  "fixture": "panel",
+  "git_result": {
+    "subject": "Add parity panel fixture",
+    "status": ""
+  }
 }

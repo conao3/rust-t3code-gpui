@@ -240,7 +240,16 @@ async def main():
         raise RuntimeError(
             "Output directory already exists; preserve each run separately"
         )
+    fixture = None
+    if "fixture" in scenario:
+        if not args.manifest:
+            parser.error("Scenario fixtures require --manifest")
+        from panel_fixture import prepare
+
+        fixture = await prepare(manifest, scenario["fixture"])
     args.output.mkdir(parents=True)
+    if fixture is not None:
+        (args.output / "fixture.json").write_text(json.dumps(fixture, indent=2) + "\n")
     workspaces = None
     workspace_before = None
     if "workspace" in scenario:
@@ -337,6 +346,24 @@ async def main():
         report["workspace_after"] = observed
         report["workspace_after"]["wait_seconds"] = time.monotonic() - started
         if report["workspace_after"]["status"] == "failed":
+            report["status"] = "failed"
+    if "git_result" in scenario:
+        if not args.manifest:
+            parser.error("Git fixture assertions require --manifest")
+        from panel_fixture import verify_git
+
+        report["git_result"] = await verify_git(manifest, scenario["git_result"])
+        if report["git_result"]["status"] != "passed":
+            report["status"] = "failed"
+    if "automation_result" in scenario:
+        if not args.manifest:
+            parser.error("Automation fixture assertions require --manifest")
+        from panel_fixture import verify_automation
+
+        report["automation_result"] = await verify_automation(
+            manifest, scenario["automation_result"]
+        )
+        if report["automation_result"]["status"] != "passed":
             report["status"] = "failed"
     (args.output / "report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n"

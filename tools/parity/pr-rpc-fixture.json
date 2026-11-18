@@ -36,8 +36,8 @@
         "mergeability": "mergeable",
         "additions": 1,
         "deletions": 0,
-        "createdAt": "2026-11-18T00:00:00.000Z",
-        "updatedAt": "2026-11-18T00:00:00.000Z",
+        "createdAt": "2099-01-01T00:00:00.000Z",
+        "updatedAt": "2099-01-01T00:00:00.000Z",
         "viewerReviewRequested": false,
         "labels": []
       }
@@ -68,8 +68,8 @@
     "mergeability": "mergeable",
     "additions": 1,
     "deletions": 0,
-    "createdAt": "2026-11-18T00:00:00.000Z",
-    "updatedAt": "2026-11-18T00:00:00.000Z",
+    "createdAt": "2099-01-01T00:00:00.000Z",
+    "updatedAt": "2099-01-01T00:00:00.000Z",
     "viewerReviewRequested": false,
     "labels": [],
     "reviewDecision": "none",
@@ -136,7 +136,7 @@
   "pullRequests.reviewGuide": {
     "guide": {
       "headSha": "abc123",
-      "generatedAt": "2026-11-18T00:00:00.000Z",
+      "generatedAt": "2099-01-01T00:00:00.000Z",
       "modelSelection": {
         "instanceId": "codex",
         "model": "gpt-5.3-codex"
@@ -171,7 +171,7 @@
   "pullRequests.generateReviewGuide": {
     "guide": {
       "headSha": "abc123",
-      "generatedAt": "2026-11-18T00:00:00.000Z",
+      "generatedAt": "2099-01-01T00:00:00.000Z",
       "modelSelection": {
         "instanceId": "codex",
         "model": "gpt-5.3-codex"

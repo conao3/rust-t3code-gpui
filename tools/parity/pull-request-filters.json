@@ -1,28 +1,148 @@
 {
   "name": "pull-request-filters",
-  "viewport": [1400, 900],
+  "viewport": [
+    1400,
+    900
+  ],
   "theme": "dark",
   "settle_ms": 1500,
   "steps": [
-    {"action": "press", "value": "escape"},
-    {"action": "click", "selector": {"role": "button", "name": "Panel fixture, UI parity"}},
-    {"action": "click", "selector": {"role": "button", "name": "Pull requests"}},
-    {"action": "click", "selector": {"role": "button", "name": "Filters"}},
-    {"action": "click", "selector": {"role": "menuitem", "name": "Author Anyone"}, "native": {"role": "menu item", "name": "Author Anyone"}},
-    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Search authors"}, "count": 1},
-    {"action": "type", "value": "absent-fixture"},
-    {"action": "checkpoint", "selector": {"role": "menuitem", "name": "No authors found"}, "native": {"role": "menu item", "name": "No authors found"}, "count": 1},
-    {"action": "press", "value": "escape"},
-    {"action": "press", "value": "escape"},
-    {"action": "click", "selector": {"role": "button", "name": "Filters"}},
-    {"action": "click", "selector": {"role": "menuitem", "name": "Labels Any"}, "native": {"role": "menu item", "name": "Labels Any"}},
-    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Search labels"}, "count": 1},
-    {"action": "press", "value": "escape"},
-    {"action": "press", "value": "escape"},
-    {"action": "click", "selector": {"role": "button", "name": "Filters"}},
-    {"action": "click", "selector": {"role": "menuitem", "name": "Project All projects"}, "native": {"role": "menu item", "name": "Project All projects"}},
-    {"action": "checkpoint", "selector": {"role": "menuitemradio", "name": "UI parity"}, "count": 1},
-    {"action": "press", "value": "escape"},
-    {"action": "press", "value": "escape"}
-  ]
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Pull requests"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Filters"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Author Anyone"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Author Anyone"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Search authors"
+      },
+      "count": 1
+    },
+    {
+      "action": "type",
+      "value": "absent-fixture"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitem",
+        "name": "No authors found"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "No authors found"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Filters"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Labels Any"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Labels Any"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Search labels"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Filters"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitem",
+        "name": "Project All projects"
+      },
+      "native": {
+        "role": "menu item",
+        "name": "Project All projects"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "UI parity"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    }
+  ],
+  "fixture": "panel"
 }

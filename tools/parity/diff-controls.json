@@ -8,6 +8,22 @@
   "settle_ms": 1200,
   "steps": [
     {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
       "action": "press",
       "value": "ctrl+d"
     },
@@ -114,5 +130,6 @@
       },
       "count": 1
     }
-  ]
+  ],
+  "fixture": "panel"
 }
