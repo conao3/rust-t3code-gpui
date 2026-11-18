@@ -20,7 +20,9 @@ impl Render for DetailsPane {
         }
         let services = self.services.as_ref().map(|(_, entity)| entity.clone());
         self.root
-            .update(cx, |root, cx| root.render_thread_details(services, cx))
+            .update(cx, |root, cx| {
+                root.with_main_conversation(|root| root.render_thread_details(services, cx))
+            })
             .expect("details root is alive")
     }
 }

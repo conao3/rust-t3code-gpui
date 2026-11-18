@@ -21,7 +21,7 @@ pub(super) struct State {
 pub(super) struct Detail {
     environment: String,
     reference: Value,
-    value: Value,
+    pub(super) value: Value,
     activity: Value,
     body: Option<Entity<TextViewState>>,
     comments: Vec<Entity<TextViewState>>,

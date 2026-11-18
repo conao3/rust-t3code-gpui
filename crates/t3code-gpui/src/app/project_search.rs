@@ -3,6 +3,8 @@ use super::*;
 pub(super) struct ProjectSearch {
     pub input: Entity<InputState>,
     pub selected: usize,
+    option_focus: [FocusHandle; 3],
+    match_focus: Vec<FocusHandle>,
     rows: Vec<SearchRow>,
     list: ListState,
     _subscription: Subscription,
@@ -32,8 +34,10 @@ pub(super) struct OpenMatch {
 impl ProjectSearch {
     pub fn new(window: &mut Window, cx: &mut Context<Root>) -> Self {
         let input = cx.new(|cx| InputState::new(window, cx).placeholder("Search project contents"));
-        let subscription =
-            cx.subscribe(&input, |root, input, event: &InputEvent, cx| match event {
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |root, input, event: &InputEvent, window, cx| match event {
                 InputEvent::Change => {
                     root.search_project_contents(input.read(cx).value().to_string(), cx)
                 }
@@ -47,14 +51,17 @@ impl ProjectSearch {
                             path: item["path"].as_str().unwrap_or_default().into(),
                             line: item["lineNumber"].as_u64().unwrap_or(1) as usize,
                         };
-                        root.open_project_match(&action, cx);
+                        root.open_project_match(&action, window, cx);
                     }
                 }
                 _ => {}
-            });
+            },
+        );
         Self {
             input,
             selected: 0,
+            option_focus: std::array::from_fn(|_| cx.focus_handle()),
+            match_focus: Vec::new(),
             rows: Vec::new(),
             list: ListState::new(0, ListAlignment::Top, px(300.)),
             _subscription: subscription,
@@ -72,10 +79,55 @@ impl ProjectSearch {
 }
 
 impl Root {
+    pub(super) fn project_search_key(
+        &mut self,
+        key: &Keystroke,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match key.key.as_str() {
+            "tab" => self.focus_project_search_next(key.modifiers.shift, window, cx),
+            "up" => self.move_project_match(false, cx),
+            "down" => self.move_project_match(true, cx),
+            "escape" => {
+                self.project_search.open = false;
+                self.toggle_palette(window, cx);
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    fn focus_project_search_next(
+        &self,
+        backward: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut handles = vec![self.project_search.input.read(cx).focus_handle(cx)];
+        handles.extend(self.project_search.option_focus.iter().cloned());
+        handles.extend(self.project_search.match_focus.iter().cloned());
+        let current = handles
+            .iter()
+            .position(|focus| focus.is_focused(window))
+            .unwrap_or(0);
+        let next = if backward {
+            (current + handles.len() - 1) % handles.len()
+        } else {
+            (current + 1) % handles.len()
+        };
+        handles[next].focus(window, cx);
+    }
+
     pub(super) fn toggle_project_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.project_search.open = !self.project_search.open;
         self.palette_open = false;
         if self.project_search.open {
+            self.project_search.options = [false; 3];
+            self.search_project_contents(String::new(), cx);
+            self.project_search
+                .input
+                .update(cx, |state, cx| state.set_value("", window, cx));
             let title = self
                 .open_entry()
                 .map(|entry| entry.project_title.clone())
@@ -106,11 +158,13 @@ impl Root {
         self.project_search.request += 1;
         let request = self.project_search.request;
         self.project_search.matches.clear();
+        self.project_search.match_focus.clear();
         self.project_search.rows.clear();
         self.project_search.list.reset(0);
         self.project_search.selected = 0;
         self.project_search.error = None;
         self.project_search.loading = false;
+        self.project_search.truncated = false;
         if query.is_empty() {
             cx.notify();
             return;
@@ -138,6 +192,7 @@ impl Root {
                 match result {
                     Ok(result) => {
                         root.project_search.matches = result["matches"].as_array().cloned().unwrap_or_default();
+                        root.project_search.match_focus = root.project_search.matches.iter().map(|_| cx.focus_handle()).collect();
                         let mut groups: Vec<(String, Vec<usize>)> = vec![];
                         for (index, item) in root.project_search.matches.iter().enumerate() {
                             let path = item["path"].as_str().unwrap_or_default();
@@ -146,7 +201,7 @@ impl Root {
                         root.project_search.rows = groups.into_iter().flat_map(|(path, indices)| std::iter::once(SearchRow::Header(path, indices.len())).chain(indices.into_iter().map(SearchRow::Match))).collect();
                         root.project_search.list.reset(root.project_search.rows.len());
                         root.project_search.truncated = result["truncated"].as_bool() == Some(true);
-                        root.project_search.error = result["regexFallbackError"].as_str().map(|error| format!("Invalid regular expression: {error}"));
+                        root.project_search.error = result["regexFallbackError"].as_str().map(|_| "Invalid regular expression".into());
                     }
                     Err(error) => root.project_search.error = Some(format!("{error:#}")),
                 }
@@ -156,8 +211,14 @@ impl Root {
         cx.notify();
     }
 
-    pub(super) fn open_project_match(&mut self, action: &OpenMatch, cx: &mut Context<Self>) {
+    pub(super) fn open_project_match(
+        &mut self,
+        action: &OpenMatch,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.project_search.open = false;
+        self.panel_focus.focus(window, cx);
         self.open_file(action.path.clone(), cx);
         self.project_search.pending_match =
             Some((action.path.clone(), action.line.saturating_sub(1)));
@@ -180,9 +241,9 @@ impl Root {
             return;
         }
         self.project_search.selected = if forward {
-            (self.project_search.selected + 1).min(count - 1)
+            (self.project_search.selected + 1) % count
         } else {
-            self.project_search.selected.saturating_sub(1)
+            (self.project_search.selected + count - 1) % count
         };
         let selected = self.project_search.selected;
         if let Some(index) = self
@@ -208,8 +269,34 @@ impl Root {
                 .gap_2()
                 .bg(cx.theme().popover)
                 .text_xs()
-                .child(div().flex_1().truncate().child(path.clone()))
-                .child(count.to_string())
+                .child(Icon::new(gpui_kit::assets::IconName::File).size(px(14.)))
+                .child(
+                    div()
+                        .font_weight(FontWeight::MEDIUM)
+                        .id(("search-file-name", index))
+                        .role(accesskit::Role::Label)
+                        .aria_value(path.rsplit('/').next().unwrap_or(path).to_owned())
+                        .child(path.rsplit('/').next().unwrap_or(path).to_owned()),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .truncate()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(
+                            path.rsplit_once('/')
+                                .map(|(dir, _)| dir)
+                                .unwrap_or("")
+                                .to_owned(),
+                        ),
+                )
+                .child(
+                    div()
+                        .id(("search-file-count", index))
+                        .role(accesskit::Role::Label)
+                        .aria_value(count.to_string())
+                        .child(count.to_string()),
+                )
                 .into_any_element(),
             Some(SearchRow::Match(index)) => {
                 let item = &self.project_search.matches[*index];
@@ -246,6 +333,7 @@ impl Root {
                     })
                     .collect();
                 Button::new(("project-search-match", *index))
+                    .track_focus(&self.project_search.match_focus[*index])
                     .accessibility_label(label)
                     .ghost()
                     .compact()
@@ -273,9 +361,18 @@ impl Root {
                                 StyledText::new(content.to_string()).with_highlights(highlights),
                             )),
                     )
-                    .on_click(
-                        cx.listener(move |root, _, _, cx| root.open_project_match(&action, cx)),
-                    )
+                    .on_hover(cx.listener({
+                        let index = *index;
+                        move |root, hovered, _, cx| {
+                            if *hovered {
+                                root.project_search.selected = index;
+                                cx.notify();
+                            }
+                        }
+                    }))
+                    .on_click(cx.listener(move |root, _, window, cx| {
+                        root.open_project_match(&action, window, cx)
+                    }))
                     .into_any_element()
             }
             None => div().into_any_element(),
@@ -312,6 +409,11 @@ impl Root {
         };
         let root = cx.entity().downgrade();
         div()
+            .id("project-search-backdrop")
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|root, _, window, cx| root.toggle_project_search(window, cx)),
+            )
             .absolute()
             .top_0()
             .left_0()
@@ -333,15 +435,7 @@ impl Root {
                     .shadow_lg()
                     .role(accesskit::Role::Dialog)
                     .aria_label("Search project contents")
-                    .capture_key_down(cx.listener(|root, event: &KeyDownEvent, window, cx| {
-                        match event.keystroke.key.as_str() {
-                            "up" => root.move_project_match(false, cx),
-                            "down" => root.move_project_match(true, cx),
-                            "escape" => root.toggle_project_search(window, cx),
-                            _ => return,
-                        }
-                        cx.stop_propagation();
-                    }))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         h_flex()
                             .px_3()
@@ -367,6 +461,7 @@ impl Root {
                                 .enumerate()
                                 .map(|(index, (label, name))| {
                                     Button::new(("search-option", index))
+                                        .track_focus(&state.option_focus[index])
                                         .label(label)
                                         .accessibility_label(name)
                                         .selected(state.options[index])
@@ -383,26 +478,58 @@ impl Root {
                                 }),
                             ),
                     )
-                    .child(
-                        h_flex()
-                            .h(px(36.))
-                            .flex_none()
-                            .px_3()
-                            .border_b_1()
-                            .border_color(cx.theme().border)
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(status),
-                    )
-                    .child(
-                        list(state.list.clone(), move |index, _, cx| {
-                            root.update(cx, |root, cx| root.render_project_search_row(index, cx))
+                    .when(!state.query.is_empty(), |dialog| {
+                        dialog.child(
+                            h_flex()
+                                .h(px(36.))
+                                .flex_none()
+                                .px_3()
+                                .border_b_1()
+                                .border_color(cx.theme().border)
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .id("search-status")
+                                .role(accesskit::Role::Label)
+                                .aria_value(status.clone())
+                                .child(status),
+                        )
+                    })
+                    .when(state.matches.is_empty(), |dialog| {
+                        dialog.child(
+                            div()
+                                .flex_1()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .id("search-empty")
+                                .role(accesskit::Role::Label)
+                                .aria_value(if state.query.is_empty() || state.loading {
+                                    "Type to search across your project."
+                                } else {
+                                    "No results found."
+                                })
+                                .child(if state.query.is_empty() || state.loading {
+                                    "Type to search across your project."
+                                } else {
+                                    "No results found."
+                                }),
+                        )
+                    })
+                    .when(!state.matches.is_empty(), |dialog| {
+                        dialog.child(
+                            list(state.list.clone(), move |index, _, cx| {
+                                root.update(cx, |root, cx| {
+                                    root.render_project_search_row(index, cx)
+                                })
                                 .unwrap_or_else(|_| div().into_any_element())
-                        })
-                        .flex_1()
-                        .min_h_0()
-                        .w_full(),
-                    )
+                            })
+                            .flex_1()
+                            .min_h_0()
+                            .w_full(),
+                        )
+                    })
                     .child(
                         h_flex()
                             .h(px(40.))
@@ -412,7 +539,52 @@ impl Root {
                             .border_color(cx.theme().border)
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
-                            .child("↑ ↓ Navigate   Enter Open file   Esc Back"),
+                            .gap_2()
+                            .bg(cx.theme().muted.opacity(0.2))
+                            .child(
+                                h_flex()
+                                    .gap_1()
+                                    .child(
+                                        Icon::new(gpui_kit::assets::IconName::ArrowUp)
+                                            .size(px(12.)),
+                                    )
+                                    .child(
+                                        Icon::new(gpui_kit::assets::IconName::ArrowDown)
+                                            .size(px(12.)),
+                                    )
+                                    .child(
+                                        div()
+                                            .id("search-navigate")
+                                            .role(accesskit::Role::Label)
+                                            .aria_value("Navigate")
+                                            .child("Navigate"),
+                                    ),
+                            )
+                            .children([("Enter", "Open file"), ("Esc", "Back")].into_iter().map(
+                                |(key, label)| {
+                                    h_flex()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .px_1()
+                                                .rounded_sm()
+                                                .bg(cx.theme().muted)
+                                                .id(SharedString::from(format!("search-key-{key}")))
+                                                .role(accesskit::Role::Label)
+                                                .aria_value(key)
+                                                .child(key),
+                                        )
+                                        .child(
+                                            div()
+                                                .id(SharedString::from(format!(
+                                                    "search-hint-{key}"
+                                                )))
+                                                .role(accesskit::Role::Label)
+                                                .aria_value(label)
+                                                .child(label),
+                                        )
+                                },
+                            )),
                     ),
             )
             .into_any_element()

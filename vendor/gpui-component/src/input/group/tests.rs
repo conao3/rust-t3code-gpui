@@ -243,12 +243,14 @@ mod interaction {
             draw(&mut cx);
             let payloads = [
                 ClipboardItem {
+                    mime_types: Vec::new(),
                     entries: vec![
                         ClipboardEntry::Image(gpui::Image::empty()),
                         ClipboardEntry::String(gpui::ClipboardString::new("image caption".into())),
                     ],
                 },
                 ClipboardItem {
+                    mime_types: Vec::new(),
                     entries: vec![ClipboardEntry::ExternalPaths(gpui::ExternalPaths(
                         vec!["attachment.png".into()].into(),
                     ))],

@@ -257,13 +257,11 @@ impl Root {
     }
 
     pub(super) fn composer_width(&self) -> f32 {
-        self.pane_layout
-            .width(
-                self.conversation.id,
-                self.canvas_width
-                    - workspace::layout(self.canvas_width, self.details_open).inset_end,
-            )
-            .expect("composer pane is in the layout")
+        if self.side_chat_parent.is_some() {
+            self.side_chat_width
+        } else {
+            self.canvas_width - workspace::layout(self.canvas_width, self.details_open).inset_end
+        }
     }
 
     fn compact_composer_context(&self) -> bool {

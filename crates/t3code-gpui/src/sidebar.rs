@@ -278,49 +278,51 @@ pub fn entries(environment: &str, shell: &ShellState) -> Vec<ThreadEntry> {
         .threads
         .iter()
         .filter(|thread| is_listed(thread))
-        .map(|thread| {
-            let presentation = crate::shell_presentation::present(thread, None);
-            let project_id = text(thread, "projectId");
-            let project_title = shell
-                .projects
-                .iter()
-                .find(|p| text(p, "id") == project_id)
-                .map(|p| text(p, "title").to_string())
-                .unwrap_or_default();
-            ThreadEntry {
-                environment: environment.to_string(),
-                thread_id: text(thread, "id").to_string(),
-                project_id: project_id.to_string(),
-                title: text(thread, "title").to_string(),
-                project_title,
-                status: status_of(thread),
-                latest_user_message_at: thread
-                    .get("latestUserMessageAt")
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
-                pin_order: present(thread, "pinnedAt").then(|| {
-                    thread
-                        .get("pinOrderKey")
-                        .and_then(Value::as_str)
-                        .unwrap_or(text(thread, "pinnedAt"))
-                        .to_string()
-                }),
-                snoozed_until: present(thread, "snoozedUntil")
-                    .then(|| text(thread, "snoozedUntil").to_string()),
-                launched_from: thread.get("launchedFrom").and_then(|l| {
-                    Some((
-                        l.get("environmentId")?.as_str()?.to_string(),
-                        l.get("threadId")?.as_str()?.to_string(),
-                    ))
-                }),
-                provider_stack: crate::provider_display::stack(&presentation),
-                activity_timestamp: activity_timestamp(&presentation),
-                presentation: Arc::new(presentation),
-                inbox_working: None,
-                returned_at: None,
-            }
-        })
+        .map(|thread| conversation_entry(environment, shell, thread))
         .collect()
+}
+
+pub fn conversation_entry(environment: &str, shell: &ShellState, thread: &Value) -> ThreadEntry {
+    let presentation = crate::shell_presentation::present(thread, None);
+    let project_id = text(thread, "projectId");
+    let project_title = shell
+        .projects
+        .iter()
+        .find(|p| text(p, "id") == project_id)
+        .map(|p| text(p, "title").to_string())
+        .unwrap_or_default();
+    ThreadEntry {
+        environment: environment.to_string(),
+        thread_id: text(thread, "id").to_string(),
+        project_id: project_id.to_string(),
+        title: text(thread, "title").to_string(),
+        project_title,
+        status: status_of(thread),
+        latest_user_message_at: thread
+            .get("latestUserMessageAt")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        pin_order: present(thread, "pinnedAt").then(|| {
+            thread
+                .get("pinOrderKey")
+                .and_then(Value::as_str)
+                .unwrap_or(text(thread, "pinnedAt"))
+                .to_string()
+        }),
+        snoozed_until: present(thread, "snoozedUntil")
+            .then(|| text(thread, "snoozedUntil").to_string()),
+        launched_from: thread.get("launchedFrom").and_then(|l| {
+            Some((
+                l.get("environmentId")?.as_str()?.to_string(),
+                l.get("threadId")?.as_str()?.to_string(),
+            ))
+        }),
+        provider_stack: crate::provider_display::stack(&presentation),
+        activity_timestamp: activity_timestamp(&presentation),
+        presentation: Arc::new(presentation),
+        inbox_working: None,
+        returned_at: None,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

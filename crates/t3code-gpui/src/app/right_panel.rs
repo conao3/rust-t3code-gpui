@@ -50,7 +50,8 @@ impl Render for Pane {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
             .update(cx, |root, cx| {
-                root.render_panel_contents(f32::from(window.viewport_size().width), cx)
+                let width = f32::from(window.viewport_size().width);
+                root.with_main_conversation(|root| root.render_panel_contents(width, cx))
             })
             .expect("panel root")
     }
@@ -88,14 +89,18 @@ impl Root {
     }
 
     pub(super) fn follow_right_panel(&mut self, cx: &mut Context<Self>) {
-        let target = self.current().or_else(|| {
-            self.conversation.draft.as_ref().map(|draft| {
-                (
-                    draft.environment.clone().unwrap_or_default(),
-                    draft.id.clone(),
-                )
-            })
-        });
+        let target = self
+            .side_chat_parent
+            .clone()
+            .or_else(|| self.current())
+            .or_else(|| {
+                self.conversation.draft.as_ref().map(|draft| {
+                    (
+                        draft.environment.clone().unwrap_or_default(),
+                        draft.id.clone(),
+                    )
+                })
+            });
         if target == self.right_panel_target {
             return;
         }
@@ -241,6 +246,7 @@ impl Root {
         let Some(index) = self.right_panel.tabs.iter().position(|tab| tab == id) else {
             return;
         };
+        self.close_side_chat_surface(id, cx);
         self.right_panel.tabs.remove(index);
         self.right_panel.files.remove(id);
         if id == "device" {
@@ -395,14 +401,20 @@ impl Root {
             .as_ref()
             .map(|e| (e.directories.len(), e.expanded.len(), e.error.clone()));
         let stamp = format!(
-            "{}:{file:?}:{explorer:?}:{}:{}:{}:{:?}:{}:{}",
+            "{}:{file:?}:{explorer:?}:{}:{}:{}:{:?}:{}:{}:{:?}:{:?}",
             self.panel_revision,
             self.file_find_open,
             self.file_find_input.read(cx).value(),
             self.settings.light_theme,
             self.branch_anchor,
             self.branch_refs.len(),
-            self.branch_query
+            self.branch_query,
+            self.right_panel
+                .tabs
+                .iter()
+                .map(|id| self.side_chat_title(id))
+                .collect::<Vec<_>>(),
+            self.side_chat_disabled_reason()
         );
         if self.panel_stamp != stamp {
             self.panel_stamp = stamp;
@@ -429,7 +441,7 @@ impl Root {
                     .overflow_x_scroll()
                     .track_scroll(&self.right_panel.tab_scroll)
                     .children(self.right_panel.tabs.iter().map(|id| {
-                        let label = panel_title(id);
+                        let label = self.side_chat_title(id).unwrap_or_else(|| panel_title(id));
                         let select = id.clone();
                         let close = id.clone();
                         let menu_id = id.clone();
@@ -631,6 +643,9 @@ impl Root {
             self.render_surface_launcher(cx)
         } else {
             match self.right_panel.active.as_deref() {
+                Some(id) if id.starts_with("side-chat:") => {
+                    self.render_side_chat_surface(&id[10..])
+                }
                 Some(id) if id.starts_with("pull-request:") || id == "pull-requests" => {
                     self.render_pull_requests(width, cx)
                 }
@@ -673,7 +688,6 @@ impl Root {
                         }
                     })
                     .unwrap_or_else(|| div().into_any_element()),
-                Some("side-chat") => self.render_side_chat_surface(cx),
                 Some(id) if id == "browser" => v_flex()
                     .p_4()
                     .gap_2()
@@ -705,10 +719,10 @@ impl Root {
             .on_key_down(cx.listener(|root, event: &KeyDownEvent, window, cx| {
                 if root.right_panel.launcher || root.right_panel.active.is_none() {
                     match event.keystroke.key.as_str() {
-                        "b" => root.open_panel_surface("Browser", cx),
-                        "t" => root.open_panel_surface("Terminal", cx),
-                        "m" => root.open_panel_surface("Device", cx),
-                        "s" => root.open_panel_surface("Side chat", cx),
+                        "b" => root.open_panel_surface("Browser", window, cx),
+                        "t" => root.open_panel_surface("Terminal", window, cx),
+                        "m" => root.open_panel_surface("Device", window, cx),
+                        "s" => root.open_panel_surface("Side chat", window, cx),
                         "f" => root.toggle_explorer(cx),
                         "d" => root.toggle_diff(cx),
                         "p" => root.open_current_pull_request(cx),
@@ -766,15 +780,23 @@ impl Root {
                                 .map(|(label, key)| {
                                     Button::new(label)
                                         .label(format!("{label} {key}"))
-                                        .accessibility_label(label)
+                                        .accessibility_label(if label == "Side chat" {
+                                            "Side chat S"
+                                        } else {
+                                            label
+                                        })
+                                        .disabled(
+                                            label == "Side chat"
+                                                && self.side_chat_disabled_reason().is_some(),
+                                        )
                                         .role(accesskit::Role::MenuItem)
                                         .ghost()
                                         .w_full()
-                                        .on_click(cx.listener(move |root, _, _, cx| {
+                                        .on_click(cx.listener(move |root, _, window, cx| {
                                             if ["Browser", "Terminal", "Device", "Side chat"]
                                                 .contains(&label)
                                             {
-                                                root.open_panel_surface(label, cx);
+                                                root.open_panel_surface(label, window, cx);
                                             } else if label == "Files" {
                                                 root.toggle_explorer(cx);
                                             } else if label == "Pull request" {
@@ -829,7 +851,11 @@ impl Root {
             .into_any_element()
     }
 
-    fn open_panel_surface(&mut self, label: &str, cx: &mut Context<Self>) {
+    fn open_panel_surface(&mut self, label: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if label == "Side chat" {
+            self.with_main_conversation(|root| root.open_side_chat(window, cx));
+            return;
+        }
         self.right_panel.launcher = false;
         if label == "Terminal" {
             let mut number = 1;
@@ -856,7 +882,6 @@ impl Root {
             let id = match label {
                 "Browser" => "browser",
                 "Device" => "device",
-                "Side chat" => "side-chat",
                 _ => return,
             };
             self.activate_panel(id.into(), cx);
@@ -925,11 +950,14 @@ impl Root {
                                 format!("{label} {key}")
                             },
                         )
+                        .disabled(
+                            label == "Side chat" && self.side_chat_disabled_reason().is_some(),
+                        )
                         .ghost()
                         .w(px(320.))
-                        .on_click(cx.listener(move |root, _, _, cx| {
+                        .on_click(cx.listener(move |root, _, window, cx| {
                             if ["Browser", "Terminal", "Device", "Side chat"].contains(&label) {
-                                root.open_panel_surface(label, cx);
+                                root.open_panel_surface(label, window, cx);
                             } else if label == "Files" {
                                 root.toggle_explorer(cx);
                             } else if label == "Pull request" {
@@ -951,7 +979,7 @@ fn panel_title(id: &str) -> String {
         "files" => "Files".into(),
         "browser" => "Browser".into(),
         "device" => "Device".into(),
-        "side-chat" => "Side chat".into(),
+        id if id.starts_with("side-chat:") => "Side chat".into(),
         "diff" => "Diff".into(),
         id if id.starts_with("terminal:") => {
             format!("Terminal {}", id.split('-').nth(1).unwrap_or_default())
@@ -993,66 +1021,10 @@ fn surface_icon(id: &str) -> gpui_kit::assets::IconName {
         "browser" => IconName::Globe,
         id if id.starts_with("terminal:") => IconName::Terminal,
         "device" => IconName::Smartphone,
-        "side-chat" => IconName::MessagesSquare,
+        id if id.starts_with("side-chat:") => IconName::MessagesSquare,
         _ if id.starts_with("pull-request") => IconName::GitPullRequest,
         _ => IconName::File,
     }
 }
 
-impl Root {
-    fn render_side_chat_surface(&self, cx: &Context<Self>) -> AnyElement {
-        let title = self
-            .current()
-            .and_then(|(environment, id)| self.thread_value(&environment, &id))
-            .and_then(|thread| thread["title"].as_str().map(str::to_string))
-            .unwrap_or_default();
-        v_flex()
-            .size_full()
-            .min_h_0()
-            .child(
-                h_flex()
-                    .h(px(40.))
-                    .px_3()
-                    .gap_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(text!("Side chat")),
-                    )
-                    .child(div().flex_1())
-                    .child(
-                        Button::new("close-side-chat")
-                            .icon(IconName::Close)
-                            .ghost()
-                            .compact()
-                            .accessibility_label("Close side chat")
-                            .on_click(
-                                cx.listener(|root, _, _, cx| root.close_panel_tab("side-chat", cx)),
-                            ),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .px_3()
-                    .py_2()
-                    .gap_1()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(text!("Context from"))
-                    .child(text!("·"))
-                    .child(text!(title)),
-            )
-            .child(
-                div()
-                    .id("side-chat-conversation")
-                    .role(accesskit::Role::Region)
-                    .aria_label("Side chat conversation")
-                    .flex_1()
-                    .min_h_0(),
-            )
-            .into_any_element()
-    }
-}
+impl Root {}

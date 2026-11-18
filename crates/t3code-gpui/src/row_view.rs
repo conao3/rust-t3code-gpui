@@ -87,6 +87,7 @@ pub enum RowEvent {
 }
 
 pub struct RowView {
+    math_enabled: bool,
     images: images::Images,
     row: Row,
     summary: String,
@@ -108,6 +109,16 @@ pub struct RowView {
 impl EventEmitter<RowEvent> for RowView {}
 
 impl RowView {
+    pub fn set_math_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if self.math_enabled != enabled {
+            self.math_enabled = enabled;
+            for child in &self.children {
+                child.update(cx, |child, cx| child.set_math_enabled(enabled, cx));
+            }
+            cx.notify();
+        }
+    }
+
     pub fn new(row: Row, cx: &mut Context<Self>) -> Self {
         let timer = (row.kind == RowKind::Working).then(|| {
             cx.spawn(async move |this, cx| {
@@ -146,6 +157,7 @@ impl RowView {
             })
         });
         let mut view = Self {
+            math_enabled: false,
             images: images::Images::default(),
             row,
             summary,
@@ -383,7 +395,11 @@ impl RowView {
             if let Some(child) = self.children.get(index) {
                 child.update(cx, |child, cx| child.update(row.clone(), cx));
             } else {
-                self.children.push(cx.new(|cx| Self::new(row.clone(), cx)));
+                self.children.push(cx.new(|cx| {
+                    let mut child = Self::new(row.clone(), cx);
+                    child.set_math_enabled(self.math_enabled, cx);
+                    child
+                }));
             }
         }
         self.children.truncate(self.row.children.len());
@@ -698,7 +714,9 @@ impl Render for RowView {
                     .line_height(relative(1.625))
                     .child(
                         TextView::new(state)
-                            .markdown_extensions(crate::rich_markdown::extensions())
+                            .markdown_extensions(crate::rich_markdown::extensions(
+                                self.math_enabled,
+                            ))
                             .selectable(true)
                             .style(
                                 TextViewStyle::default()
@@ -829,7 +847,9 @@ impl Render for RowView {
                         .map(|detail| match &self.markdown {
                             Some(markdown) if self.row.kind == RowKind::Reasoning => detail.child(
                                 TextView::new(markdown)
-                                    .markdown_extensions(crate::rich_markdown::extensions())
+                                    .markdown_extensions(crate::rich_markdown::extensions(
+                                        self.math_enabled,
+                                    ))
                                     .selectable(true),
                             ),
                             _ => detail.child(text),
@@ -912,6 +932,51 @@ impl Render for RowView {
                     })
                     .into_any_element()
             }
+            RowKind::Fork if self.row.detail == "Context from" => base
+                .px(if window.viewport_size().width >= px(640.) {
+                    px(48.)
+                } else {
+                    px(12.)
+                })
+                .py_2()
+                .text_size(px(11.))
+                .text_color(theme.muted_foreground)
+                .child(
+                    h_flex()
+                        .gap_3()
+                        .child(div().h(px(1.)).flex_1().bg(theme.border.opacity(0.7)))
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .child(
+                                    Icon::new(gpui_kit::assets::IconName::MessagesSquare)
+                                        .size(px(12.)),
+                                )
+                                .child(
+                                    div()
+                                        .id("context-label")
+                                        .role(accesskit::Role::Label)
+                                        .aria_value("Context from")
+                                        .child("Context from"),
+                                )
+                                .child(
+                                    div()
+                                        .id("context-separator")
+                                        .role(accesskit::Role::Label)
+                                        .aria_value("·\u{a0}")
+                                        .child("·\u{a0}"),
+                                )
+                                .child(
+                                    div()
+                                        .id("context-title")
+                                        .role(accesskit::Role::Label)
+                                        .aria_value(self.row.text.clone())
+                                        .child(self.row.text.clone()),
+                                ),
+                        )
+                        .child(div().h(px(1.)).flex_1().bg(theme.border.opacity(0.7))),
+                )
+                .into_any_element(),
             RowKind::Fork => base
                 .py_2()
                 .text_size(px(11.))

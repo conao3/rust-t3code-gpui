@@ -1480,6 +1480,7 @@ impl WaylandConnection {
             for mime_type in TEXT_MIME_TYPES {
                 data_source.offer(mime_type.to_string());
             }
+            for mime in state.clipboard.mime_types() { data_source.offer(mime); }
             data_source.offer(state.clipboard.self_mime());
             data_device.set_selection(Some(&data_source), serial.as_raw());
         }

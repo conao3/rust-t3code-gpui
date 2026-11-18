@@ -981,6 +981,15 @@ impl Clipboard {
         Ok(Self { inner: ctx })
     }
 
+    pub(crate) fn set_item(&self, item: &ClipboardItem, selection: ClipboardKind, wait: WaitConfig) -> Result<()> {
+        let mut data = vec![ClipboardData { bytes: item.text().unwrap_or_default().into_bytes(), format: self.inner.atoms.UTF8_STRING }];
+        for (mime, bytes) in &item.mime_types {
+            let format = self.inner.server.conn.intern_atom(false, mime.as_bytes()).map_err(into_unknown)?.reply().map_err(into_unknown)?.atom;
+            data.push(ClipboardData { bytes: bytes.clone(), format });
+        }
+        self.inner.write(data, selection, wait)
+    }
+
     pub(crate) fn set_text(
         &self,
         message: Cow<'_, str>,

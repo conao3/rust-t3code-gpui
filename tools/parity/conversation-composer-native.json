@@ -1,5 +1,5 @@
 {
-  "name": "independent-pane-stash-queue-send",
+  "name": "side-chat-independent-stash-queue-send",
   "viewport": [
     1600,
     1000
@@ -15,97 +15,21 @@
       }
     },
     {
-      "action": "click",
-      "selector": {
-        "role": "button",
-        "name": "Toggle thread details panel"
-      }
-    },
-    {
-      "action": "click",
-      "selector": {
-        "role": "button",
-        "name": "Split conversation horizontally"
-      }
-    },
-    {
-      "action": "click",
-      "selector": {
-        "role": "button",
-        "name": "Pane Beta, UI parity"
-      }
-    },
-    {
-      "action": "focus",
-      "selector": {
-        "role": "textbox",
-        "name": "Message Pane Alpha"
-      }
-    },
-    {
-      "action": "type",
-      "value": "Stash Alpha"
-    },
-    {
       "action": "press",
-      "value": "ctrl+s"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "textbox",
-        "name": "Message Pane Alpha"
-      },
-      "value": ""
-    },
-    {
-      "action": "focus",
-      "selector": {
-        "role": "textbox",
-        "name": "Message Pane Beta"
-      }
-    },
-    {
-      "action": "type",
-      "value": "Stash Beta"
-    },
-    {
-      "action": "press",
-      "value": "ctrl+s"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "textbox",
-        "name": "Message Pane Beta"
-      },
-      "value": ""
+      "value": "ctrl+alt+b"
     },
     {
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "Close side chat",
-        "index": 1
+        "name": "Side chat S"
       }
     },
     {
       "action": "checkpoint",
       "selector": {
-        "role": "textbox",
-        "name": "Message Pane Beta"
-      },
-      "count": 0
-    },
-    {
-      "action": "press",
-      "value": "ctrl+shift+t"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "textbox",
-        "name": "Message Pane Beta"
+        "role": "button",
+        "name": "Bring back"
       },
       "count": 1
     },
@@ -117,6 +41,61 @@
       }
     },
     {
+      "action": "type",
+      "value": "Stash Alpha"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      },
+      "reference": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": ""
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Side chat"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Stash Beta"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Side chat"
+      },
+      "value": "Stash Beta"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message Pane Alpha"
+      }
+    },
+    {
       "action": "press",
       "value": "ctrl+s"
     },
@@ -132,7 +111,7 @@
       "action": "focus",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       }
     },
     {
@@ -143,7 +122,7 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       },
       "value": "Stash Beta"
     },
@@ -159,7 +138,7 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       },
       "value": "Stash Beta"
     },
@@ -180,14 +159,23 @@
         "role": "textbox",
         "name": "Message Pane Alpha"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": ""
+      }
     },
     {
       "action": "focus",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       }
     },
     {
@@ -198,10 +186,19 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": ""
+      }
     },
     {
       "action": "focus",
@@ -224,14 +221,23 @@
         "role": "textbox",
         "name": "Message Pane Alpha"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": ""
+      }
     },
     {
       "action": "focus",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       }
     },
     {
@@ -246,10 +252,19 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": ""
+      }
     },
     {
       "action": "checkpoint",
@@ -292,7 +307,7 @@
       "action": "focus",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       }
     },
     {
@@ -303,7 +318,7 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       },
       "value": "Queue Beta",
       "screenshot": false
@@ -329,7 +344,7 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       },
       "value": "Queue Beta edited",
       "screenshot": false
@@ -351,14 +366,23 @@
         "role": "textbox",
         "name": "Message Pane Alpha"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Pane Alpha",
+        "value": ""
+      }
     },
     {
       "action": "focus",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       }
     },
     {
@@ -369,10 +393,19 @@
       "action": "checkpoint",
       "selector": {
         "role": "textbox",
-        "name": "Message Pane Beta"
+        "name": "Message Side chat"
       },
-      "value": "",
-      "screenshot": false
+      "screenshot": false,
+      "reference": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": "\n"
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Message Side chat",
+        "value": ""
+      }
     },
     {
       "action": "checkpoint",

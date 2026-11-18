@@ -1,10 +1,18 @@
 use super::*;
 
+pub(super) struct DiscardedDraft {
+    pane: u64,
+    key: String,
+    text: String,
+    attachments: Vec<attachments::Pending>,
+}
+
 pub(super) struct UndoEntry {
     pub environment: String,
     pub thread: String,
     pub kind: &'static str,
     pub commands: Vec<Value>,
+    pub drafts: Vec<DiscardedDraft>,
 }
 
 pub(super) fn undo_plan(
@@ -53,6 +61,27 @@ fn hosted_segment(id: &str) -> String {
             _ => format!("%{byte:02X}"),
         })
         .collect()
+}
+
+fn thread_context_label(title: &str) -> String {
+    let normalized = title
+        .replace(['[', ']', '\\', '\r', '\n'], " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut units = 0;
+    let label: String = normalized
+        .chars()
+        .take_while(|ch| {
+            units += ch.len_utf16();
+            units <= 200
+        })
+        .collect();
+    if label.is_empty() {
+        "thread".into()
+    } else {
+        label
+    }
 }
 
 fn current_pull_request(links: &[Value]) -> Option<&Value> {
@@ -239,24 +268,140 @@ fn current_pull_request(links: &[Value]) -> Option<&Value> {
 }
 
 impl Root {
-    pub(super) fn reference_label(&self) -> &'static str {
-        if self
-            .current()
-            .and_then(|(environment, thread)| self.thread_value(&environment, &thread))
-            .is_some_and(|value| {
-                value["pullRequests"]
-                    .as_array()
-                    .and_then(|links| current_pull_request(links))
-                    .is_some()
-                    || value
-                        .pointer("/linkedPullRequest/url")
-                        .and_then(Value::as_str)
-                        .is_some()
-                    || value
-                        .pointer("/branchPullRequest/url")
-                        .and_then(Value::as_str)
-                        .is_some()
+    fn panel_pull_request_url(&self) -> Option<Option<String>> {
+        if !self.right_panel.open {
+            return None;
+        }
+        let id = self
+            .right_panel
+            .active
+            .as_ref()
+            .filter(|id| id.starts_with("pull-request:"))?;
+        Some(
+            self.pr_state
+                .views
+                .get(id)
+                .and_then(|detail| detail.value["url"].as_str().map(str::to_owned)),
+        )
+    }
+
+    pub(super) fn has_thread_draft(&self, environment: &str, thread: &str) -> bool {
+        let suffix = drafts::thread_key(environment, thread);
+        std::iter::once(&self.conversation)
+            .chain(self.panes.values())
+            .any(|pane| {
+                let key = format!("pane:{}:{suffix}", pane.id);
+                self.drafts.has(&key)
+                    || pane
+                        .composer_attachments
+                        .get(&key)
+                        .is_some_and(|items| !items.is_empty())
             })
+    }
+
+    pub(super) fn discard_thread_draft(
+        &mut self,
+        environment: String,
+        thread: String,
+        cx: &mut Context<Self>,
+    ) {
+        let suffix = drafts::thread_key(&environment, &thread);
+        let mut discarded = Vec::new();
+        for pane in std::iter::once(&mut self.conversation).chain(self.panes.values_mut()) {
+            let key = format!("pane:{}:{suffix}", pane.id);
+            let text = self.drafts.get(&key).unwrap_or_default().to_owned();
+            let attachments = pane.composer_attachments.remove(&key).unwrap_or_default();
+            if text.is_empty() && attachments.is_empty() {
+                continue;
+            }
+            self.drafts.set(&key, "");
+            pane.attachments_dirty = true;
+            if pane.open.as_ref().is_some_and(|open| {
+                open.environment == environment && open.watch.thread_id() == thread
+            }) {
+                pane.attachments.clear();
+                pane.pending_composer = Some(String::new());
+                pane.draft_text.clear();
+            }
+            discarded.push(DiscardedDraft {
+                pane: pane.id,
+                key,
+                text,
+                attachments,
+            });
+        }
+        if discarded.is_empty() {
+            return;
+        }
+        if let Err(error) = self.drafts.save(&self.drafts_path) {
+            self.conversation.message = Some(format!("Failed to discard draft: {error:#}"));
+        }
+        self.remember_thread_undo(
+            UndoEntry {
+                environment,
+                thread,
+                kind: "Discarded",
+                commands: vec![],
+                drafts: discarded,
+            },
+            cx,
+        );
+        cx.notify();
+    }
+
+    fn restore_discarded_drafts(&mut self, entry: &UndoEntry, cx: &mut Context<Self>) {
+        if entry.drafts.iter().any(|draft| {
+            self.drafts.has(&draft.key)
+                || std::iter::once(&self.conversation)
+                    .chain(self.panes.values())
+                    .find(|pane| pane.id == draft.pane)
+                    .is_some_and(|pane| {
+                        pane.composer_attachments
+                            .get(&draft.key)
+                            .is_some_and(|items| !items.is_empty())
+                    })
+        }) {
+            self.conversation.message =
+                Some("Failed to restore draft: The draft has new content.".into());
+            return;
+        }
+        for draft in &entry.drafts {
+            self.drafts.set(&draft.key, &draft.text);
+            self.with_conversation(draft.pane, |root| {
+                root.composer_attachments
+                    .insert(draft.key.clone(), draft.attachments.clone());
+                root.attachments_dirty = true;
+                if root.current() == Some((entry.environment.clone(), entry.thread.clone())) {
+                    root.conversation.attachments = draft.attachments.clone();
+                    root.pending_composer = Some(draft.text.clone());
+                }
+            });
+        }
+        if let Err(error) = self.drafts.save(&self.drafts_path) {
+            self.conversation.message = Some(format!("Failed to restore draft: {error:#}"));
+        }
+        cx.notify();
+    }
+
+    pub(super) fn reference_label(&self) -> &'static str {
+        if self.panel_pull_request_url().is_some()
+            || self
+                .current()
+                .and_then(|(environment, thread)| self.thread_value(&environment, &thread))
+                .is_some_and(|value| {
+                    value["pullRequests"]
+                        .as_array()
+                        .and_then(|links| current_pull_request(links))
+                        .is_some()
+                        || value
+                            .pointer("/linkedPullRequest/url")
+                            .and_then(Value::as_str)
+                            .is_some()
+                        || value
+                            .pointer("/branchPullRequest/url")
+                            .and_then(Value::as_str)
+                            .is_some()
+                })
         {
             "Copy PR link"
         } else {
@@ -277,15 +422,24 @@ impl Root {
         let value = self
             .thread_value(&environment, &thread)
             .unwrap_or(Value::Null);
-        let link = value["pullRequests"]
-            .as_array()
-            .and_then(|links| current_pull_request(links))
-            .and_then(|link| link["url"].as_str())
+        let panel_url = self.panel_pull_request_url();
+        if panel_url == Some(None) {
+            return;
+        }
+        let link = panel_url
+            .as_ref()
+            .and_then(|url| url.as_deref())
             .or_else(|| {
-                value
-                    .pointer("/linkedPullRequest/url")
-                    .or_else(|| value.pointer("/branchPullRequest/url"))
-                    .and_then(Value::as_str)
+                value["pullRequests"]
+                    .as_array()
+                    .and_then(|links| current_pull_request(links))
+                    .and_then(|link| link["url"].as_str())
+                    .or_else(|| {
+                        value
+                            .pointer("/linkedPullRequest/url")
+                            .or_else(|| value.pointer("/branchPullRequest/url"))
+                            .and_then(Value::as_str)
+                    })
             });
         let (text, notice) = if let Some(url) = link {
             (url.to_string(), "PR link copied")
@@ -299,7 +453,22 @@ impl Root {
                 "Thread copied",
             )
         };
-        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        let mut item = ClipboardItem::new_string(text.clone());
+        if link.is_none() {
+            let title = value["title"].as_str().unwrap_or_default();
+            let label = thread_context_label(title);
+            let fragment = json!({"version":1,"source":{"environmentId":environment_id},"records":[{"version":1,"kind":"thread","contextId":format!("thread_{thread}"),"label":label,"title":label,"environmentId":environment_id,"threadId":thread}]}).to_string();
+            let html = format!(
+                "<pre data-t3-context-fragment=\"{}\">{}</pre>",
+                hosted_segment(&fragment),
+                html_escape::encode_safe(&text)
+            );
+            item = item.with_mime_type("web application/x-t3-context-fragment+json", fragment.as_bytes().to_vec())
+                .with_mime_type("application/web;type=\"custom/format0\"", fragment.into_bytes())
+                .with_mime_type("application/web;type=\"custom/formatmap\"", br#"{"application/x-t3-context-fragment+json":"application/web;type=\"custom/format0\""}"#.to_vec())
+                .with_mime_type("text/html", html.into_bytes());
+        }
+        cx.write_to_clipboard(item);
         self.conversation.message = Some(notice.into());
         cx.notify();
     }
@@ -364,6 +533,10 @@ impl Root {
             group.push(self.thread_undos.pop().unwrap());
         }
         for entry in group {
+            if entry.kind == "Discarded" {
+                self.restore_discarded_drafts(&entry, cx);
+                continue;
+            }
             let Some(connection) = self.connection(&entry.environment) else {
                 continue;
             };
@@ -404,8 +577,13 @@ impl Root {
             .take_while(|entry| entry.kind == last.kind)
             .count();
         let label = format!(
-            "{} {count} thread{}",
+            "{} {count} {}{}",
             last.kind,
+            if last.kind == "Discarded" {
+                "draft"
+            } else {
+                "thread"
+            },
             if count == 1 { "" } else { "s" }
         );
         let undo_label = self
@@ -472,8 +650,22 @@ impl Root {
 
 #[cfg(test)]
 mod tests {
-    use super::{ThreadOp, current_pull_request, hosted_segment, undo_plan};
+    use super::{ThreadOp, current_pull_request, hosted_segment, thread_context_label, undo_plan};
     use serde_json::json;
+
+    #[test]
+    fn context_labels_follow_utf16_limits_without_splitting_a_character() {
+        assert_eq!(thread_context_label(" [A]\\\n B "), "A B");
+        assert_eq!(thread_context_label("[ ]"), "thread");
+        assert_eq!(
+            thread_context_label(&format!("{}🦀", "x".repeat(199))),
+            "x".repeat(199)
+        );
+        assert_eq!(
+            thread_context_label(&format!("{}🦀tail", "x".repeat(198))),
+            format!("{}🦀", "x".repeat(198))
+        );
+    }
 
     #[test]
     fn reference_uses_the_top_open_layer_and_ignores_dismissed_links() {

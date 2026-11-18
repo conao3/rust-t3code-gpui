@@ -3126,6 +3126,7 @@ pub enum CursorStyle {
 /// A clipboard item that should be copied to the clipboard
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClipboardItem {
+    pub mime_types: Vec<(String, Vec<u8>)>,
     /// The entries in this clipboard item.
     pub entries: Vec<ClipboardEntry>,
 }
@@ -3176,9 +3177,15 @@ pub enum ClipboardEntry {
 }
 
 impl ClipboardItem {
+    pub fn with_mime_type(mut self, mime: impl Into<String>, bytes: Vec<u8>) -> Self {
+        self.mime_types.push((mime.into(), bytes));
+        self
+    }
+
     /// Create a new ClipboardItem::String with no associated metadata
     pub fn new_string(text: String) -> Self {
         Self {
+            mime_types: Vec::new(),
             entries: vec![ClipboardEntry::String(ClipboardString::new(text))],
         }
     }
@@ -3186,6 +3193,7 @@ impl ClipboardItem {
     /// Create a new ClipboardItem::String with the given text and associated metadata
     pub fn new_string_with_metadata(text: String, metadata: String) -> Self {
         Self {
+            mime_types: Vec::new(),
             entries: vec![ClipboardEntry::String(ClipboardString {
                 text,
                 metadata: Some(metadata),
@@ -3196,6 +3204,7 @@ impl ClipboardItem {
     /// Create a new ClipboardItem::String with the given text and associated metadata
     pub fn new_string_with_json_metadata<T: Serialize>(text: String, metadata: T) -> Self {
         Self {
+            mime_types: Vec::new(),
             entries: vec![ClipboardEntry::String(
                 ClipboardString::new(text).with_json_metadata(metadata),
             )],
@@ -3205,6 +3214,7 @@ impl ClipboardItem {
     /// Create a new ClipboardItem::Image with the given image with no associated metadata
     pub fn new_image(image: &Image) -> Self {
         Self {
+            mime_types: Vec::new(),
             entries: vec![ClipboardEntry::Image(image.clone())],
         }
     }
@@ -3281,6 +3291,7 @@ impl From<Image> for ClipboardEntry {
 impl From<ClipboardEntry> for ClipboardItem {
     fn from(value: ClipboardEntry) -> Self {
         Self {
+            mime_types: Vec::new(),
             entries: vec![value],
         }
     }

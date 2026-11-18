@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct SavedPane {
     pub id: u64,
+    pub side_chat_parent: Option<(String, String)>,
     pub composer: String,
     pub draft: Option<super::NewThreadDraft>,
     pub thread: Option<(String, String)>,
@@ -38,6 +39,7 @@ impl Layout {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn width(&self, target: u64, width: f32) -> Option<f32> {
         match self {
             Self::Pane(id) => (*id == target).then_some(width),

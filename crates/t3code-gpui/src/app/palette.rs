@@ -18,18 +18,12 @@ impl Root {
 
     pub(super) fn render_palette(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
-        let commands: [(&str, Box<dyn Action>); 22] = [
+        let commands: [(&str, Box<dyn Action>); 19] = [
             ("Search project contents", Box::new(ToggleProjectSearch)),
             (self.reference_label(), Box::new(CopyThreadReference)),
             ("Regenerate thread title", Box::new(RegenerateTitle)),
             ("Undo thread action", Box::new(UndoThreadAction)),
             ("Side chat", Box::new(OpenSideChat)),
-            ("Split conversation right", Box::new(SplitConversation)),
-            (
-                "Split conversation down",
-                Box::new(SplitConversationVertical),
-            ),
-            ("Close conversation pane", Box::new(CloseConversation)),
             ("Focus Next Workspace Area", Box::new(FocusNextWorkspace)),
             ("Reopen Closed Tab", Box::new(ReopenClosed)),
             ("New thread", Box::new(NewThread)),

@@ -85,6 +85,59 @@
         "name": "Search project contents"
       },
       "count": 0
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+f"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Search in UI parity",
+        "focused": true
+      },
+      "count": 1
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "3 Deterministic local workspace."
+      },
+      "count": 0
+    },
+    {
+      "action": "press",
+      "value": "shift+tab"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Use regular expression",
+        "focused": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "tab"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Search in UI parity",
+        "focused": true
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "press",
+      "value": "escape"
     }
   ]
 }

@@ -56,7 +56,7 @@ impl Root {
         let Some(open) = &self.conversation.open else {
             return;
         };
-        let (rows, queued, loading) = {
+        let (mut rows, queued, loading) = {
             let state = open.watch.state();
             let state = state.lock().expect("thread lock");
             (
@@ -65,6 +65,26 @@ impl Root {
                 state.projection.is_empty(),
             )
         };
+        if !loading && let Some((environment, parent)) = self.side_chat_parent.as_ref() {
+            let title = self
+                .thread_value(environment, parent)
+                .and_then(|thread| thread["title"].as_str().map(str::to_owned))
+                .unwrap_or_else(|| "Thread".into());
+            rows.insert(
+                0,
+                Row {
+                    message_part: None,
+                    key: format!("side-chat-context:{parent}"),
+                    kind: RowKind::Fork,
+                    text: title,
+                    live: false,
+                    pending: None,
+                    detail: "Context from".into(),
+                    link: None,
+                    children: vec![],
+                },
+            );
+        }
         self.conversation.revision += 1;
         let had_queue = !self.conversation.queued.is_empty();
         self.conversation.queued = queued;
@@ -592,16 +612,42 @@ impl Root {
                         .child("Loading thread…"),
                 )
             })
-            .when(!self.conversation.thread_loading, |pane| {
-                pane.child(
-                    self.conversation
-                        .timeline_pane
-                        .clone()
-                        .cached(StyleRefinement::default().flex_1().w_full()),
-                )
-            })
+            .when(
+                !self.conversation.thread_loading && self.conversation.rows.is_empty(),
+                |pane| {
+                    pane.child(
+                        div()
+                            .id("empty-conversation")
+                            .role(accesskit::Role::Label)
+                            .aria_value("Send a message to start the conversation.")
+                            .flex_1()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_sm()
+                            .text_color(theme.muted_foreground)
+                            .child("Send a message to start the conversation."),
+                    )
+                },
+            )
+            .when(
+                !self.conversation.thread_loading && !self.conversation.rows.is_empty(),
+                |pane| {
+                    pane.child(
+                        self.conversation
+                            .timeline_pane
+                            .clone()
+                            .cached(StyleRefinement::default().flex_1().w_full()),
+                    )
+                },
+            )
             .children(message)
-            .child(div().pt_6().child(self.render_composer(cx)))
+            .child(
+                div()
+                    .pt_6()
+                    .px(px(self.composer_gutter))
+                    .child(self.render_composer(cx)),
+            )
             .into_any_element()
     }
 }
