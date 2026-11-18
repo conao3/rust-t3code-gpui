@@ -1,5 +1,30 @@
 use super::*;
 
+pub(super) fn load_draft_sessions(
+    path: &std::path::Path,
+    pane: u64,
+) -> anyhow::Result<HashMap<String, NewThreadDraft>> {
+    let path = path.with_file_name(format!("draft-sessions-{pane}.json"));
+    match std::fs::read(path) {
+        Ok(data) => Ok(serde_json::from_slice(&data)?),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(HashMap::new()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn save_draft_sessions(
+    path: &std::path::Path,
+    pane: u64,
+    drafts: &HashMap<String, NewThreadDraft>,
+) -> anyhow::Result<()> {
+    let path = path.with_file_name(format!("draft-sessions-{pane}.json"));
+    std::fs::create_dir_all(path.parent().context("draft sessions directory")?)?;
+    let partial = path.with_extension("json.partial");
+    std::fs::write(&partial, serde_json::to_vec(drafts)?)?;
+    std::fs::rename(partial, path)?;
+    Ok(())
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum SubmissionIntent {
     Foreground,
@@ -318,12 +343,8 @@ impl Root {
     }
 
     pub(super) fn composer_key(&self) -> Option<String> {
-        if self.conversation.draft.is_some() {
-            return Some(format!(
-                "pane:{}:{}",
-                self.conversation.id,
-                drafts::NEW_THREAD
-            ));
+        if let Some(draft) = &self.conversation.draft {
+            return Some(format!("pane:{}:draft:{}", self.conversation.id, draft.id));
         }
         self.current().map(|(environment, thread_id)| {
             format!(
@@ -337,9 +358,7 @@ impl Root {
     /// Keeps the composer text as the draft of what the composer is for now. Call before the
     /// composer changes what it is for.
     pub(super) fn stash_composer(&mut self, cx: &mut Context<Self>) {
-        if let Some(draft) = &self.conversation.draft {
-            self.history_drafts.insert(draft.id.clone(), draft.clone());
-        }
+        let session_changed = self.remember_draft();
         if self.conversation.queue_edit.is_some() {
             return;
         }
@@ -363,13 +382,14 @@ impl Root {
                 .composer_attachments
                 .insert(key.clone(), self.conversation.attachments.clone());
         }
-        if self.drafts.set(&key, &text) || attachments_changed {
+        if self.drafts.set(&key, &text) || attachments_changed || session_changed {
             self.schedule_drafts_save(cx);
         }
     }
 
     /// Puts the draft of what the composer is for now into it, at the next render.
     pub(super) fn load_composer(&mut self) {
+        self.conversation.composer_choices.reset_routing();
         self.conversation.picker_open = false;
         self.abandon_queue_edit();
         self.conversation.attachments = self
@@ -388,7 +408,7 @@ impl Root {
         self.conversation.pending_composer = Some(text);
     }
 
-    fn schedule_drafts_save(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn schedule_drafts_save(&mut self, cx: &mut Context<Self>) {
         if self.drafts_save_scheduled {
             return;
         }
@@ -429,6 +449,16 @@ impl Root {
             let _ = this.update(cx, |root, cx| {
                 root.drafts_save_scheduled = false;
                 root.save_conversations();
+                for pane in std::iter::once(&root.conversation).chain(root.panes.values()) {
+                    if let Err(error) =
+                        save_draft_sessions(&root.drafts_path, pane.id, &pane.history_drafts)
+                    {
+                        root.conversation.message =
+                            Some(format!("Saving draft sessions failed: {error:#}"));
+                        cx.notify();
+                        break;
+                    }
+                }
                 let failed = !failures.is_empty();
                 for (id, message) in failures {
                     root.with_conversation(id, |root| {
@@ -693,7 +723,8 @@ impl Root {
             let saved = self
                 .history_drafts
                 .values()
-                .find(|draft| draft.group.as_deref() == group.map(|group| group.key.as_str()))
+                .filter(|draft| draft.group.as_deref() == group.map(|group| group.key.as_str()))
+                .max_by_key(|draft| draft.last_used)
                 .cloned();
             if let Some(draft) = saved {
                 self.stash_composer(cx);
@@ -733,7 +764,9 @@ impl Root {
             .filter(|m| !m.is_null());
         self.conversation.draft = Some(NewThreadDraft {
             id: uuid::Uuid::new_v4().to_string(),
+            last_used: 0,
             environment: None,
+            automatic: self.settings.values["loadBalancingEnabled"] == true,
             workspace_strategy: json!({"type":"root"}),
             group,
             carry,
@@ -754,6 +787,89 @@ impl Root {
         self.conversation.branch_request += 1;
         self.close_thread(cx);
         self.load_composer();
+        self.remember_draft();
+        self.schedule_drafts_save(cx);
+        cx.notify();
+    }
+
+    pub(super) fn remember_draft(&mut self) -> bool {
+        let Some(mut draft) = self.conversation.draft.clone() else {
+            return false;
+        };
+        if self.conversation.last_draft.as_ref() != Some(&draft.id) {
+            draft.last_used = self
+                .conversation
+                .history_drafts
+                .values()
+                .map(|draft| draft.last_used)
+                .max()
+                .unwrap_or(0)
+                + 1;
+            self.conversation.last_draft = Some(draft.id.clone());
+            self.conversation.draft = Some(draft.clone());
+        }
+        let changed = self.conversation.history_drafts.get(&draft.id) != Some(&draft);
+        self.conversation
+            .history_drafts
+            .insert(draft.id.clone(), draft);
+        changed
+    }
+
+    pub(super) fn select_draft_project(
+        &mut self,
+        group: String,
+        environment: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.conversation.draft.is_none() {
+            return;
+        }
+        self.stash_composer(cx);
+        let has_content = !self
+            .conversation
+            .composer
+            .read(cx)
+            .value()
+            .trim()
+            .is_empty()
+            || !self.conversation.attachments.is_empty();
+        if !has_content {
+            let saved = self
+                .conversation
+                .history_drafts
+                .values()
+                .filter(|draft| {
+                    draft.group.as_deref() == Some(&group)
+                        && environment.as_ref().is_none_or(|environment| {
+                            draft.environment.as_ref() == Some(environment)
+                        })
+                })
+                .max_by_key(|draft| draft.last_used)
+                .cloned();
+            let draft = saved.unwrap_or_else(|| NewThreadDraft {
+                id: uuid::Uuid::new_v4().to_string(),
+                last_used: 0,
+                environment: environment.clone(),
+                automatic: false,
+                workspace_strategy: json!({"type":"root"}),
+                group: Some(group.clone()),
+                carry: None,
+                model: None,
+                runtime_mode: None,
+                interaction_mode: "default".into(),
+            });
+            self.history
+                .visit(crate::navigation::Target::Draft(draft.id.clone()));
+            self.conversation.draft = Some(draft);
+            self.load_composer();
+        } else if let Some(draft) = &mut self.conversation.draft {
+            draft.group = Some(group);
+            draft.environment = environment;
+            draft.automatic = false;
+            draft.workspace_strategy = json!({"type":"root"});
+        }
+        self.remember_draft();
+        self.schedule_drafts_save(cx);
         cx.notify();
     }
 
@@ -793,6 +909,24 @@ impl Root {
     }
 
     fn launch(&mut self, intent: SubmissionIntent, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .conversation
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.automatic && draft.environment.is_none())
+            && self.project_groups().iter().any(|group| {
+                self.conversation
+                    .draft
+                    .as_ref()
+                    .and_then(|draft| draft.group.as_ref())
+                    == Some(&group.key)
+                    && group.members.len() > 1
+            })
+        {
+            self.conversation.message = Some("Auto balance unavailable".into());
+            cx.notify();
+            return;
+        }
         let text = self
             .conversation
             .composer
@@ -879,16 +1013,33 @@ impl Root {
             });
             let _ = this.update_in(cx, |root, window, cx| match launched {
                 Ok(thread_id) => {
+                    root.history
+                        .promote_draft(&promoting.1, &environment, &thread_id);
+                    root.conversation.history_drafts.remove(&promoting.1);
+                    root.schedule_drafts_save(cx);
                     if root.conversation.draft.as_ref().map(|draft| &draft.id) != Some(&promoting.1)
                     {
                         return;
                     }
                     if intent == SubmissionIntent::Background {
-                        root.new_thread(window, cx);
+                        let mut next = root.conversation.draft.take().expect("promoted draft");
+                        next.id = uuid::Uuid::new_v4().to_string();
+                        next.last_used = 0;
+                        next.workspace_strategy = json!({"type":"root"});
+                        if next.automatic {
+                            next.environment = None;
+                        }
+                        root.history
+                            .visit(crate::navigation::Target::Draft(next.id.clone()));
+                        root.conversation.draft = Some(next);
+                        root.load_composer();
+                        root.remember_draft();
+                        root.schedule_drafts_save(cx);
                         root.background_started(environment, thread_id, window, cx);
                     } else {
                         root.open_thread(environment, thread_id, cx);
                     }
+                    root.conversation.history_drafts.remove(&promoting.1);
                 }
                 Err(error) => {
                     root.conversation.message = Some(format!("New thread failed: {error:#}"));
@@ -2718,6 +2869,40 @@ pub(super) async fn upload_all(
 
 #[cfg(test)]
 mod send_tests {
+    #[test]
+    fn saved_sessions_keep_drafts_and_panes_independent() {
+        use super::*;
+        let directory = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let path = directory.join("drafts.json");
+        let mut drafts = HashMap::new();
+        for (id, host, project) in [("one", "helios", "a"), ("two", "eos", "b")] {
+            drafts.insert(
+                id.to_string(),
+                NewThreadDraft {
+                    id: id.into(),
+                    last_used: 0,
+                    environment: Some(host.into()),
+                    automatic: false,
+                    workspace_strategy: json!({"type":"root"}),
+                    group: Some(project.into()),
+                    carry: None,
+                    model: Some(json!({"instanceId":"codex","model":"luna"})),
+                    runtime_mode: Some("full-access".into()),
+                    interaction_mode: "plan".into(),
+                },
+            );
+        }
+        save_draft_sessions(&path, 1, &drafts).unwrap();
+        assert_eq!(load_draft_sessions(&path, 1).unwrap(), drafts);
+        assert!(load_draft_sessions(&path, 2).unwrap().is_empty());
+        drafts.remove("one");
+        save_draft_sessions(&path, 1, &drafts).unwrap();
+        assert_eq!(load_draft_sessions(&path, 1).unwrap(), drafts);
+        std::fs::write(directory.join("draft-sessions-2.json"), b"invalid").unwrap();
+        assert!(load_draft_sessions(&path, 2).is_err());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
     use super::delivery;
     use serde_json::Value;
     use t3_client::session::Delivery;

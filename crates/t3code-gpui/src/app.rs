@@ -373,10 +373,12 @@ struct Completion {
     selected: usize,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct NewThreadDraft {
     id: String,
+    last_used: u64,
     environment: Option<String>,
+    automatic: bool,
     workspace_strategy: Value,
     group: Option<String>,
     carry: Option<Value>,
@@ -512,7 +514,6 @@ pub struct Root {
     sidebar_resizing: bool,
     window_drag_pending: bool,
     history: crate::navigation::History,
-    history_drafts: HashMap<String, NewThreadDraft>,
     sidebar_pane: Entity<SidebarPane>,
     sidebar_header: sidebar_header::State,
     sidebar_scroll: ScrollHandle,
@@ -782,7 +783,6 @@ impl Root {
             sidebar_resizing: false,
             window_drag_pending: false,
             history: crate::navigation::History::default(),
-            history_drafts: HashMap::new(),
             sidebar_pane: cx.new(|_| SidebarPane {
                 root: sidebar_root.clone(),
             }),
@@ -1572,12 +1572,7 @@ impl Render for Root {
                 root.toggle_model_picker(window, cx)
             }))
             .on_action(cx.listener(|root, action: &PickProjectAction, _, cx| {
-                if let Some(draft) = root.conversation.draft.as_mut() {
-                    draft.group = Some(action.key.clone());
-                    draft.environment = None;
-                    draft.workspace_strategy = json!({"type":"root"});
-                    cx.notify();
-                }
+                root.select_draft_project(action.key.clone(), None, cx);
             }))
             .on_action(cx.listener(|root, action: &PickModelAction, _, cx| {
                 root.pick_model(action.instance_id.clone(), action.slug.clone(), cx)

@@ -90,9 +90,8 @@ impl Root {
                             .find(|g| g.contains(&environment, &project_id))
                             .map(|g| g.key.clone());
                         root.new_thread(window, cx);
-                        if let Some(draft) = root.conversation.draft.as_mut() {
-                            draft.group = group;
-                            draft.environment = Some(environment);
+                        if let Some(group) = group {
+                            root.select_draft_project(group, Some(environment), cx);
                         }
                     }
                     Err(error) => {

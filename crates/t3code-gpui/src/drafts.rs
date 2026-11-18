@@ -3,14 +3,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
 
-/// Unsent composer text per thread (`<host>/<thread id>`) and for the new-thread pane (`new`),
+/// Unsent composer text keyed by pane and thread or draft ID,
 /// kept on disk so it survives a restart.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Drafts {
     texts: BTreeMap<String, String>,
 }
-
-pub const NEW_THREAD: &str = "new";
 
 pub fn thread_key(environment: &str, thread_id: &str) -> String {
     format!("{environment}/{thread_id}")
@@ -95,7 +93,7 @@ mod tests {
         assert_eq!(Drafts::load(&path).unwrap(), Drafts::default());
         let mut drafts = Drafts::default();
         drafts.set(&thread_key("eos", "t1"), "日本語の下書き");
-        drafts.set(NEW_THREAD, "new idea");
+        drafts.set("pane:1:draft:first", "new idea");
         drafts.save(&path).unwrap();
         let loaded = Drafts::load(&path).unwrap();
         assert_eq!(loaded.get("eos/t1"), Some("日本語の下書き"));
