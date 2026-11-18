@@ -451,6 +451,7 @@ impl Render for DiagramView {
                             window.open_dialog(cx, move |dialog, window, _| {
                                 dialog
                                     .accessibility_label("Expanded image preview")
+                                    .keyboard(false)
                                     .close_button(false)
                                     .centered()
                                     .p_0()
@@ -460,6 +461,13 @@ impl Render for DiagramView {
                                     .child(
                                         div()
                                             .relative()
+                                            .top(px(18.))
+                                            .on_key_down(|event: &KeyDownEvent, window, cx| {
+                                                if event.keystroke.key == "escape" {
+                                                    window.close_dialog(cx);
+                                                    cx.stop_propagation();
+                                                }
+                                            })
                                             .h(window.viewport_size().height * 0.86)
                                             .flex()
                                             .flex_col()
@@ -541,6 +549,10 @@ impl Render for DiagramImage {
         let fit = (width / self.graphic.width).min(height / self.graphic.height);
         div()
             .id("diagram-zoom")
+            .bg(black())
+            .border_1()
+            .border_color(white().opacity(0.08))
+            .rounded_lg()
             .role(accesskit::Role::Region)
             .aria_label("Mermaid diagram, zoomable image")
             .aria_description("Click to zoom in or return to fit. Pinch or Ctrl+scroll to zoom, scroll or drag to pan. Use Enter to toggle zoom, plus or minus to zoom, and 0 to fit.")
