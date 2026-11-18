@@ -1,4 +1,4 @@
-use chrono::{DateTime, Days, Duration, TimeZone, Timelike};
+use chrono::{DateTime, Datelike, Days, Duration, Offset, TimeZone, Timelike};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -37,6 +37,58 @@ pub(super) fn count(value: f64) -> String {
         result.push(ch);
     }
     result
+}
+
+pub(super) fn hour_label(source: &str, zone: chrono_tz::Tz, hour12: bool) -> String {
+    let Ok(value) = DateTime::parse_from_rfc3339(source) else {
+        return source.to_string();
+    };
+    let value = value.with_timezone(&zone);
+    let repeated = [-1, 1].into_iter().any(|hours| {
+        let other = value + Duration::hours(hours);
+        value.date_naive() == other.date_naive() && value.hour() == other.hour()
+    });
+    let hour = if hour12 {
+        value.format("%-I %p").to_string()
+    } else {
+        format!("{:02}:00", value.hour())
+    };
+    if repeated {
+        use icu_datetime::NoCalendarFormatter;
+        use icu_datetime::fieldsets::zone::SpecificShort;
+        use icu_datetime::input::{
+            Date, DateTime as IcuDateTime, Time, TimeZone as IcuZone, UtcOffset,
+        };
+        thread_local! {
+            static FORMATTER: NoCalendarFormatter<SpecificShort> = NoCalendarFormatter::try_new(
+                "en-US"
+                    .parse::<icu_locale_core::Locale>()
+                    .expect("usage locale")
+                    .into(),
+                SpecificShort,
+            )
+            .expect("usage zone formatter");
+        }
+        let zone = IcuZone::from_iana_id(zone.name())
+            .with_offset(Some(
+                UtcOffset::try_from_seconds(value.offset().fix().local_minus_utc())
+                    .expect("zone offset"),
+            ))
+            .at_date_time(IcuDateTime {
+                date: Date::try_new_gregorian(value.year(), value.month() as u8, value.day() as u8)
+                    .expect("usage date"),
+                time: Time::try_new(
+                    value.hour() as u8,
+                    value.minute() as u8,
+                    value.second() as u8,
+                    0,
+                )
+                .expect("usage time"),
+            });
+        FORMATTER.with(|formatter| format!("{hour} {}", formatter.format(&zone)))
+    } else {
+        hour
+    }
 }
 
 pub(super) fn usd(value: f64) -> String {
@@ -186,6 +238,8 @@ fn source_buckets<'a>(summary: &'a Value, source: &Value) -> Vec<&'a Value> {
 pub(super) struct Totals {
     pub cost: f64,
     pub tokens: [f64; 5],
+    pub category_cost: [f64; 4],
+    pub speed_cost: [f64; 3],
     pub records: f64,
     pub unpriced: f64,
     pub sessions: f64,
@@ -208,6 +262,18 @@ impl Totals {
         .enumerate()
         {
             self.tokens[index] += number(&bucket["totals"], key);
+        }
+        for (index, key) in ["input", "cacheRead", "cacheWrite", "output"]
+            .iter()
+            .enumerate()
+        {
+            self.category_cost[index] += number(&bucket["categoryCostUsd"], key);
+        }
+        for (index, key) in ["fastCostUsd", "ultrafastCostUsd", "speedPremiumUsd"]
+            .iter()
+            .enumerate()
+        {
+            self.speed_cost[index] += number(bucket, key);
         }
         self.records += number(bucket, "records");
         self.unpriced += number(bucket, "unpricedRecords");
@@ -453,6 +519,30 @@ pub(super) fn percent(share: f64) -> String {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn hourly_labels_distinguish_repeated_hours_and_follow_clock_format() {
+        let zone = chrono_tz::America::New_York;
+        for (source, hour12, expected) in [
+            ("2026-11-01T05:37:00Z", true, "1 AM EDT"),
+            ("2026-11-01T06:37:00Z", true, "1 AM EST"),
+            ("2026-11-01T05:37:00Z", false, "01:00 EDT"),
+            ("2026-11-01T06:37:00Z", false, "01:00 EST"),
+            ("2026-11-01T07:37:00Z", false, "02:00"),
+            ("2026-11-01T17:37:00Z", true, "12 PM"),
+            ("invalid", false, "invalid"),
+        ] {
+            assert_eq!(super::hour_label(source, zone, hour12), expected);
+        }
+        for (source, expected) in [
+            ("2026-10-25T00:37:00Z", "02:00 GMT+2"),
+            ("2026-10-25T01:37:00Z", "02:00 GMT+1"),
+        ] {
+            assert_eq!(
+                super::hour_label(source, chrono_tz::Europe::Berlin, false),
+                expected
+            );
+        }
+    }
+    #[test]
     fn unpriced_share_retains_small_positive_values_and_decimal_precision() {
         for (share, expected) in [
             (0., "0.0%"),
@@ -541,7 +631,7 @@ mod tests {
     }
     #[test]
     fn duplicate_sources_and_reasoning_do_not_inflate_totals() {
-        let summary = json!({"contractVersion":6,"readAt":"2026-11-18T00:00:00Z","sources":[{"fingerprint":{"hostId":"host","provider":"codex","resolvedHomePath":"/home","volumeId":"1"},"status":"ok","distinctSessions":2}],"buckets":[{"provider":"codex","model":"model","day":"2026-11-18","totals":{"uncachedInputTokens":100,"cachedInputTokens":40,"cacheCreationTokens":10,"outputTokens":30,"reasoningTokens":20},"costUsd":1.5,"records":2,"unpricedRecords":0,"sessions":2}]});
+        let summary = json!({"contractVersion":6,"readAt":"2026-11-18T00:00:00Z","sources":[{"fingerprint":{"hostId":"host","provider":"codex","resolvedHomePath":"/home","volumeId":"1"},"status":"ok","distinctSessions":2}],"buckets":[{"provider":"codex","model":"model","day":"2026-11-18","totals":{"uncachedInputTokens":100,"cachedInputTokens":40,"cacheCreationTokens":10,"outputTokens":30,"reasoningTokens":20},"costUsd":1.5,"categoryCostUsd":{"input":0.5,"cacheRead":0.125,"cacheWrite":0.125,"output":0.75},"fastCostUsd":0.5,"ultrafastCostUsd":0.25,"speedPremiumUsd":0.125,"records":2,"unpricedRecords":0,"sessions":2}]});
         let merged = merge(
             &[("a".into(), summary.clone()), ("b".into(), summary)],
             &HashSet::new(),
@@ -549,6 +639,12 @@ mod tests {
         assert_eq!(merged.totals.total_tokens(), 180.);
         assert_eq!(merged.totals.sessions, 2.);
         assert_eq!(merged.totals.cost, 1.5);
+        assert_eq!(merged.totals.category_cost, [0.5, 0.125, 0.125, 0.75]);
+        assert_eq!(merged.totals.speed_cost, [0.5, 0.25, 0.125]);
+        assert_eq!(
+            merged.models.values().next().unwrap().category_cost,
+            merged.totals.category_cost
+        );
         assert_eq!(merged.warnings.len(), 1);
     }
 }

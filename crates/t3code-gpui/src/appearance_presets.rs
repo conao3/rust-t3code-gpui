@@ -102,7 +102,7 @@ impl Palette {
     }
 }
 
-fn mix_oklab(from: Hsla, to: Hsla, amount: f32) -> Hsla {
+pub(crate) fn mix_oklab(from: Hsla, to: Hsla, amount: f32) -> Hsla {
     let lab = |color: Hsla| {
         let color: Rgba = color.into();
         let linear = |c: f32| {
