@@ -192,3 +192,47 @@ The developer checks include driver regression tests. GUI comparison requires an
 `usage_chart_oracle.mjs ORIGINAL_ROOT OUTPUT` extracts the pinned reference's scale and monotone tangent functions and records their results for the native chart tests. The chart retains independent provider areas rather than stacking provider values.
 
 `env.py up --slot N --pr-rpc-fixture tools/parity/pr-rpc-fixture.json` fixes PR RPC responses in both isolated servers. The Node preload intercepts server WebSocket requests before dispatch; every `pullRequests.*` method is either answered by the JSON fixture or rejected. It never passes an unconfigured PR method to a real host. Each server records PR method names and inputs in its own `home/pr-rpc.jsonl`, including review submissions. The frontend bundle and input paths remain unchanged. The fixture is read on each request, so separate empty, running, failed, stale and completed guide states can be selected without changing application state. Enable `reviewGuidesEnabled` through the isolated server settings for Guide scenarios. The fixture certifies client behavior and payloads, not a real forge's review processing.
+
+### Multiple hosts inside one slot
+
+`host_fixture.py` adds one independent mock server per application on the slot's
+base port + 3 and + 4. Each application then has two environments and two copies
+of the `Multi host fixture` project, grouped by their identical repository
+origin. Environment identities, tokens, provider homes and working directories
+remain independent. The helper rejects an unowned manifest, a changed generation
+or an allocation that does not belong to that slot.
+
+The Electron connection catalog requires secure storage. Start a fresh slot with
+`keyring_reference.py` as its reference executable. This requires
+`gnome-keyring-daemon` on PATH and creates an empty-password fixture keyring on
+Electron's private D-Bus, with data and control files in the slot generation.
+Its processes carry the slot owner marker and are stopped by `env.py down`.
+
+```sh
+nix develop --command python3 tools/parity/env.py up --slot 5 \
+  --native-binary target/debug/t3code-gpui \
+  --reference-binary tools/parity/keyring_reference.py
+nix develop --command python3 tools/parity/host_fixture.py \
+  --manifest /path/to/main/.claude-dev/parity/slots/5/manifest.json \
+  --primary-label helios
+```
+
+Use your allocated slot number and main checkout path. `--primary-label` is the
+primary machine name displayed by Electron; the helper uses that name for the
+native connection too. `--label` chooses the secondary name (default
+`parity-secondary`). The helper registers the Electron connection catalog,
+updates the native configuration, and restarts only the native client. It binds
+`composer.cycleHost` to `Ctrl+Alt+H` on all four fixture servers. Host switching,
+draft editing and submission must then be tested through normal UI input.
+
+The helper writes `multi-host/fixture.json` with the environment identities,
+workspace paths and shortcut. The adjacent `configurations.json` contains fixture
+tokens and is private. Run the helper once per fresh generation; `env.py reset`
+creates a new generation without the additional hosts.
+
+Select `Multi host fixture` in both clients before running `composer-host.json`.
+It uses the project's `New thread in Multi host fixture` button, switches hosts
+with the selector and `Ctrl+Alt+H`, checks that the draft text follows the chosen
+host, and submits on the secondary host. The global `New thread` project palette
+is a separate behavior: do not count it as verified by this scenario. Compare the
+secondary servers' message/run state as well as the primary servers' state.
