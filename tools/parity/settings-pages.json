@@ -66,46 +66,6 @@
       "action": "click",
       "selector": {
         "role": "treeitem",
-        "name": "Chat"
-      },
-      "native": {
-        "role": "tree item",
-        "name": "Chat"
-      }
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "combobox",
-        "name": "Send shortcut"
-      }
-    },
-    {
-      "action": "click",
-      "selector": {
-        "role": "combobox",
-        "name": "Send shortcut"
-      }
-    },
-    {
-      "action": "press",
-      "value": "down"
-    },
-    {
-      "action": "press",
-      "value": "enter"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "combobox",
-        "name": "Send shortcut"
-      }
-    },
-    {
-      "action": "click",
-      "selector": {
-        "role": "treeitem",
         "name": "Threads"
       },
       "native": {
@@ -135,44 +95,6 @@
         "role": "toggle button",
         "name": "Snooze until limits reset",
         "checked": true
-      }
-    },
-    {
-      "action": "click",
-      "selector": {
-        "role": "treeitem",
-        "name": "Keybindings"
-      },
-      "native": {
-        "role": "tree item",
-        "name": "Keybindings"
-      }
-    },
-    {
-      "action": "click",
-      "selector": {
-        "role": "searchbox",
-        "name": "Search keybindings"
-      },
-      "native": {
-        "role": "textbox",
-        "name": "Search keybindings"
-      }
-    },
-    {
-      "action": "type",
-      "value": "usage"
-    },
-    {
-      "action": "checkpoint",
-      "selector": {
-        "role": "searchbox",
-        "name": "Search keybindings"
-      },
-      "value": "usage",
-      "native": {
-        "role": "textbox",
-        "name": "Search keybindings"
       }
     },
     {

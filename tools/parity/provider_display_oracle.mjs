@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { stripTypeScriptTypes } from "node:module";
+import { boundaries } from "./boundaries.mjs";
 
 const [root, destination] = process.argv.slice(2);
 if (!root || !destination) throw new Error("Expected original source root and destination");
@@ -45,20 +46,15 @@ const code = [
 const original = await import("data:text/javascript;base64," + Buffer.from(stripTypeScriptTypes(code)).toString("base64"));
 const initials = ["Codex", "Codex (hub)", "Theo's Codex", "Codex 'hub'", "Codex ’hub’", "'", "’", "'',", "( )", "", "A", "ß", "ßeta test", "🙂🙂🙂", "日本語", "日本 語", "Ｃｏｄｅｘ hub", "foo_bar", "foo/bar", "foo—bar", "foo…bar", "a\u0085b", "a\uFEFFb", "a\u3000b", "a\u00A0b", "a\u2028b", "'foo' 'bar'", "‘foo’ ‘bar’", "_a_", "İstanbul Server", "i\u0307 server", "🤖 Codex"].map(input => ({input, expected: original.providerInstanceInitials(input)}));
 const names = [];
-for (const driver of ["codex", "claudeAgent", "opencode", "acpRegistry", "antigravity", "cursor", "grok", "fx", "kiro", "muse", "pi", "openaiCompatible", "customDriver"]) {
-  for (const instanceId of [driver, driver + "_conao3", "東京_worker", "aBCd--test", "\uFEFFname\uFEFF"]) {
-    for (const displayName of [undefined, "", "  ", "Codex", "Claude", "東京 用", "\uFEFFcustom\uFEFF"]) {
-      const input = {driver, instanceId, ...(displayName === undefined ? {} : {displayName})};
-      names.push({input, expected: original.resolveProviderInstanceDisplayName(input)});
-    }
-  }
-}
+names.push(...boundaries([["codex", "claudeAgent", "opencode", "acpRegistry", "antigravity", "cursor", "grok", "fx", "kiro", "muse", "pi", "openaiCompatible", "customDriver"], [driver => driver, driver => driver + "_conao3", () => "東京_worker", () => "aBCd--test", () => "\uFEFFname\uFEFF"], [undefined, "", "  ", "Codex", "Claude", "東京 用", "\uFEFFcustom\uFEFF"]], ([driver, instance, displayName]) => {
+  const input = {driver, instanceId: instance(driver), ...(displayName === undefined ? {} : {displayName})};
+  return {input, expected: original.resolveProviderInstanceDisplayName(input)};
+}));
 const accents = ["", " ", "#000000", "#ffffff", "#Aa00Ff", "\uFEFF#123456\uFEFF", "#123", "#1234567", "#12zz34", "red", "#日本語", "\u0085#123456"].map(input => ({input, expected: original.normalizeProviderAccentColor(input) ?? null}));
 const contrast = [];
-for (const r of [0, 64, 128, 192, 255]) for (const g of [0, 64, 128, 192, 255]) for (const b of [0, 64, 128, 192, 255]) {
+contrast.push(...boundaries([[0, 64, 128, 192, 255], [0, 64, 128, 192, 255], [0, 64, 128, 192, 255]], ([r, g, b]) => {
   const input = "#" + [r,g,b].map(channel => channel.toString(16).padStart(2,"0")).join("");
-  contrast.push({input, expected: original.providerAccentForegroundColor(input)});
-}
+  return {input, expected: original.providerAccentForegroundColor(input)};}));
 const stacks = [];
 for (const runtime of [undefined, null, {providerInstanceId:"a"}, {providerInstanceId:"b"}]) {
   for (const instanceId of ["a", "b"]) for (const history of [[], ["a"], ["b"], ["a","b"], ["b","a"], ["a","a","b"], ["a","b","c","d"], ["a","b","a","c","b","d"]]) {

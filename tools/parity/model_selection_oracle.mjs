@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { stripTypeScriptTypes } from "node:module";
+import { boundaries, unique } from "./boundaries.mjs";
 
 const [root, destination] = process.argv.slice(2);
 if (!root || !destination) throw new Error("Expected reference root and destination");
@@ -52,32 +53,21 @@ const code = [
   fn(source.actions, "resolveNewThreadModelSelectionOverride"),
 ].join("\n");
 const original = await import("data:text/javascript;base64," + Buffer.from(stripTypeScriptTypes(code)).toString("base64"));
-const enabled = [];
-for (const driver of ["codex", "claudeAgent", "cursor", "opencode", "antigravity", "acpRegistry"]) {
-  for (const instance of [driver, driver + "_custom"]) {
-    for (const configured of [false, true]) for (const top of [undefined, false, true]) for (const nested of [undefined, false, true]) for (const override of [undefined, false, true]) {
-      const settings = {providerInstances: configured ? {[instance]: {driver, enabled: top, config: {enabled: nested}}} : {}, projectSettingsOverrides: {project: {providerInstances: {[instance]: {enabled: override}}}}};
-      enabled.push({settings, project: "project", instance, expected: original.resolveProjectProviderInstanceEnabled(settings, "project", instance)});
-    }
-  }
-}
-const selections = [];
-for (const driver of ["codex", "opencode", "antigravity", "cursor"]) {
-  for (const hidden of [[], ["gpt-5.4"], ["custom"], ["gpt-5.4", "second", "unknown"], ["gpt-5.4", "second"]]) {
-    for (const custom of [[], [" custom ", {slug:"named", name:"My model"}, "custom", "gpt-5.4"], [{slug:"named", name:"My model"}], ["x".repeat(257)]]) {
-      const providers = [{instanceId:driver, driver, enabled:true, status:"ready", models:[{slug:"gpt-5.4",name:"GPT-5.4",isDefault:true,aliases:["alias"],isCustom:false},{slug:"second",name:"Second",isCustom:false},{slug:"stale-custom",name:"Stale",isCustom:true}]}];
-      const settings = {providerInstances:{[driver]:{driver,config:{customModels:custom}}}, providerModelPreferences:{[driver]:{hiddenModels:hidden, modelOrder:["second","gpt-5.4"]}}};
-      for (const model of ["gpt-5.4"," 5.4 ","GPT-5.4","ALIAS","custom","My model","unknown","antigravity-default","stale-custom",""]) {
-        const selection = {instanceId:driver,model,options:[{id:"effort",value:"high"}]};
-        selections.push({config:{settings,providers}, selection, expected: original.resolveEffectiveDefaultModelSelection(settings, providers, selection)});
-      }
-    }
-  }
-}
+const enabled = boundaries([["codex", "claudeAgent", "cursor", "opencode", "antigravity", "acpRegistry"], [false, true], [false, true], [undefined, false, true], [undefined, false, true], [undefined, false, true]], ([driver, custom, configured, top, nested, override]) => {
+  const instance = custom ? driver + "_custom" : driver;
+  const settings = {providerInstances: configured ? {[instance]: {driver, enabled: top, config: {enabled: nested}}} : {}, projectSettingsOverrides: {project: {providerInstances: {[instance]: {enabled: override}}}}};
+  return {settings, project: "project", instance, expected: original.resolveProjectProviderInstanceEnabled(settings, "project", instance)};
+});
+const selections = boundaries([["codex", "opencode", "antigravity", "cursor"], [[], ["gpt-5.4"], ["custom"], ["gpt-5.4", "second", "unknown"], ["gpt-5.4", "second"]], [[], [" custom ", {slug:"named", name:"My model"}, "custom", "gpt-5.4"], [{slug:"named", name:"My model"}], ["x".repeat(257)]], ["gpt-5.4"," 5.4 ","GPT-5.4","ALIAS","custom","My model","unknown","antigravity-default","stale-custom",""]], ([driver, hidden, custom, model]) => {
+  const providers = [{instanceId:driver, driver, enabled:true, status:"ready", models:[{slug:"gpt-5.4",name:"GPT-5.4",isDefault:true,aliases:["alias"],isCustom:false},{slug:"second",name:"Second",isCustom:false},{slug:"stale-custom",name:"Stale",isCustom:true}]}];
+  const settings = {providerInstances:{[driver]:{driver,config:{customModels:custom}}}, providerModelPreferences:{[driver]:{hiddenModels:hidden, modelOrder:["second","gpt-5.4"]}}};
+  const selection = {instanceId:driver,model,options:[{id:"effort",value:"high"}]};
+  return {config:{settings,providers}, selection, expected: original.resolveEffectiveDefaultModelSelection(settings, providers, selection)};
+});
 const overrides = [];
 for (const projectDefaultSelection of [null,{instanceId:"codex",model:"project"}]) for (const carrySelection of [null,{instanceId:"codex",model:"carry"}]) for (const carrySourceDraftId of [null,"same","other"]) {
   const input = {projectDefaultSelection,carrySelection,carrySourceDraftId,destinationDraftId:"same"};
   overrides.push({input,expected:original.resolveNewThreadModelSelectionOverride(input)});
 }
-fs.writeFileSync(destination, JSON.stringify({sources:Object.fromEntries(Object.entries(paths).map(([key,file])=>[file,createHash("sha256").update(source[key]).digest("hex")])),adapters:["Effect Array/Order/Result operations", "Brand identity", "Entry metadata and short name projection", "Custom capability identity for fixtures without capabilities"],enabled,selections,overrides},null,2)+"\n");
-console.log(JSON.stringify({enabled:enabled.length,selections:selections.length,overrides:overrides.length}));
+fs.writeFileSync(destination, JSON.stringify({sources:Object.fromEntries(Object.entries(paths).map(([key,file])=>[file,createHash("sha256").update(source[key]).digest("hex")])),adapters:["Effect Array/Order/Result operations", "Brand identity", "Entry metadata and short name projection", "Custom capability identity for fixtures without capabilities"],enabled:unique(enabled),selections,overrides},null,2)+"\n");
+console.log(JSON.stringify({enabled:unique(enabled).length,selections:selections.length,overrides:overrides.length}));

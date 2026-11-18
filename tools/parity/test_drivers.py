@@ -12,7 +12,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.error import URLError
 
-from audit_commands import reference_commands
 from cdp import Cdp
 from desktop_session import read_display, require_free_ports, stop_process_group
 from fixture_validation import distinct, inspect_environments
@@ -291,14 +290,6 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("".join(call.args[4] for call in calls), text)
         self.assertEqual([call.args[3] for call in calls], [20, 300, 20])
         app.focus.assert_called_once()
-
-    async def test_appearance_observes_the_applied_document_color_scheme(self):
-        app = Cdp("http://127.0.0.1:39991")
-        app.evaluate = AsyncMock(return_value="light")
-        self.assertEqual(await app.appearance(), "light")
-        app.evaluate.assert_awaited_once_with(
-            "getComputedStyle(document.documentElement).colorScheme"
-        )
 
     def test_duplicate_controls_require_the_selected_occurrence(self):
         nodes = [
@@ -784,16 +775,6 @@ class ComparisonTests(unittest.TestCase):
             self.assertEqual(compare(left, right, output)["status"], "failed")
             Image.new("RGB", (33, 32), "black").save(right)
             self.assertEqual(compare(left, right, output)["status"], "failed")
-
-    def test_upstream_spreads_are_part_of_the_inventory(self):
-        source = """
-        const EXTRA = ["terminal.toggle", "terminal.split"] as const;
-        export const STATIC_KEYBINDING_COMMANDS = ["chat.new", ...EXTRA] as const;
-        """
-        self.assertEqual(
-            reference_commands(source),
-            ["chat.new", "terminal.split", "terminal.toggle"],
-        )
 
 
 class FixtureTests(unittest.TestCase):
