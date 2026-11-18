@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import logging
 import os
 import subprocess
 import time
@@ -214,7 +215,78 @@ class Native:
             raise RuntimeError(f"Target cannot take focus: {role} {name!r}")
         node.queryComponent().scrollTo(self.atspi.SCROLL_ANYWHERE)
         time.sleep(0.1)
-        return node
+        for attempt in range(16):
+            nodes = self.tree()
+            matches = [
+                item for item in nodes if item["role"] == role and item["name"] == name
+            ]
+            if not 0 <= index < len(matches):
+                raise RuntimeError(
+                    f"Target disappeared while revealing: {role} {name!r}"
+                )
+            target = matches[index]
+            rect = target["bounds"]
+            if rect is None or rect["width"] <= 0 or rect["height"] <= 0:
+                raise RuntimeError(f"Target has no bounds: {role} {name!r}")
+            viewport = next(
+                item["bounds"]
+                for item in nodes
+                if item["name"] == "Application content"
+            )
+            for ancestor in target["ancestors"]:
+                candidates = [
+                    item["bounds"]
+                    for item in nodes
+                    if item["role"] == ancestor["role"]
+                    and item["name"] == ancestor["name"]
+                    and item["bounds"] is not None
+                ]
+                if len(candidates) != 1:
+                    continue
+                bounds = candidates[0]
+                left = max(viewport["x"], bounds["x"])
+                top = max(viewport["y"], bounds["y"])
+                right = min(
+                    viewport["x"] + viewport["width"], bounds["x"] + bounds["width"]
+                )
+                bottom = min(
+                    viewport["y"] + viewport["height"], bounds["y"] + bounds["height"]
+                )
+                if right > left and bottom > top:
+                    viewport = {
+                        "x": left,
+                        "y": top,
+                        "width": right - left,
+                        "height": bottom - top,
+                    }
+            center_x = rect["x"] + rect["width"] // 2
+            center_y = rect["y"] + rect["height"] // 2
+            if (
+                viewport["x"] <= center_x < viewport["x"] + viewport["width"]
+                and viewport["y"] <= center_y < viewport["y"] + viewport["height"]
+            ):
+                return self.snapshot_controls[(role, name)][index]
+            if attempt == 0:
+                logging.getLogger(__name__).warning(
+                    "Revealing off-screen native control with X11 wheel input: %s %r",
+                    role,
+                    name,
+                )
+            self.xdo(
+                "mousemove",
+                viewport["x"] + viewport["width"] // 2,
+                viewport["y"] + viewport["height"] // 2,
+            )
+            self.xdo(
+                "click",
+                "--repeat",
+                3,
+                "--delay",
+                40,
+                4 if center_y < viewport["y"] else 5,
+            )
+            time.sleep(0.15)
+        raise RuntimeError(f"Could not reveal native control: {role} {name!r}")
 
     def click(self, role, name, index=0):
         self.focus()
