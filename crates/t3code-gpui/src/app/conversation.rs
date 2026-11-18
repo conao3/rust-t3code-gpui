@@ -769,7 +769,12 @@ impl Root {
         {
             layout = layout.and_then(|layout| layout.remove(pane.id));
         }
-        self.render_conversation_layout(&layout.expect("main conversation"), vec![], cx)
+        super::conversation_accessibility::Surface::new(self.render_conversation_layout(
+            &layout.expect("main conversation"),
+            vec![],
+            cx,
+        ))
+        .into_any_element()
     }
 
     fn render_conversation_layout(
