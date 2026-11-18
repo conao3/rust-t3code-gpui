@@ -359,7 +359,7 @@ impl Root {
                         .rounded_md()
                         .border_1()
                         .border_color(cx.theme().border)
-                        .bg(crate::appearance::composer(cx).opacity(1.))
+                        .bg(crate::appearance::color("surface", !cx.theme().mode.is_dark()))
                         .shadow_md()
                 })
                 .gap_1()
