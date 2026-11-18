@@ -1913,6 +1913,13 @@ impl Root {
                     })),
             );
         let picker = self.conversation.picker_open.then(|| {
+            let searching = !self
+                .conversation
+                .model_picker
+                .read(cx)
+                .query(cx)
+                .trim()
+                .is_empty();
             let shown = instances
                 .iter()
                 .find(|i| Some(&i.instance_id) == self.conversation.picker_instance.as_ref())
@@ -1929,11 +1936,13 @@ impl Root {
                                 && favorite["model"] == model.slug
                         })
                     });
-                    if if favorite_tab {
-                        !favorite
-                    } else {
-                        !shown.is_some_and(|shown| shown.instance_id == instance.instance_id)
-                    } {
+                    if !searching
+                        && if favorite_tab {
+                            !favorite
+                        } else {
+                            !shown.is_some_and(|shown| shown.instance_id == instance.instance_id)
+                        }
+                    {
                         continue;
                     }
                     let name = model.full_name.clone();
@@ -2224,40 +2233,46 @@ impl Root {
                         .flex_1()
                         .min_h_0()
                         .items_start()
-                        .child(
-                            v_flex()
-                                .id("model-picker-providers")
-                                .role(accesskit::Role::Toolbar)
-                                .aria_label("Providers")
-                                .w(px(44.))
-                                .h_full()
-                                .border_r_1()
-                                .border_color(theme.border)
-                                .py_2()
-                                .gap_1()
-                                .child(
-                                    Button::new("model-picker-favorites")
-                                        .icon(gpui_kit::assets::IconName::Star)
-                                        .accessibility_label("Favorites")
-                                        .ghost()
-                                        .size(px(36.))
-                                        .selected(favorite_tab)
-                                        .on_click(self.pane_listener(cx, |root, _, window, cx| {
-                                            root.conversation.picker_instance =
-                                                Some("favorites".into());
-                                            root.conversation.model_picker.update(
+                        .when(!searching, |row| {
+                            row.child(
+                                v_flex()
+                                    .id("model-picker-providers")
+                                    .role(accesskit::Role::Toolbar)
+                                    .aria_label("Providers")
+                                    .w(px(44.))
+                                    .h_full()
+                                    .border_r_1()
+                                    .border_color(theme.border)
+                                    .py_2()
+                                    .gap_1()
+                                    .child(
+                                        Button::new("model-picker-favorites")
+                                            .icon(gpui_kit::assets::IconName::Star)
+                                            .accessibility_label("Favorites")
+                                            .ghost()
+                                            .size(px(36.))
+                                            .selected(favorite_tab)
+                                            .on_click(self.pane_listener(
                                                 cx,
-                                                |state, cx| {
-                                                    state.set_query("", window, cx);
-                                                    state.focus(window, cx);
+                                                |root, _, window, cx| {
+                                                    root.conversation.picker_instance =
+                                                        Some("favorites".into());
+                                                    root.conversation.model_picker.update(
+                                                        cx,
+                                                        |state, cx| {
+                                                            state.set_query("", window, cx);
+                                                            state.focus(window, cx);
+                                                        },
+                                                    );
+                                                    cx.notify();
                                                 },
-                                            );
-                                            cx.notify();
-                                        })),
-                                )
-                                .children(instances.iter().map(|instance| {
-                                    let id = instance.instance_id.clone();
-                                    Button::new(SharedString::from(format!("picker-provider-{id}")))
+                                            )),
+                                    )
+                                    .children(instances.iter().map(|instance| {
+                                        let id = instance.instance_id.clone();
+                                        Button::new(SharedString::from(format!(
+                                            "picker-provider-{id}"
+                                        )))
                                         .icon(Icon::empty().path(match instance.driver.as_str() {
                                             "codex" => "icons/t3-openai.svg",
                                             "claudeAgent" => "icons/t3-claude.svg",
@@ -2271,9 +2286,8 @@ impl Root {
                                             !favorite_tab
                                                 && shown.is_some_and(|i| i.instance_id == id),
                                         )
-                                        .on_click(self.pane_listener(
-                                            cx,
-                                            move |root, _, window, cx| {
+                                        .on_click(
+                                            self.pane_listener(cx, move |root, _, window, cx| {
                                                 root.conversation.picker_instance =
                                                     Some(id.clone());
                                                 root.conversation.model_picker.update(
@@ -2284,13 +2298,19 @@ impl Root {
                                                     },
                                                 );
                                                 cx.notify();
-                                            },
-                                        ))
-                                })),
-                        )
+                                            }),
+                                        )
+                                    })),
+                            )
+                        })
                         .child(
                             div().flex_1().min_w_0().h_full().child(
                                 Command::new(&self.conversation.model_picker)
+                                    .on_query(self.pane_listener(cx, |root, _, _, cx| {
+                                        root.conversation
+                                            .composer_controls
+                                            .update(cx, |_, cx| cx.notify());
+                                    }))
                                     .placeholder("Search models...")
                                     .empty(|_, _, _| div().p_3().child(text!("No models found")))
                                     .max_h(px(300.))
@@ -2543,7 +2563,11 @@ impl Root {
                         h_flex()
                             .id(("composer-completion", i))
                             .role(accesskit::Role::ListBoxOption)
-                            .aria_label(label.clone())
+                            .aria_label(if s.insert.starts_with("model:") {
+                                format!("{label} {}", s.detail)
+                            } else {
+                                label.clone()
+                            })
                             .cursor_pointer()
                             .on_click(self.pane_listener(cx, move |root, _, window, cx| {
                                 if let Some(completion) = root.conversation.completion.as_mut() {
@@ -2565,17 +2589,21 @@ impl Root {
                             .rounded_sm()
                             .when(i == c.selected, |row| row.bg(theme.list_active))
                             .child(div().text_sm().child(text!(label)))
-                            .when(c.trigger.kind != completion::TriggerKind::Path, |row| {
-                                row.child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_xs()
-                                        .text_color(theme.muted_foreground)
-                                        .child(text!(s.detail.clone())),
-                                )
-                            })
+                            .when(
+                                c.trigger.kind != completion::TriggerKind::Path
+                                    || s.insert.starts_with("model:"),
+                                |row| {
+                                    row.child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .truncate()
+                                            .text_xs()
+                                            .text_color(theme.muted_foreground)
+                                            .child(text!(s.detail.clone())),
+                                    )
+                                },
+                            )
                     }))
             });
         let chips = (!self.conversation.attachments.is_empty()).then(|| {

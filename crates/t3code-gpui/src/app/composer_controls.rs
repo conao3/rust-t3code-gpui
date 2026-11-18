@@ -90,7 +90,11 @@ fn select(
             })
             .collect::<Vec<_>>(),
     );
-    cx.new(|cx| SelectState::new(items, index, window, cx))
+    cx.new(|cx| {
+        let mut state = SelectState::new(items, index, window, cx);
+        state.set_option_roles(cx);
+        state
+    })
 }
 
 impl Root {

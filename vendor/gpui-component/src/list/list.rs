@@ -81,6 +81,8 @@ pub struct ListState<D: ListDelegate> {
     pub(crate) focus_handle: FocusHandle,
     pub(crate) query_input: Entity<InputState>,
     options: ListOptions,
+    list_role: Role,
+    item_role: Role,
     delegate: D,
     last_query: Option<String>,
     scroll_handle: VirtualListScrollHandle,
@@ -111,6 +113,8 @@ where
         Self {
             focus_handle: cx.focus_handle(),
             options: ListOptions::default(),
+            list_role: Role::List,
+            item_role: Role::ListItem,
             delegate,
             rows_cache: RowsCache::default(),
             query_input,
@@ -127,6 +131,12 @@ where
             _load_more_task: Task::ready(()),
             _query_input_subscription,
         }
+    }
+
+    pub fn set_accessibility_roles(&mut self, list: Role, item: Role, cx: &mut Context<Self>) {
+        self.list_role = list;
+        self.item_role = item;
+        cx.notify();
     }
 
     /// Sets whether the list is searchable, default is `false`.
@@ -501,7 +511,7 @@ where
 
         div()
             .id(id)
-            .role(Role::ListItem)
+            .role(self.item_role)
             .when_some(
                 self.delegate.item_accessibility_label(ix, cx),
                 |row, label| row.aria_label(label),
@@ -689,7 +699,7 @@ where
             .key_context("List")
             .id("list-state")
             .track_focus(&self.focus_handle)
-            .role(Role::List)
+            .role(self.list_role)
             .size_full()
             .relative()
             .overflow_hidden()
