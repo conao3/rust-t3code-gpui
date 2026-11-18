@@ -14,8 +14,6 @@ pub(super) struct State {
     #[serde(skip)]
     files: HashMap<String, FilePanel>,
     #[serde(skip)]
-    modal: bool,
-    #[serde(skip)]
     tab_scroll: ScrollHandle,
     #[serde(skip)]
     terminals: HashMap<String, Entity<crate::terminal::Drawer>>,
@@ -306,12 +304,11 @@ impl Root {
         let owner = cx.entity().downgrade();
         let id = id.to_string();
         window.open_alert_dialog(cx, move |dialog, _, _| {
-            let closed = owner.clone();
             let owner = owner.clone();
             let id = id.clone();
             dialog
-                .title(text!(title.clone()))
-                .description(text!(description.clone()))
+                .title(title.clone())
+                .description(description.clone())
                 .centered()
                 .confirm()
                 .button_props(
@@ -323,14 +320,7 @@ impl Root {
                     let _ = owner.update(cx, |root, cx| root.close_panel_tab(&id, cx));
                     true
                 })
-                .on_close(move |_, _, cx| {
-                    let _ = closed.update(cx, |root, cx| {
-                        root.panel_revision += 1;
-                        cx.notify();
-                    });
-                })
         });
-        cx.notify();
     }
 
     pub(super) fn close_panel_tab(&mut self, id: &str, cx: &mut Context<Self>) {
@@ -415,11 +405,6 @@ impl Root {
 
     pub(super) fn prepare_right_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.follow_right_panel(cx);
-        let modal = window.has_active_dialog(cx);
-        if self.right_panel.modal != modal {
-            self.right_panel.modal = modal;
-            self.panel_revision += 1;
-        }
         if self.right_panel.file_search.is_none() {
             let input = cx.new(|cx| InputState::new(window, cx).placeholder("Search files"));
             self.right_panel.file_search_subscription =
@@ -601,16 +586,6 @@ impl Root {
         let theme = cx.theme();
         h_flex()
             .id("panel-tabs")
-            .role(accesskit::Role::Group)
-            .when(
-                self.right_panel.modal
-                    || self
-                        .right_panel
-                        .device
-                        .as_ref()
-                        .is_some_and(|view| view.read(cx).setup),
-                |tabs| tabs.a11y_synthetic_children(|builder| builder.parent_node().set_hidden()),
-            )
             .h(px(40.))
             .min_w_0()
             .w_full()
@@ -892,9 +867,6 @@ impl Root {
         v_flex()
             .id("workspace-panel")
             .role(accesskit::Role::Region)
-            .when(self.right_panel.modal, |panel| {
-                panel.a11y_synthetic_children(|builder| builder.parent_node().set_hidden())
-            })
             .aria_label(
                 self.right_panel
                     .active
