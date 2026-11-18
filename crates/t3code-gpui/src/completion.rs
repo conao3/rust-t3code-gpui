@@ -33,7 +33,7 @@ pub fn trigger(text: &str, cursor: usize) -> Option<Trigger> {
     let kind = match first {
         '/' if !rest.contains('/') => TriggerKind::SlashCommand,
         '@' => TriggerKind::Path,
-        '$' | '¥' | '€' | '£' if !rest.starts_with(|c: char| c.is_ascii_digit()) => {
+        currency if is_currency(currency) && !rest.starts_with(|c: char| c.is_ascii_digit()) => {
             TriggerKind::Skill
         }
         _ => return None,
@@ -44,6 +44,59 @@ pub fn trigger(text: &str, cursor: usize) -> Option<Trigger> {
         start,
         end: cursor,
     })
+}
+
+fn is_currency(character: char) -> bool {
+    static CURRENCY: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"^\p{Sc}$").expect("currency category"));
+    CURRENCY.is_match(character.encode_utf8(&mut [0; 4]))
+}
+
+pub fn model_suggestions(instances: &[crate::models::Instance], query: &str) -> Vec<Suggestion> {
+    let query = query.to_lowercase();
+    let queries = [
+        query.replace([':', '/'], " "),
+        query.replace([':', '/', '-'], " "),
+    ];
+    if queries[1]
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .count()
+        < 2
+    {
+        return vec![];
+    }
+    for query in queries {
+        let terms = query.split_whitespace().collect::<Vec<_>>();
+        let mut result = Vec::new();
+        for instance in instances {
+            for model in &instance.models {
+                let haystack = format!(
+                    "{} {} {} {}",
+                    model.full_name, model.name, instance.driver, instance.name
+                )
+                .to_lowercase();
+                let words = haystack
+                    .split(|character: char| !character.is_alphanumeric())
+                    .collect::<Vec<_>>();
+                if terms
+                    .iter()
+                    .all(|term| words.iter().any(|word| word.starts_with(term)))
+                {
+                    result.push(Suggestion {
+                        label: model.full_name.clone(),
+                        detail: instance.name.clone(),
+                        insert: format!("model:{}/{} ", instance.instance_id, model.slug),
+                    });
+                }
+            }
+        }
+        if !result.is_empty() {
+            result.truncate(8);
+            return result;
+        }
+    }
+    vec![]
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

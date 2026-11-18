@@ -5,3 +5,4 @@ pub mod projection;
 pub mod protocol;
 pub mod rpc;
 pub mod session;
+pub mod speech;

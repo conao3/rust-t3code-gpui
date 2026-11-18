@@ -18,6 +18,8 @@ pub struct ConversationState {
     _subscriptions: Vec<Subscription>,
     pub(super) open: Option<OpenThread>,
     pub(super) draft: Option<NewThreadDraft>,
+    pub(super) last_draft: Option<String>,
+    pub(super) history_drafts: HashMap<String, NewThreadDraft>,
     pub(super) rows: Vec<Row>,
     pub(super) row_views: Vec<Entity<RowView>>,
     pub(super) timeline_pane: Entity<TimelinePane>,
@@ -89,6 +91,13 @@ impl ConversationState {
         cx: &mut Context<Root>,
     ) -> Self {
         let prompt_path = crate::prompt_store::Store::path(drafts_path, id);
+        let (history_drafts, drafts_error) = match composer::load_draft_sessions(drafts_path, id) {
+            Ok(drafts) => (drafts, None),
+            Err(error) => (
+                HashMap::new(),
+                Some(format!("Could not load draft sessions: {error:#}")),
+            ),
+        };
         let (prompt_store, prompt_error) = match crate::prompt_store::Store::load(&prompt_path) {
             Ok(store) => (store, None),
             Err(error) => (
@@ -148,6 +157,8 @@ impl ConversationState {
             }),
             open: None,
             draft: None,
+            history_drafts,
+            last_draft: None,
             rows: vec![],
             row_views: vec![],
             timeline_pane: cx.new(|cx| TimelinePane {
@@ -168,7 +179,10 @@ impl ConversationState {
             composer,
             composer_controls: cx.new(|_| ComposerControlsPane { root, pane_id: id }),
             composer_controls_stamp: None,
-            message: message.or(prompt_error).or(attachment_error),
+            message: message
+                .or(prompt_error)
+                .or(attachment_error)
+                .or(drafts_error),
             picker_open: false,
             picker_instance: None,
             permissions_menu: None,
@@ -587,9 +601,10 @@ impl Root {
             self.with_conversation(id, |root| {
                 if let Some(text) = root.conversation.pending_composer.take() {
                     root.conversation.draft_text = text.clone();
-                    root.conversation.composer.update(cx, |state, cx| {
-                        state.set_value(composer_tokens::content(text), window, cx)
-                    });
+                    let content = root.composer_content(text);
+                    root.conversation
+                        .composer
+                        .update(cx, |state, cx| state.set_value(content, window, cx));
                 }
                 let target = format!(
                     "{:?}:{}",
@@ -639,10 +654,7 @@ impl Root {
                     draft: root.conversation.draft.is_some(),
                     status: root.open_entry().map(|entry| entry.status),
                     delivery: root.composer_delivery(false),
-                    dictation: (
-                        root.conversation.dictation.busy,
-                        root.conversation.dictation.recording.is_some(),
-                    ),
+                    dictation: root.conversation.dictation.stamp(),
                     effort_cursor: root.conversation.composer_choices.effort_cursor.clone(),
                     queue_edit: root
                         .conversation

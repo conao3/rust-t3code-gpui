@@ -4,6 +4,7 @@ use gpui_kit::component::{
     popover::Popover,
     select::{SearchableVec, Select, SelectEvent, SelectItem, SelectState},
 };
+use std::time::Instant;
 #[derive(Clone)]
 struct Choice {
     value: String,
@@ -29,7 +30,9 @@ struct ContextChoice {
 }
 
 pub(super) struct Controls {
-    key: Option<(String, String, Value)>,
+    key: Option<(String, String, Value, String)>,
+    routing: Option<String>,
+    routing_failed: bool,
     choices: Vec<ContextChoice>,
     host: Option<Entity<State>>,
     workspace: Option<Entity<State>>,
@@ -41,6 +44,11 @@ pub(super) struct Controls {
     pub(super) effort_cursor: Option<Value>,
 }
 impl Controls {
+    pub(super) fn reset_routing(&mut self) {
+        self.routing = None;
+        self.routing_failed = false;
+    }
+
     pub(super) fn menu_stamp(&self) -> (bool, usize) {
         (self.open, self.cursor)
     }
@@ -48,6 +56,8 @@ impl Controls {
     pub(super) fn new(cx: &mut App) -> Self {
         Self {
             key: None,
+            routing: None,
+            routing_failed: false,
             choices: vec![],
             host: None,
             workspace: None,
@@ -84,6 +94,135 @@ fn select(
 }
 
 impl Root {
+    pub(super) fn auto_balance_composer(&mut self, cx: &mut Context<Self>) {
+        if !self.conversation.attachments.is_empty() {
+            self.conversation.message = Some("Keep attachments on this machine\nRemove attachments before choosing automatic routing, then attach them on the selected machine.".into());
+            cx.notify();
+            return;
+        }
+        let Some(draft) = self.conversation.draft.clone() else {
+            return;
+        };
+        let Some(group) = self
+            .project_groups()
+            .into_iter()
+            .find(|group| Some(&group.key) == draft.group.as_ref())
+        else {
+            return;
+        };
+        if group.members.len() < 2 {
+            return;
+        }
+        let model = self.composer_target().and_then(|(_, model, ..)| model);
+        let instance = model
+            .as_ref()
+            .and_then(|model| model["instanceId"].as_str());
+        let candidates = group
+            .members
+            .iter()
+            .filter_map(|member| {
+                let connection = self.connection(&member.environment)?;
+                if connection.status() != t3_client::session::ConnectionStatus::Connected {
+                    return None;
+                }
+                let config = self.config_of(&member.environment)?;
+                let usable = config["providers"].as_array()?.iter().any(|provider| {
+                    instance.is_none_or(|instance| provider["instanceId"] == instance)
+                        && models::project_provider_enabled(
+                            &config["settings"],
+                            Some(&member.project_id),
+                            provider["instanceId"].as_str().unwrap_or_default(),
+                        )
+                        && provider["installed"] == true
+                        && provider["status"] != "error"
+                        && provider["auth"]["status"] != "unauthenticated"
+                        && provider["availability"] != "unavailable"
+                });
+                let weight = connection
+                    .environment_id()
+                    .and_then(|id| self.settings.values["loadBalancingWeights"][id].as_f64())
+                    .unwrap_or(50.);
+                (usable && weight > 0.).then_some((connection, weight))
+            })
+            .collect::<Vec<_>>();
+        let request = uuid::Uuid::new_v4().to_string();
+        self.conversation.composer_choices.routing = Some(request.clone());
+        self.conversation.composer_choices.routing_failed = false;
+        if let Some(draft) = &mut self.conversation.draft {
+            draft.automatic = true;
+            draft.environment = None;
+            draft.workspace_strategy = json!({"type":"root"});
+        }
+        let runtime = self.runtime.clone();
+        self.spawn_pane(cx, async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                let mut tasks = tokio::task::JoinSet::new();
+                for (index, (connection, weight)) in candidates.into_iter().enumerate() {
+                    tasks.spawn(async move {
+                        let resources = connection
+                            .request("server.getHostResources", json!({}))
+                            .await;
+                        (
+                            index,
+                            connection.label().to_string(),
+                            weight,
+                            resources,
+                            Instant::now(),
+                        )
+                    });
+                }
+                let mut results = Vec::new();
+                while let Some(result) = tasks.join_next().await {
+                    results.push(result?);
+                }
+                results.sort_by_key(|result| result.0);
+                let mut best = 0.;
+                let mut selected = None;
+                for (_, environment, weight, resources, received) in results {
+                    let Ok(resources) = resources else {
+                        continue;
+                    };
+                    if received.elapsed() > Duration::from_secs(15) {
+                        continue;
+                    }
+                    if let Some(score) = host_score(&resources, weight)
+                        && score > best
+                    {
+                        best = score;
+                        selected = Some(environment);
+                    }
+                }
+                Ok(selected)
+            })
+            .await;
+            let _ = this.update(cx, |root, cx| {
+                if root.conversation.composer_choices.routing.as_ref() != Some(&request) {
+                    return;
+                }
+                root.conversation.composer_choices.routing = None;
+                let Some(current) = &mut root.conversation.draft else {
+                    return;
+                };
+                if current.id != draft.id || current.group != draft.group || !current.automatic {
+                    return;
+                }
+                match result {
+                    Ok(Some(environment)) => current.environment = Some(environment),
+                    Ok(None) => root.conversation.composer_choices.routing_failed = true,
+                    Err(error) => {
+                        root.conversation.composer_choices.routing_failed = true;
+                        root.conversation.message =
+                            Some(format!("Auto balance unavailable: {error:#}"));
+                    }
+                }
+                root.stash_composer(cx);
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     pub(super) fn set_model_favorite(
         &mut self,
         provider: String,
@@ -110,10 +249,41 @@ impl Root {
     }
 
     pub(super) fn sync_composer_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.remember_draft() {
+            self.schedule_drafts_save(cx);
+        }
+        if self
+            .conversation
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.automatic && draft.environment.is_none())
+            && self.conversation.composer_choices.routing.is_none()
+            && !self.conversation.composer_choices.routing_failed
+        {
+            self.auto_balance_composer(cx);
+        }
+        let auto_label = if self.conversation.composer_choices.routing.is_some() {
+            "Checking machines…"
+        } else if self.conversation.composer_choices.routing_failed {
+            "Auto balance unavailable"
+        } else {
+            "Auto balance"
+        };
         let key = self
             .draft_project()
             .zip(self.conversation.draft.as_ref())
-            .map(|((env, project), draft)| (env, project, draft.workspace_strategy.clone()));
+            .map(|((env, project), draft)| {
+                (
+                    env,
+                    project,
+                    draft.workspace_strategy.clone(),
+                    if draft.automatic {
+                        auto_label.to_string()
+                    } else {
+                        String::new()
+                    },
+                )
+            });
         if self.conversation.composer_choices.key == key {
             return;
         }
@@ -123,7 +293,7 @@ impl Root {
         self.conversation.composer_choices.workspace = None;
         self.conversation.composer_choices.subscriptions.clear();
         self.conversation.composer_choices.open = false;
-        let Some((environment, _, strategy)) = key else {
+        let Some((environment, _, strategy, auto_label)) = key else {
             return;
         };
         let mut choices = vec![];
@@ -136,12 +306,24 @@ impl Root {
                     == Some(&g.key)
             })
         {
+            if group.members.len() > 1 {
+                choices.push(ContextChoice {
+                    kind: "host",
+                    value: "action:auto".into(),
+                    label: if auto_label.is_empty() {
+                        "Auto balance".into()
+                    } else {
+                        auto_label.clone()
+                    },
+                    checked: !auto_label.is_empty(),
+                });
+            }
             for member in &group.members {
                 choices.push(ContextChoice {
                     kind: "host",
                     value: member.environment.clone(),
                     label: member.environment.clone(),
-                    checked: member.environment == environment,
+                    checked: auto_label.is_empty() && member.environment == environment,
                 });
             }
         }
@@ -445,7 +627,9 @@ impl Root {
             return;
         };
         self.conversation.composer_choices.open = false;
-        if choice.value == "previous" {
+        if choice.value == "action:auto" {
+            self.auto_balance_composer(cx);
+        } else if choice.value == "previous" {
             self.use_previous_worktree(window, cx);
         } else if !(choice.value == "root"
             && self
@@ -665,6 +849,23 @@ impl Root {
     }
 }
 
+fn host_score(resources: &Value, weight: f64) -> Option<f64> {
+    let cpu = resources["cpuUtilization"].as_f64()?;
+    let count = resources["cpuCount"].as_f64()?;
+    let total = resources["totalMemoryBytes"].as_f64()?;
+    let available = resources["availableMemoryBytes"].as_f64()?;
+    if !weight.is_finite()
+        || weight <= 0.
+        || cpu >= 0.95
+        || count <= 0.
+        || total <= 0.
+        || available / total <= 0.05
+    {
+        return None;
+    }
+    Some(weight * count * (1. - cpu) * available / total)
+}
+
 fn reasoning_step(
     descriptor: &Value,
     selection: &Value,
@@ -708,6 +909,24 @@ fn reasoning_step(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn load_balancing_rejects_saturated_hosts_and_weights_capacity() {
+        let resources = serde_json::json!({"cpuUtilization":0.25,"cpuCount":8,"totalMemoryBytes":1000,"availableMemoryBytes":500});
+        assert_eq!(super::host_score(&resources, 50.), Some(150.));
+        for (field, value) in [
+            ("cpuUtilization", serde_json::json!(0.95)),
+            ("cpuUtilization", serde_json::Value::Null),
+            ("cpuCount", serde_json::json!(0)),
+            ("totalMemoryBytes", serde_json::json!(0)),
+            ("availableMemoryBytes", serde_json::json!(50)),
+        ] {
+            let mut unavailable = resources.clone();
+            unavailable[field] = value;
+            assert_eq!(super::host_score(&unavailable, 50.), None);
+        }
+        assert_eq!(super::host_score(&resources, 0.), None);
+    }
+
     use super::reasoning_step;
     use serde_json::json;
     #[test]

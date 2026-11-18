@@ -8,7 +8,9 @@ pub struct Recording {
 }
 
 impl Recording {
-    pub fn start() -> Result<Self> {
+    pub fn start(
+        stream: Option<tokio::sync::mpsc::UnboundedSender<t3_client::speech::Input>>,
+    ) -> Result<Self> {
         let mut child = Command::new("pw-record")
             .args([
                 "--raw",
@@ -30,7 +32,26 @@ impl Recording {
         let mut stdout = child.stdout.take().context("Microphone output missing")?;
         let reader = std::thread::spawn(move || {
             let mut bytes = vec![];
-            stdout.read_to_end(&mut bytes)?;
+            let mut buffer = [0u8; 16_000];
+            let mut remainder = Vec::new();
+            loop {
+                let count = stdout.read(&mut buffer)?;
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                if let Some(stream) = &stream {
+                    remainder.extend_from_slice(&buffer[..count]);
+                    let complete = remainder.len() / 4 * 4;
+                    if complete > 0 {
+                        stream
+                            .send(t3_client::speech::Input::Audio(
+                                remainder.drain(..complete).collect(),
+                            ))
+                            .map_err(|_| std::io::Error::other("Voice connection closed"))?;
+                    }
+                }
+            }
             Ok(bytes)
         });
         Ok(Self {

@@ -148,8 +148,9 @@ impl Root {
                 } else {
                     format!("{}\n\n{}", current.trim_end(), entry.prompt)
                 };
+                let content = self.composer_content(text);
                 self.conversation.composer.update(cx, |state, cx| {
-                    state.set_value(super::composer_tokens::content(text), window, cx);
+                    state.set_value(content, window, cx);
                     state.focus(window, cx);
                 });
                 for file in entry.attachments {
@@ -325,8 +326,9 @@ impl Root {
         self.conversation.prompts.history = position;
         let (line, column) = completion::line_column(&prompt, prompt.len());
         let position = Position::new(line, column);
+        let content = self.composer_content(prompt);
         self.conversation.composer.update(cx, |state, cx| {
-            state.set_value(super::composer_tokens::content(prompt), window, cx);
+            state.set_value(content, window, cx);
             state.set_cursor_position(position, window, cx);
         });
         self.stash_composer(cx);

@@ -20,6 +20,14 @@ impl Default for History {
 }
 
 impl History {
+    pub fn promote_draft(&mut self, id: &str, environment: &str, thread: &str) {
+        for entry in &mut self.entries {
+            if matches!(entry, Target::Draft(draft) if draft == id) {
+                *entry = Target::Thread(environment.to_string(), thread.to_string());
+            }
+        }
+    }
+
     pub fn replace(&mut self, target: Target) {
         self.entries[self.at] = target;
     }
@@ -55,6 +63,18 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::{History, Target};
+    #[test]
+    fn promoted_drafts_navigate_to_the_created_thread() {
+        let mut history = History::default();
+        history.visit(Target::Draft("draft-a".into()));
+        history.visit(Target::Draft("draft-b".into()));
+        history.promote_draft("draft-a", "host-a", "thread-a");
+        assert_eq!(
+            history.step(false),
+            Some(Target::Thread("host-a".into(), "thread-a".into()))
+        );
+        assert_eq!(history.step(true), Some(Target::Draft("draft-b".into())));
+    }
     #[test]
     fn visiting_after_back_replaces_the_forward_branch() {
         let mut history = History::default();

@@ -828,10 +828,12 @@ impl Root {
             "host" => {
                 if let Some(draft) = self.conversation.draft.as_mut() {
                     draft.environment = action.value.as_str().map(str::to_string);
+                    draft.automatic = false;
                     draft.workspace_strategy = json!({"type":"root"});
                     draft.model = None;
                     draft.runtime_mode = None;
                 }
+                self.stash_composer(cx);
             }
             "editor" => {
                 if let Some((environment, cwd)) = self.composer_cwd()
