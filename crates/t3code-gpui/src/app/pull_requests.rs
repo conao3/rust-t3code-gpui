@@ -1,5 +1,8 @@
 use super::*;
 
+mod guide;
+mod guide_excerpt;
+
 #[derive(Default)]
 pub(super) struct State {
     pub page: bool,
@@ -26,6 +29,9 @@ pub(super) struct Detail {
     body: Option<Entity<TextViewState>>,
     comments: Vec<Entity<TextViewState>>,
     diff: Option<Entity<DiffState>>,
+    guide_diffs: HashMap<String, (Entity<DiffState>, usize, usize)>,
+    guide_open_files: HashSet<String>,
+    diff_loading: bool,
     tab: &'static str,
     guide: Value,
     guide_position: usize,
@@ -635,6 +641,9 @@ impl Root {
             body: None,
             comments: Vec::new(),
             diff: None,
+            guide_diffs: HashMap::new(),
+            guide_open_files: HashSet::new(),
+            diff_loading: false,
             tab: "summary",
             guide: Value::Null,
             guide_position: 0,
@@ -659,6 +668,7 @@ impl Root {
             return;
         };
         view.loading = true;
+        view.diff_loading = false;
         view.request += 1;
         let request = view.request;
         view.error = None;
@@ -691,7 +701,15 @@ impl Root {
                     Ok((mut detail, activity, checks, guide)) => {
                         let mut errors = Vec::new();
                         match guide {
-                            Ok(guide) => view.guide = guide,
+                            Ok(guide) => {
+                                if view.guide != guide || view.value["headSha"] != detail["headSha"]
+                                {
+                                    view.diff = None;
+                                    view.guide_diffs.clear();
+                                    view.diff_loading = false;
+                                }
+                                view.guide = guide;
+                            }
                             Err(error) => errors.push(format!("Review guide: {error:#}")),
                         }
                         match checks {
@@ -725,6 +743,11 @@ impl Root {
                         view.error = (!errors.is_empty()).then(|| errors.join("\n"));
                     }
                     Err(error) => view.error = Some(format!("{error:#}")),
+                }
+                let tab = view.tab;
+                if root.pull_request_id().as_deref() == Some(&id) && matches!(tab, "code" | "guide")
+                {
+                    root.select_pr_tab(tab, cx);
                 }
                 root.panel_revision += 1;
                 root.conversation.workspace_revision += 1;
@@ -775,10 +798,16 @@ impl Root {
                 self.right_panel.maximized = true;
             }
         }
-        if tab == "code" && view.diff.is_none() {
+        if matches!(tab, "code" | "guide") && view.diff.is_none() && !view.diff_loading {
+            view.diff_loading = true;
+            let guide = view.guide.clone();
+            let request = view.request;
             let reference = view.reference.clone();
             let environment = view.environment.clone();
             let Some(connection) = self.connection(&environment) else {
+                if let Some(view) = self.pr_state.views.get_mut(&id) {
+                    view.diff_loading = false;
+                }
                 return;
             };
             let runtime = self.runtime.clone();
@@ -795,8 +824,14 @@ impl Root {
                                 DiffParseOptions::new().truncated_hunks(true),
                             )
                             .map_err(|error| anyhow::anyhow!("Diff parse error: {error:?}"))?;
+                            let guide_diffs = guide::parse_diffs(
+                                &files,
+                                value["patch"].as_str().unwrap_or_default(),
+                                &guide,
+                            );
                             Ok((
                                 files,
+                                guide_diffs,
                                 value["truncated"].as_bool() == Some(true),
                                 value["nextCursor"].is_string(),
                             ))
@@ -809,8 +844,25 @@ impl Root {
                     let Some(view) = root.pr_state.views.get_mut(&id) else {
                         return;
                     };
+                    if view.request != request {
+                        return;
+                    }
+                    view.diff_loading = false;
                     match result {
-                        Ok((files, truncated, more)) => {
+                        Ok((files, guide_diffs, truncated, more)) => {
+                            view.guide_diffs = guide_diffs
+                                .into_iter()
+                                .map(|(key, excerpt)| {
+                                    (
+                                        key,
+                                        (
+                                            cx.new(|cx| DiffState::new(excerpt.files, cx)),
+                                            excerpt.shown,
+                                            excerpt.total,
+                                        ),
+                                    )
+                                })
+                                .collect();
                             view.diff = Some(cx.new(|cx| DiffState::new(files, cx)));
                             if truncated || more {
                                 view.error = Some("The host returned a partial diff.".into());
@@ -1902,16 +1954,7 @@ impl Root {
                     )),
             );
         }
-        for file in stop["files"].as_array().into_iter().flatten() {
-            let path = file["path"].as_str().unwrap_or_default().to_string();
-            body = body.child(
-                Button::new(SharedString::from(format!("guide-file-{path}")))
-                    .label(path)
-                    .ghost()
-                    .disabled(true)
-                    .tooltip("Guide excerpts are not implemented in T3 Code GPUI."),
-            );
-        }
+        body = body.child(self.render_guide_materials(view, stop, cx));
         body = body.child(
             h_flex().child(
                 Button::new("ask-guide")
