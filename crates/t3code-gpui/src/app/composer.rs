@@ -2680,7 +2680,9 @@ impl Root {
                                                     token.range().start,
                                                 ))
                                                 .label(label.clone())
-                                                .accessibility_label(format!("Model {label}"))
+                                                .accessibility_label(format!(
+                                                    "Model {label}. Show details"
+                                                ))
                                                 .ghost()
                                                 .compact()
                                                 .h(token.line_height()),
