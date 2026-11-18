@@ -12,7 +12,7 @@
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "Panel fixture, UI parity"
+        "name": "Panel fixture, Done, UI parity"
       }
     },
     {
