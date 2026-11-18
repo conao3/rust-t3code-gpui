@@ -102,6 +102,7 @@ impl Root {
         self.terminal_subscriptions
             .retain(|key, _| self.terminal_recent.contains(key));
         let terminal_configuration = crate::terminal::DrawerConfig {
+            panel: false,
             light: self.settings.light_theme,
             font_size: self.settings.font_size_code,
             shortcuts: [
@@ -136,20 +137,27 @@ impl Root {
             });
             let key = key.clone();
             let saved_key = key.clone();
-            let subscription = cx.subscribe(&drawer, move |root, _, event, cx| match event {
-                crate::terminal::DrawerEvent::Changed(layout) => {
-                    root.terminal_store.set(saved_key.clone(), layout);
-                    root.terminal_revision = root.terminal_revision.wrapping_add(1);
-                    root.save_terminal_layout(cx);
-                    cx.notify();
-                }
-                crate::terminal::DrawerEvent::Focus => {
-                    if root.jump_hints {
-                        root.jump_hints = false;
+            let subscription = cx.subscribe_in(
+                &drawer,
+                window,
+                move |root, _, event, window, cx| match event {
+                    crate::terminal::DrawerEvent::Changed(layout) => {
+                        root.terminal_store.set(saved_key.clone(), layout);
+                        root.terminal_revision = root.terminal_revision.wrapping_add(1);
+                        root.save_terminal_layout(cx);
                         cx.notify();
                     }
-                }
-            });
+                    crate::terminal::DrawerEvent::AddTerminal(split) => {
+                        root.add_drawer_terminal(*split, window, cx);
+                    }
+                    crate::terminal::DrawerEvent::Focus => {
+                        if root.jump_hints {
+                            root.jump_hints = false;
+                        }
+                        cx.notify();
+                    }
+                },
+            );
             self.terminal_subscriptions
                 .insert(key.clone(), subscription);
             self.terminal_drawers.insert(key, drawer);
@@ -173,7 +181,7 @@ impl Root {
         let mut layout = self.terminal_store.get(&key);
         layout.open = !layout.open;
         if layout.open && layout.ids().is_empty() {
-            layout.add("term-1".into(), None);
+            layout.add(self.next_terminal_id(true), None);
         }
         let open = layout.open;
         self.terminal_store.set(key.clone(), &layout);
@@ -190,12 +198,32 @@ impl Root {
         cx.notify();
     }
 
+    fn add_drawer_terminal(
+        &mut self,
+        split: Option<bool>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let id = self.next_terminal_id(true);
+        if let Some(drawer) = self
+            .terminal_key()
+            .and_then(|key| self.terminal_drawers.get(&key))
+            .cloned()
+        {
+            drawer.update(cx, |drawer, cx| drawer.insert(id, split, window, cx));
+        }
+    }
+
     pub(super) fn add_terminal(
         &mut self,
         split: Option<bool>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.panel_terminal_focused(window, cx) {
+            self.add_panel_terminal(split, window, cx);
+            return;
+        }
         let Some(key) = self.terminal_key() else {
             return;
         };

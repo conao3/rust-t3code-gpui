@@ -521,11 +521,6 @@ impl Render for TerminalView {
             rgba(0xb4cbff40)
         }
         .into();
-        let label = if self.state.label.is_empty() {
-            "Terminal".to_owned()
-        } else {
-            self.state.label.clone()
-        };
         let text = snapshot
             .as_ref()
             .map(|snapshot| {
@@ -547,8 +542,8 @@ impl Render for TerminalView {
             .overflow_hidden()
             .track_focus(&self.focus)
             .key_context("Terminal")
-            .role(accesskit::Role::Terminal)
-            .aria_label(label)
+            .role(accesskit::Role::TextInput)
+            .aria_label("Terminal input")
             .a11y_synthetic_children(move |builder| {
                 let mut run = accesskit::Node::new(accesskit::Role::TextRun);
                 run.set_value(text.clone());

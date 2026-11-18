@@ -940,11 +940,7 @@ pub async fn close(connection: &Connection, target: &Target) -> Result<()> {
     ensure!(!target.read_only, "Terminal is read-only");
     let mut payload = target.identity();
     payload["deleteHistory"] = json!(true);
-    if connection.request("terminal.close", payload).await.is_err() {
-        let mut payload = target.identity();
-        payload["data"] = json!("exit\n");
-        connection.request("terminal.write", payload).await?;
-    }
+    connection.request("terminal.close", payload).await?;
     Ok(())
 }
 

@@ -226,5 +226,10 @@
     "labels": [],
     "errors": []
   },
-  "pullRequests.comment": null
+  "pullRequests.comment": null,
+  "http:/api/pull-requests/diff": {
+    "patch": "diff --git a/example.rs b/example.rs\n--- a/example.rs\n+++ b/example.rs\n@@ -1,3 +1,3 @@\n fn example() {\n-    old();\n+    new();\n }\n",
+    "truncated": false,
+    "nextCursor": null
+  }
 }

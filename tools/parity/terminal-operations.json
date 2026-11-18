@@ -1,0 +1,269 @@
+{
+  "name": "terminal-panel-operations",
+  "fixture": "panel",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+b"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Add panel surface"
+      },
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "t"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Close Terminal 1"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Split Terminal Horizontally (Ctrl+D)"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 2,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+d"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 3,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+d"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 4,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+d"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 4,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+n"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Close Terminal 5"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Terminal 4"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 4,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+w"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Confirm"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Cancel"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 4,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+w"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Confirm"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 3,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Close Terminal 3"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Confirm"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Confirm"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Close Terminal 5"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "button",
+        "name": "Close Terminal 5"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+w"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Confirm"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Cancel"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "count": 1
+    }
+  ]
+}

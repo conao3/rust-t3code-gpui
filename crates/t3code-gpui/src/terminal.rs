@@ -1,7 +1,7 @@
 use crate::terminal_view::{TerminalView, ViewEvent};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon,
+    ActiveTheme as _, Disableable as _, Icon, WindowExt as _,
     button::{Button, ButtonVariants as _},
     h_flex, v_flex,
 };
@@ -334,6 +334,7 @@ impl Store {
 pub enum DrawerEvent {
     Changed(Layout),
     Focus,
+    AddTerminal(Option<bool>),
 }
 
 pub struct Drawer {
@@ -344,6 +345,7 @@ pub struct Drawer {
     connection: Arc<Connection>,
     runtime: Handle,
     visible: bool,
+    panel: bool,
     light: bool,
     font_size: f32,
     shortcuts: [Option<String>; 4],
@@ -356,6 +358,7 @@ impl EventEmitter<DrawerEvent> for Drawer {}
 
 #[derive(Clone, PartialEq)]
 pub struct DrawerConfig {
+    pub panel: bool,
     pub light: bool,
     pub font_size: f32,
     pub shortcuts: [Option<String>; 4],
@@ -379,6 +382,7 @@ impl Drawer {
             connection,
             runtime,
             visible: true,
+            panel: configuration.panel,
             light: configuration.light,
             font_size: configuration.font_size,
             shortcuts: configuration.shortcuts,
@@ -426,7 +430,7 @@ impl Drawer {
                     }
                     cx.emit(DrawerEvent::Focus);
                 }
-                ViewEvent::Metadata => cx.notify(),
+                ViewEvent::Metadata => drawer.changed(cx),
             });
             self.subscriptions.insert(id.clone(), subscription);
             self.views.insert(id, view);
@@ -443,6 +447,13 @@ impl Drawer {
             let focus = view.read(cx).focus.clone();
             window.focus(&focus, cx);
         }
+    }
+
+    pub fn active_label(&self, cx: &App) -> String {
+        self.views
+            .get(&self.layout.active)
+            .map(|view| label(&self.layout.active, &view.read(cx).state.label))
+            .unwrap_or_else(|| label(&self.layout.active, ""))
     }
 
     pub fn is_focused(&self, window: &Window, cx: &App) -> bool {
@@ -462,6 +473,7 @@ impl Drawer {
     ) {
         let light = configuration.light;
         let font_size = configuration.font_size;
+        let activate = self.panel && visible && !self.visible;
         let changed = self.visible != visible
             || self.light != light
             || self.font_size != font_size
@@ -478,16 +490,28 @@ impl Drawer {
                 });
             }
             if visible {
+                if activate {
+                    self.focus(window, cx);
+                }
                 cx.notify();
             }
         }
     }
 
-    pub fn add(&mut self, split: Option<bool>, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn add(&mut self, split: Option<bool>, _window: &mut Window, cx: &mut Context<Self>) {
         if self.target.read_only {
             return;
         }
-        let id = next_id(self.layout.ids(), true);
+        cx.emit(DrawerEvent::AddTerminal(split));
+    }
+
+    pub fn insert(
+        &mut self,
+        id: String,
+        split: Option<bool>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.layout.add(id, split) {
             self.reconcile(window, cx);
             self.focus(window, cx);
@@ -503,6 +527,23 @@ impl Drawer {
         }
     }
 
+    pub fn close_labels(&self, cx: &App) -> Vec<String> {
+        std::iter::once(&self.layout.active)
+            .chain(
+                self.layout
+                    .terminal_ids
+                    .iter()
+                    .filter(|id| *id != &self.layout.active),
+            )
+            .map(|id| {
+                self.views
+                    .get(id)
+                    .map(|view| label(id, &view.read(cx).state.label))
+                    .unwrap_or_else(|| label(id, ""))
+            })
+            .collect()
+    }
+
     pub fn close_active(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.close(self.layout.active.clone(), window, cx);
     }
@@ -516,33 +557,64 @@ impl Drawer {
             .get(&id)
             .map(|view| label(&id, &view.read(cx).state.label))
             .unwrap_or_else(|| label(&id, ""));
-        let prompt = window.prompt(
-            PromptLevel::Warning,
-            &format!("Close terminal \"{terminal_label}\"?"),
-            Some("This stops the running process and clears its history."),
-            &["Cancel", "Close"],
-            cx,
-        );
+        let (answer, prompt) = async_channel::bounded(1);
+        window.open_alert_dialog(cx, move |dialog, _, _| {
+            let confirm = answer.clone();
+            let cancel = answer.clone();
+            dialog
+                .title(text!(format!("Close terminal \"{terminal_label}\"?")))
+                .description(text!(
+                    "This stops the running process and clears its history."
+                ))
+                .centered()
+                .confirm()
+                .button_props(
+                    gpui_kit::component::dialog::DialogButtonProps::default()
+                        .ok_text("Confirm")
+                        .ok_variant(gpui_kit::component::button::ButtonVariant::Danger),
+                )
+                .on_ok(move |_, _, _| {
+                    let _ = confirm.try_send(true);
+                    true
+                })
+                .on_close(move |_, _, _| {
+                    let _ = cancel.try_send(false);
+                })
+        });
         self.closing = true;
+        cx.emit(DrawerEvent::Focus);
         let runtime = self.runtime.clone();
         let connection = self.connection.clone();
         let mut target = self.target.clone();
         target.terminal_id = id.clone();
         cx.spawn_in(window, async move |this, cx| {
-            if prompt.await != Ok(1) {
-                let _ = this.update(cx, |drawer, _| drawer.closing = false);
+            if prompt.recv().await != Ok(true) {
+                let _ = this.update(cx, |drawer, cx| {
+                    drawer.closing = false;
+                    cx.emit(DrawerEvent::Focus);
+                    cx.notify();
+                });
                 return;
             }
             let result = runtime
                 .spawn(async move { t3_terminal::session::close(&connection, &target).await })
                 .await;
-            let _ = this.update(cx, |drawer, cx| {
+            let _ = this.update_in(cx, |drawer, window, cx| {
                 drawer.closing = false;
                 match result {
                     Ok(Ok(())) => {
+                        let active = drawer.layout.active == id;
                         drawer.layout.remove(&id);
+                        if drawer.panel
+                            && active
+                            && let Some(last) = drawer.layout.terminal_ids.last().cloned()
+                        {
+                            drawer.layout.select(&last);
+                        }
                         drawer.views.remove(&id);
                         drawer.subscriptions.remove(&id);
+                        drawer.reconcile(window, cx);
+                        drawer.focus(window, cx);
                         drawer.changed(cx);
                     }
                     Ok(Err(error)) => {
@@ -732,7 +804,7 @@ impl Render for Drawer {
                         .p_0()
                         .px(px(6.))
                         .rounded(px(4.))
-                        .accessibility_label(title)
+                        .accessibility_label(format!("{title} {count}"))
                         .when(group_active, |button| {
                             button.bg(cx.theme().accent.opacity(0.5))
                         })
@@ -879,28 +951,31 @@ impl Render for Drawer {
         v_flex()
             .relative()
             .w_full()
-            .h(px(height))
-            .flex_none()
-            .border_t_1()
+            .when(self.panel, |body| body.h_full().flex_1().min_h_0())
+            .when(!self.panel, |body| {
+                body.h(px(height)).flex_none().border_t_1()
+            })
             .border_color(cx.theme().border.opacity(0.8))
             .bg(cx.theme().background)
             .child(body)
-            .child(
-                div()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right_0()
-                    .h(px(6.))
-                    .cursor_row_resize()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|drawer, event: &MouseDownEvent, _, _| {
-                            drawer.resizing =
-                                Some((f32::from(event.position.y), drawer.layout.height))
-                        }),
-                    ),
-            )
+            .when(!self.panel, |body| {
+                body.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .h(px(6.))
+                        .cursor_row_resize()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|drawer, event: &MouseDownEvent, _, _| {
+                                drawer.resizing =
+                                    Some((f32::from(event.position.y), drawer.layout.height))
+                            }),
+                        ),
+                )
+            })
             .children(
                 self.error
                     .as_ref()

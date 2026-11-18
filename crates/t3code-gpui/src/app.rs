@@ -1025,10 +1025,13 @@ impl Root {
             "terminalOpen" => self
                 .terminal_key()
                 .is_some_and(|key| self.terminal_store.get(&key).open),
-            "terminalFocus" => self
-                .terminal_key()
-                .and_then(|key| self.terminal_drawers.get(&key))
-                .is_some_and(|drawer| drawer.read(cx).is_focused(window, cx)),
+            "terminalFocus" => {
+                self.panel_terminal_focused(window, cx)
+                    || self
+                        .terminal_key()
+                        .and_then(|key| self.terminal_drawers.get(&key))
+                        .is_some_and(|drawer| drawer.read(cx).is_focused(window, cx))
+            }
             "isDesktop" => true,
             "modelPickerOpen" => self.conversation.picker_open,
             "usagePageOpen" => {
@@ -1347,33 +1350,33 @@ impl Render for Root {
         self.follow_explorer(cx);
         self.follow_workspace();
         self.follow_context_usage();
-        let details_stamp = DetailsStamp {
-            usage_sequence: self.context_usage_stamp.clone(),
-            pull_requests: self
+        let details_stamp = self.with_main_conversation(|root| DetailsStamp {
+            usage_sequence: root.context_usage_stamp.clone(),
+            pull_requests: root
                 .current()
-                .and_then(|(environment, id)| self.thread_value(&environment, &id))
+                .and_then(|(environment, id)| root.thread_value(&environment, &id))
                 .map(|thread| thread["pullRequests"].clone())
                 .unwrap_or(Value::Null),
-            target: self
+            target: root
                 .conversation
                 .workspace_watch
                 .as_ref()
                 .map(|watch| watch.target.clone()),
-            status_revision: self.conversation.workspace_revision,
-            catalog_revision: self.model_catalog_revision,
-            draft_strategy: self
+            status_revision: root.conversation.workspace_revision,
+            catalog_revision: root.model_catalog_revision,
+            draft_strategy: root
                 .conversation
                 .draft
                 .as_ref()
                 .map(|draft| draft.workspace_strategy.clone()),
-            branch_anchor: self.conversation.branch_anchor,
-            branch_request: self.conversation.branch_request,
-            branch_loading: self.conversation.branch_loading,
-            branch_count: self.conversation.branch_refs.len(),
-            light: self.settings.light_theme,
-            preferred_editor: self.settings.preferred_editor.clone(),
-            lineage_revision: self.lineage_revision,
-        };
+            branch_anchor: root.conversation.branch_anchor,
+            branch_request: root.conversation.branch_request,
+            branch_loading: root.conversation.branch_loading,
+            branch_count: root.conversation.branch_refs.len(),
+            light: root.settings.light_theme,
+            preferred_editor: root.settings.preferred_editor.clone(),
+            lineage_revision: root.lineage_revision,
+        });
         if self.details_stamp.as_ref() != Some(&details_stamp) {
             self.details_stamp = Some(details_stamp);
             window.mark_view_dirty(self.details_pane.entity_id());
@@ -1462,7 +1465,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &CopyPullRequestNumber, _, cx| root.copy_pull_request_number(cx)))
             .on_action(cx.listener(|root, action: &git_controls::GitAction, window, cx| root.git_action(action, window, cx)))
             .on_action(cx.listener(|root, action: &diff_controls::SelectDiff, _, cx| root.select_diff(action, cx)))
-            .on_action(cx.listener(|root, action: &right_panel::TabAction, _, cx| root.panel_tab_action(action, cx)))
+            .on_action(cx.listener(|root, action: &right_panel::TabAction, window, cx| root.panel_tab_action(action, window, cx)))
             .on_action(cx.listener(|root, _: &ToggleRightPanel, window, cx| root.toggle_right_panel(window, cx)))
             .on_action(cx.listener(|root, _: &NewRightPanel, window, cx| root.new_panel(window, cx)))
             .on_action(cx.listener(|root, _: &MaximizeRightPanel, window, cx| {
@@ -1495,9 +1498,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &SplitTerminalVertical, window, cx| root.add_terminal(Some(true), window, cx)))
             .on_action(cx.listener(|root, _: &NewTerminal, window, cx| root.add_terminal(None, window, cx)))
             .on_action(cx.listener(|root, _: &CloseTerminal, window, cx| {
-                if let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() {
-                    drawer.update(cx, |drawer, cx| drawer.close_active(window, cx));
-                }
+                root.close_focused_terminal(window, cx);
             }))
             .on_action(
                 cx.listener(|root, _: &ManageHosts, window, cx| root.toggle_hosts(window, cx)),
