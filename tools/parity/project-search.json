@@ -139,5 +139,16 @@
       "action": "press",
       "value": "escape"
     }
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Pane Alpha",
+          "Pane Beta"
+        ]
+      }
+    }
   ]
 }

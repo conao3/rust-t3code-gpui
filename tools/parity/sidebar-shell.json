@@ -37,5 +37,19 @@
       },
       "count": 1
     }
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Model defaults fixture"
+        ],
+        "model": {
+          "instanceId": "codex",
+          "model": "gpt-5.5"
+        }
+      }
+    }
   ]
 }

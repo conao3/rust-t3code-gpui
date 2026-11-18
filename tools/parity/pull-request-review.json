@@ -1,6 +1,5 @@
 {
   "name": "pull-request-review",
-  "fixture": "pr-guide",
   "viewport": [
     1400,
     900
@@ -159,5 +158,16 @@
       },
       "count": 0
     }
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "pr-guide"
+      }
+    }
+  ],
+  "environment": {
+    "pr_rpc_fixture": "pr-rpc-fixture.json"
+  }
 }

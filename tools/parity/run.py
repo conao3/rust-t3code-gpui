@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import sys
 import time
 from collections import Counter
 from pathlib import Path
@@ -12,6 +13,7 @@ from cdp import Cdp
 from fixture_validation import distinct, environment_descriptor, origin
 from native import Native
 from PIL import Image, ImageChops, ImageStat
+from prepare import prepare
 from workspace_fixture import independent, observe
 
 logger = logging.getLogger(__name__)
@@ -110,6 +112,7 @@ async def execute(app, target, scenario, directory):
     results = []
     for index, step in enumerate(scenario["steps"]):
         result = {"index": index, "step": step, "status": "failed"}
+        started = time.monotonic()
         try:
             action = step["action"]
             if action in ["click", "focus"]:
@@ -126,7 +129,9 @@ async def execute(app, target, scenario, directory):
                     role = chosen["role"]
                 await invoke(
                     app,
-                    "focus_control" if action == "focus" else "click",
+                    ("focus_snapshot" if action == "focus" else "click_snapshot")
+                    if target == "native"
+                    else ("focus_control" if action == "focus" else "click"),
                     role,
                     selector["name"],
                     index,
@@ -179,6 +184,7 @@ async def execute(app, target, scenario, directory):
             except Exception as capture_error:
                 logger.exception("Failure screenshot failed")
                 result["capture_error"] = str(capture_error)
+        result["seconds"] = time.monotonic() - started
         results.append(result)
         if result["status"] == "failed":
             break
@@ -227,6 +233,7 @@ async def main():
     parser.add_argument("--reference-workspace", type=Path)
     parser.add_argument("--native-workspace", type=Path)
     args = parser.parse_args()
+    manifest = None
     if args.manifest:
         if args.endpoint or args.session:
             parser.error("Use --manifest or --endpoint/--session")
@@ -240,16 +247,25 @@ async def main():
         raise RuntimeError(
             "Output directory already exists; preserve each run separately"
         )
-    fixture = None
-    if "fixture" in scenario:
-        if not args.manifest:
-            parser.error("Scenario fixtures require --manifest")
-        from panel_fixture import prepare
-
-        fixture = await prepare(manifest, scenario["fixture"])
     args.output.mkdir(parents=True)
-    if fixture is not None:
-        (args.output / "fixture.json").write_text(json.dumps(fixture, indent=2) + "\n")
+    if manifest:
+        (args.output / "environment.json").write_text(
+            json.dumps(
+                {key: manifest[key] for key in ["slot", "generation", "session"]},
+                indent=2,
+            )
+            + "\n"
+        )
+    if scenario.get("prepare"):
+        if manifest is None:
+            raise ValueError("Scenario preparation requires --manifest")
+        await prepare(manifest, scenario["prepare"], args.output / "preparation")
+    targets = scenario.get("targets", ["reference", "native"])
+    if targets not in [["native"], ["reference", "native"]]:
+        raise ValueError("Scenario targets must be native or reference and native")
+    if manifest and "workspace" in scenario:
+        args.reference_workspace = Path(manifest["workspaces"]["reference"])
+        args.native_workspace = Path(manifest["workspaces"]["native"])
     workspaces = None
     workspace_before = None
     if "workspace" in scenario:
@@ -264,6 +280,48 @@ async def main():
             for key, value in scenario.get("workspace_initial", {}).items():
                 if state.get(key) != value:
                     raise ValueError(f"{target}: initial {key} must be {value!r}")
+    for index, declaration in enumerate(scenario.get("prepare", [])):
+        helper = declaration["helper"]
+        if helper == "actions":
+            for target in targets:
+                directory = args.output / "preparation" / target / str(index)
+                directory.mkdir(parents=True)
+                with (directory / "setup.log").open("w") as log:
+                    process = await asyncio.create_subprocess_exec(
+                        sys.executable,
+                        str(Path(__file__).with_name("prepare.py")),
+                        "--manifest",
+                        str(args.manifest),
+                        "--scenario",
+                        str(args.scenario),
+                        "--target",
+                        target,
+                        "--index",
+                        str(index),
+                        "--output",
+                        str(directory),
+                        stdout=log,
+                        stderr=log,
+                    )
+                    if await process.wait():
+                        raise RuntimeError(
+                            f"{target} GUI preparation failed; see {directory}"
+                        )
+        elif helper == "reload_clients":
+            async with Cdp(args.endpoint) as reference:
+                await reference.call("Page.reload")
+                await wait_for(reference, {"role": "button", "name": "Settings"})
+            process = await asyncio.create_subprocess_exec(
+                sys.executable,
+                str(Path(__file__).with_name("env.py")),
+                "restart",
+                "--slot",
+                str(manifest["slot"]),
+                "--target",
+                "native",
+            )
+            if await process.wait():
+                raise RuntimeError("Fixture client restart failed")
     native = Native(args.session)
     width, height = scenario["viewport"]
     async with Cdp(args.endpoint) as reference:
@@ -287,18 +345,16 @@ async def main():
         await reference.viewport(width, height, native.session["display"])
         await native.viewport(width, height)
         await reference.call("Page.bringToFront")
-        reports = {
-            "reference": await execute(
-                reference, "reference", scenario, args.output / "reference"
-            )
-        }
-        reports["native"] = await execute(
-            native, "native", scenario, args.output / "native"
-        )
+        reports = {}
+        for target in targets:
+            app = reference if target == "reference" else native
+            reports[target] = await execute(app, target, scenario, args.output / target)
     comparisons = []
     for index, step in enumerate(scenario["steps"]):
-        if step["action"] != "checkpoint" or not (
-            step.get("screenshot", True) or step.get("visible_regions")
+        if (
+            "reference" not in targets
+            or step["action"] != "checkpoint"
+            or not (step.get("screenshot", True) or step.get("visible_regions"))
         ):
             continue
         left, right = [

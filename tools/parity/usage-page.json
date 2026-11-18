@@ -124,5 +124,45 @@
       },
       "count": 0
     }
+  ],
+  "prepare": [
+    {
+      "helper": "mock",
+      "arguments": {
+        "stream_ms": 100,
+        "usage_models": [
+          "gpt-6-luna",
+          "gpt-6-sol",
+          "parity-unpriced"
+        ]
+      }
+    },
+    {
+      "helper": "completed",
+      "arguments": {
+        "title": "Usage fixture"
+      }
+    },
+    {
+      "helper": "settings",
+      "arguments": {
+        "usagePriceOverrides": {
+          "gpt-6-luna": {
+            "inputCostPerMillionTokens": 2,
+            "outputCostPerMillionTokens": 10,
+            "cacheReadCostPerMillionTokens": 0.2
+          },
+          "gpt-6-sol": {
+            "inputCostPerMillionTokens": 2,
+            "outputCostPerMillionTokens": 10,
+            "cacheReadCostPerMillionTokens": 0.2
+          }
+        }
+      }
+    },
+    {
+      "helper": "usage",
+      "arguments": {}
+    }
   ]
 }

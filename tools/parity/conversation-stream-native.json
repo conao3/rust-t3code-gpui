@@ -49,5 +49,19 @@
       },
       "count": 1
     }
+  ],
+  "targets": [
+    "native"
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Pane Alpha",
+          "Pane Beta"
+        ]
+      }
+    }
   ]
 }

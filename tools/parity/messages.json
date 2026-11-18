@@ -69,5 +69,14 @@
       },
       "text_contains": "Fixture output"
     }
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "completed",
+      "arguments": {}
+    }
+  ],
+  "environment": {
+    "stream_ms": 100
+  }
 }

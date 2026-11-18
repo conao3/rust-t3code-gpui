@@ -1,6 +1,5 @@
 {
   "name": "side-chat-panel",
-  "fixture": "panel",
   "viewport": [
     1400,
     900
@@ -48,6 +47,14 @@
         "name": "Close side chat"
       },
       "count": 1
+    }
+  ],
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "panel"
+      }
     }
   ]
 }

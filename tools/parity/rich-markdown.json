@@ -11,7 +11,7 @@
       "action": "click",
       "selector": {
         "role": "button",
-        "name": "Pane Alpha, Done, UI parity"
+        "name": "Pane Alpha, UI parity"
       }
     },
     {
@@ -116,6 +116,25 @@
         "name": "Expand diagram"
       },
       "count": 2
+    }
+  ],
+  "prepare": [
+    {
+      "helper": "mock",
+      "arguments": {
+        "stream_ms": 100,
+        "text": "Inline math $E = mc^2$ and $\\frac{a}{b}$ stay on the text baseline.\n\n$$\n\\int_0^1 x^2\\,dx = \\frac{1}{3}\n$$\n\n```mermaid\nflowchart LR\n    A[Question] --> B{Ready?}\n    B -->|Yes| C[Answer]\n    B -->|No| A\n```\n\nThe diagram preserves the author's left-to-right direction.\n"
+      }
+    },
+    {
+      "helper": "completed",
+      "arguments": {
+        "title": "Pane Alpha",
+        "prompts": [
+          "First question: show an equation and a diagram.",
+          "Second question: keep the same diagram."
+        ]
+      }
     }
   ]
 }

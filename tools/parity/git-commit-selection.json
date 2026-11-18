@@ -151,9 +151,16 @@
       "count": 0
     }
   ],
-  "fixture": "panel",
   "git_result": {
     "subject": "Commit selected parity file",
     "status": "?? panel-fixture.txt"
-  }
+  },
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "panel"
+      }
+    }
+  ]
 }

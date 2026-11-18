@@ -1,6 +1,5 @@
 {
   "name": "project-script",
-  "fixture": "panel",
   "viewport": [
     1400,
     900
@@ -124,6 +123,14 @@
         "role": "terminal"
       },
       "count": 1
+    }
+  ],
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "panel"
+      }
     }
   ]
 }

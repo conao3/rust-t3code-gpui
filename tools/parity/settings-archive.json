@@ -16,5 +16,16 @@
     {"action":"click","selector":{"role":"treeitem","name":"General"},"native":{"role":"tree item","name":"General"}},
     {"action":"click","selector":{"role":"switch","name":"Confirm thread deletion"},"native":{"role":"toggle button","name":"Confirm thread deletion"}},
     {"action":"press","value":"escape"}
+  ],
+  "prepare": [
+    {
+      "helper": "archive",
+      "arguments": {
+        "titles": [
+          "Restore fixture",
+          "Delete fixture"
+        ]
+      }
+    }
   ]
 }

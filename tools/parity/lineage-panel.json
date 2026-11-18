@@ -13,5 +13,14 @@
     {"action": "focus", "selector": {"role": "button", "name": "Fixture response Done"}},
     {"action": "press", "value": "enter"},
     {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Fixture response"}, "count": 1}
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "fork",
+      "arguments": {}
+    }
+  ],
+  "environment": {
+    "stream_ms": 100
+  }
 }

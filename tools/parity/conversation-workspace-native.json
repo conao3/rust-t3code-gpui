@@ -82,5 +82,19 @@
       },
       "value": "Side draft"
     }
+  ],
+  "targets": [
+    "native"
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Pane Alpha",
+          "Pane Beta"
+        ]
+      }
+    }
   ]
 }

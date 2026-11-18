@@ -108,5 +108,14 @@
       },
       "count": 1
     }
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "fork",
+      "arguments": {}
+    }
+  ],
+  "environment": {
+    "stream_ms": 100
+  }
 }

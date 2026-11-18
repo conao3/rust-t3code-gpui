@@ -177,5 +177,12 @@
       "count": 1
     }
   ],
-  "fixture": "panel"
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "panel"
+      }
+    }
+  ]
 }

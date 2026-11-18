@@ -43,5 +43,53 @@
     {"action": "click", "selector": {"role": "button", "name": "Settled 1"}},
     {"action": "checkpoint", "selector": {"role": "button", "name": "Settled 1", "expanded": true}, "count": 1},
     {"action": "checkpoint", "selector": {"role": "button", "name": "Shelf settled fixture, UI parity"}, "count": 1}
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "mock",
+      "arguments": {
+        "stream_ms": 100
+      }
+    },
+    {
+      "helper": "completed",
+      "arguments": {}
+    },
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Shelf snoozed fixture",
+          "Shelf settled fixture"
+        ]
+      }
+    },
+    {
+      "helper": "snooze",
+      "arguments": {
+        "title": "Shelf snoozed fixture"
+      }
+    },
+    {
+      "helper": "settle",
+      "arguments": {
+        "title": "Shelf settled fixture"
+      }
+    },
+    {
+      "helper": "mock",
+      "arguments": {
+        "stream_ms": 3600000
+      }
+    },
+    {
+      "helper": "running",
+      "arguments": {
+        "title": "Shelf working fixture"
+      }
+    }
+  ],
+  "environment": {
+    "stream_ms": 100
+  }
 }

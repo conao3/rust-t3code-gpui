@@ -416,5 +416,22 @@
       "count": 2,
       "screenshot": false
     }
-  ]
+  ],
+  "targets": [
+    "native"
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Pane Alpha",
+          "Pane Beta"
+        ]
+      }
+    }
+  ],
+  "environment": {
+    "stream_ms": 600000
+  }
 }

@@ -25,5 +25,15 @@
     {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Model defaults fixture"}, "count": 1, "screenshot": false},
     {"action": "click", "selector": {"role": "button", "name": "Go forward"}},
     {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message New thread"}, "count": 1, "reference": {"role": "textbox", "name": "Message New thread", "value": "\n"}, "native": {"role": "textbox", "name": "Message New thread", "value": ""}}
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Model defaults fixture"
+        ]
+      }
+    }
   ]
 }

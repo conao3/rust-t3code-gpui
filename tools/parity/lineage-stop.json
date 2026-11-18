@@ -11,5 +11,28 @@
     {"action": "press", "value": "enter"},
     {"action": "checkpoint", "selector": {"role": "button", "name": "Stop subagent Parity Stop"}, "count": 0},
     {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Lineage stop fixture"}, "count": 1}
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "lineage_stop",
+      "arguments": {}
+    },
+    {
+      "helper": "actions",
+      "arguments": {
+        "steps": [
+          {
+            "action": "click",
+            "selector": {
+              "role": "button",
+              "name": "Working 1"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "environment": {
+    "stream_ms": 600000
+  }
 }

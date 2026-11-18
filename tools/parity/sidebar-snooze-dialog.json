@@ -77,5 +77,16 @@
       "value": "2",
       "count": 1
     }
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Next interaction fixture",
+          "Snooze interaction fixture"
+        ]
+      }
+    }
   ]
 }

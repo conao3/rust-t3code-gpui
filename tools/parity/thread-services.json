@@ -1,6 +1,5 @@
 {
   "name": "thread-services",
-  "fixture": "services",
   "viewport": [
     1400,
     900
@@ -153,5 +152,13 @@
       "type": "interval",
       "everyMs": 3600000
     }
-  }
+  },
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "services"
+      }
+    }
+  ]
 }

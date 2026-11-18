@@ -43,14 +43,20 @@ class ReplayTests(unittest.TestCase):
                     json.dumps(dict(type="emit_inbound", **entry)) for entry in entries
                 )
             )
+            settings = Path(directory) / "settings.json"
+            settings.write_text(
+                json.dumps(
+                    {"stream_ms": 3000, "text": "fixture\n" * 200, "usage_models": []}
+                )
+            )
             with subprocess.Popen(
                 [
                     sys.executable,
                     str(Path(__file__).with_name("replay_codex.py")),
                     "--transcript",
                     str(transcript),
-                    "--stream-ms",
-                    "3000",
+                    "--settings",
+                    str(settings),
                 ],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,

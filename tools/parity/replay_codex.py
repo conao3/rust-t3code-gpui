@@ -6,11 +6,12 @@ import sys
 import threading
 import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--transcript", type=Path, required=True)
-parser.add_argument("--stream-ms", type=int, default=15000)
+parser.add_argument("--settings", type=Path, required=True)
 args, extra = parser.parse_known_args()
 if "--version" in extra:
     print("codex-cli 0.167.2")
@@ -91,6 +92,35 @@ def replace(value, mapping):
 
 
 def stream(thread_id, turn_id, cwd, interrupted):
+    settings = json.loads(args.settings.read_text())
+    stream_ms = settings["stream_ms"]
+    for index, model in enumerate(settings["usage_models"]):
+        session = (
+            Path(os.environ["CODEX_HOME"])
+            / "sessions"
+            / f"parity-{thread_id}-{index}.jsonl"
+        )
+        session.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        entries = [
+            {"type": "session_meta", "payload": {"id": f"{thread_id}-{index}"}},
+            {"type": "turn_context", "payload": {"model": model}},
+            {
+                "type": "event_msg",
+                "timestamp": timestamp,
+                "payload": {
+                    "type": "token_count",
+                    "info": {
+                        "last_token_usage": {
+                            "input_tokens": 1000,
+                            "output_tokens": 100,
+                            "cached_input_tokens": 100,
+                        }
+                    },
+                },
+            },
+        ]
+        session.write_text("".join(json.dumps(entry) + "\n" for entry in entries))
     mapping = {
         old_thread: thread_id,
         old_turn: turn_id,
@@ -100,10 +130,7 @@ def stream(thread_id, turn_id, cwd, interrupted):
         item = frame.get("params", {}).get("item")
         if item:
             mapping[item["id"]] = "fixture-item-" + uuid.uuid4().hex
-    text = "".join(
-        f"Fixture output {i:03d}: deterministic text, **Markdown**, 日本語の表示。\n\n"
-        for i in range(200)
-    )
+    text = settings["text"]
     agent_item = None
     for frame in notifications:
         frame = replace(copy.deepcopy(frame), mapping)
@@ -131,7 +158,7 @@ def stream(thread_id, turn_id, cwd, interrupted):
                 delay = (
                     started
                     + (index + 1)
-                    * args.stream_ms
+                    * stream_ms
                     / 1000
                     / len(text.splitlines(keepends=True))
                     - time.monotonic()
@@ -145,7 +172,7 @@ def stream(thread_id, turn_id, cwd, interrupted):
             for item in params["turn"]["items"]:
                 if item["type"] == "agentMessage":
                     item["text"] = text
-            params["turn"]["durationMs"] = args.stream_ms
+            params["turn"]["durationMs"] = stream_ms
             if interrupted.is_set():
                 params["turn"]["status"] = "interrupted"
         write(frame)

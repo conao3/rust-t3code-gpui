@@ -50,7 +50,9 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         app = object.__new__(Native)
         app.focus = Mock()
         app.xdo = Mock()
-        app.atspi = SimpleNamespace(STATE_ENABLED="enabled", SCROLL_ANYWHERE="anywhere")
+        app.atspi = SimpleNamespace(
+            STATE_ENABLED="enabled", SCROLL_ANYWHERE="anywhere", DESKTOP_COORDS=0
+        )
         node = Mock()
         node.name = "Settled 1"
         node.getRoleName.return_value = "push button"
@@ -78,8 +80,18 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
                 },
             ]
 
-        app.tree = bounds
+        app.tree = Mock(side_effect=bounds)
+        app.content_bounds = Mock(
+            return_value={"x": 0, "y": 0, "width": 800, "height": 600}
+        )
+
+        def current_bounds(*_):
+            events.append("bounds")
+            return SimpleNamespace(x=10, y=20, width=100, height=32)
+
+        node.queryComponent.return_value.getExtents.side_effect = current_bounds
         app.click("push button", "Settled 1")
+        app.tree.assert_called_once()
         self.assertEqual(events, ["bounds", "scroll", "bounds", "bounds"])
         self.assertIn(unittest.mock.call("mousemove", 60, 36), app.xdo.call_args_list)
 
@@ -117,7 +129,9 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         app.atspi = SimpleNamespace(
             STATE_ENABLED="enabled",
             STATE_FOCUSABLE="focusable",
+            STATE_FOCUSED="focused",
             SCROLL_ANYWHERE="anywhere",
+            DESKTOP_COORDS=0,
         )
         node = Mock(name="entry")
         node.name = "Message"
@@ -149,6 +163,12 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         node.getState.return_value.contains.return_value = True
         node.getState.return_value.contains.side_effect = None
         node.queryComponent.return_value.grabFocus.return_value = True
+        node.queryComponent.return_value.getExtents.return_value = SimpleNamespace(
+            x=10, y=20, width=100, height=32
+        )
+        app.content_bounds = Mock(
+            return_value={"x": 0, "y": 0, "width": 800, "height": 600}
+        )
         app.focus_control("entry", "Message")
         node.queryComponent.return_value.scrollTo.assert_called_once_with("anywhere")
         node.queryComponent.return_value.grabFocus.assert_called_once()
@@ -159,16 +179,19 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
 
         app = object.__new__(Native)
         app.focus = Mock()
-        app.reveal_control = Mock()
-        app.tree = Mock(
-            side_effect=[
-                [{"role": "entry", "name": "Message", "focused": focused}]
-                for focused in [False, True]
-            ]
-        )
+        node = Mock()
+        node.getState.return_value.contains.side_effect = [False, True]
+        app.atspi = SimpleNamespace(STATE_FOCUSED="focused")
+        app.reveal_control = Mock(return_value=node)
+        app.tree = Mock()
         with patch("native.time.sleep"):
             app.focus_control("entry", "Message")
-        self.assertEqual(app.tree.call_count, 2)
+        app.tree.assert_called_once()
+        self.assertEqual(node.clear_cache.call_count, 2)
+        self.assertEqual(
+            node.getState.return_value.contains.call_args_list,
+            [unittest.mock.call("focused"), unittest.mock.call("focused")],
+        )
 
     async def test_held_control_applies_to_a_number_and_is_released(self):
         app = Cdp("http://127.0.0.1:39991")
@@ -345,7 +368,7 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
                 Path(directory),
             )
         self.assertEqual(result[0]["status"], "passed")
-        app.click.assert_awaited_once_with("radio menu item", "New worktree", 0)
+        app.click_snapshot.assert_called_once_with("radio menu item", "New worktree", 0)
 
     async def test_cdp_keeps_visible_ancestors_across_ignored_layout_nodes(self):
         app = Cdp("http://127.0.0.1:39991")
@@ -619,7 +642,7 @@ class ComparisonTests(unittest.TestCase):
         self.assertFalse(stale_object(error))
 
     def test_large_snapshots_retry_stale_nodes_with_a_bounded_attempt_count(self):
-        from native import Native
+        from native import Native, RemovedAccessible
 
         class StaleError(Exception):
             pass
@@ -642,6 +665,10 @@ class ComparisonTests(unittest.TestCase):
             with self.assertRaises(StaleError):
                 app.tree()
             self.assertEqual(app.snapshot.call_count, 3)
+            app.snapshot = Mock(side_effect=RemovedAccessible("defunct"))
+            with self.assertRaises(RemovedAccessible):
+                app.tree()
+            self.assertEqual(app.snapshot.call_count, 3)
 
     def test_native_click_uses_the_retrying_snapshot_instead_of_stale_objects(self):
         from native import Native
@@ -658,7 +685,12 @@ class ComparisonTests(unittest.TestCase):
             ]
         )
         app.nodes = Mock(side_effect=RuntimeError("Stale accessibility object"))
-        app.reveal_control = Mock()
+        node = Mock()
+        node.queryComponent.return_value.getExtents.return_value = SimpleNamespace(
+            x=10, y=20, width=32, height=32
+        )
+        app.reveal_control = Mock(return_value=node)
+        app.atspi = SimpleNamespace(DESKTOP_COORDS=0, STATE_ENABLED="enabled")
         app.xdo = Mock()
         with patch("native.time.sleep"):
             app.click("button", "Choose editor")
@@ -676,8 +708,12 @@ class ComparisonTests(unittest.TestCase):
             def clear_cache(self):
                 self.cached = self.children
 
-            def __iter__(self):
-                return iter(self.cached)
+            @property
+            def childCount(self):
+                return len(self.cached)
+
+            def getChildAtIndex(self, index):
+                return self.cached[index]
 
         child = Node([])
         parent = Node([child])
@@ -688,6 +724,39 @@ class ComparisonTests(unittest.TestCase):
         self.assertNotEqual(child.cached, child.children)
         self.assertEqual(list(nodes), [child])
         self.assertEqual(app.parent_paths[id(child)], [id(parent)])
+
+    def test_content_geometry_rechecks_the_live_node_without_rewalking_the_tree(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        node = Mock()
+        node.queryComponent.return_value.getExtents.side_effect = [
+            SimpleNamespace(x=40, y=40, width=800, height=600),
+            SimpleNamespace(x=60, y=60, width=1400, height=900),
+        ]
+        app.snapshot_controls = {("panel", "Application content"): [node]}
+        app.tree = Mock()
+        app.atspi = SimpleNamespace(DESKTOP_COORDS=0)
+        self.assertEqual(app.content_bounds()["width"], 800)
+        self.assertEqual(app.content_bounds()["width"], 1400)
+        app.tree.assert_called_once()
+        self.assertEqual(node.clear_cache.call_count, 2)
+
+    def test_invalid_child_counts_cannot_produce_a_successful_partial_snapshot(self):
+        from native import Native
+
+        app = object.__new__(Native)
+        parent = Mock(childCount=-1)
+        parent.getState.return_value.contains.return_value = False
+        app.atspi = SimpleNamespace(STATE_DEFUNCT="defunct")
+        app.app = Mock(return_value=parent)
+        with self.assertRaisesRegex(RuntimeError, "negative child count"):
+            list(app.nodes())
+        parent.getState.return_value.contains.return_value = True
+        from native import RemovedAccessible
+
+        with self.assertRaises(RemovedAccessible):
+            list(app.nodes())
 
     def test_platform_accessibility_roles_keep_the_same_control_semantics(self):
         for native, reference in [

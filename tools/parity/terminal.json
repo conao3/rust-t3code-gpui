@@ -18,5 +18,14 @@
     {"action": "press", "value": "ctrl+j"},
     {"action": "checkpoint", "selector": {"role": "textbox", "name": "Terminal input"}, "native": {"role": "terminal"}, "count": 3},
     {"action": "checkpoint", "selector": {"role": "StaticText"}, "native": {"role": "document frame", "name": "Assistant message"}, "text_contains": "Fixture output 199"}
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "completed",
+      "arguments": {}
+    }
+  ],
+  "environment": {
+    "stream_ms": 100
+  }
 }

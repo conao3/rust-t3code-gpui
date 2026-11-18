@@ -56,5 +56,10 @@ class FixtureRpc:
                     and reply.get("requestId", reply.get("id")) == request
                 ):
                     if reply["exit"]["_tag"] != "Success":
-                        raise RuntimeError("Fixture RPC request failed: " + method)
+                        raise RuntimeError(
+                            "Fixture RPC request failed: "
+                            + method
+                            + ": "
+                            + json.dumps(reply["exit"])
+                        )
                     return reply["exit"]["value"]

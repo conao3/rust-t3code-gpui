@@ -200,13 +200,24 @@ def fixture(generation, options):
         provider = base / "provider"
         provider.mkdir()
         wrapper = base / "mock-codex"
+        write_json(
+            base / "mock-settings.json",
+            {
+                "stream_ms": options["stream_ms"],
+                "usage_models": [],
+                "text": "".join(
+                    f"Fixture output {i:03d}: deterministic text, **Markdown**, 日本語の表示。\n\n"
+                    for i in range(200)
+                ),
+            },
+        )
         command = [
             sys.executable,
             str(TOOLS / "replay_codex.py"),
             "--transcript",
             str(base / "transcript.ndjson"),
-            "--stream-ms",
-            str(options["stream_ms"]),
+            "--settings",
+            str(base / "mock-settings.json"),
         ]
         wrapper.write_text("#!/bin/sh\nexec " + shlex.join(command) + ' "$@"\n')
         wrapper.chmod(0o700)
@@ -400,6 +411,7 @@ def worker(slot_path):
             "XDG_CONFIG_HOME": str(isolated_home / "config"),
             "XDG_STATE_HOME": str(isolated_home / "state"),
             "XDG_CACHE_HOME": str(isolated_home / "cache"),
+            "GIT_CEILING_DIRECTORIES": str(generation),
         }
     )
 

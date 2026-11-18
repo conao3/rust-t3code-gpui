@@ -96,9 +96,16 @@
       "count": 0
     }
   ],
-  "fixture": "panel",
   "git_result": {
     "subject": "Add parity panel fixture",
     "status": ""
-  }
+  },
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "panel"
+      }
+    }
+  ]
 }

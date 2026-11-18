@@ -143,5 +143,16 @@
       "count": 1,
       "screenshot": false
     }
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "running",
+      "arguments": {
+        "title": "Working transition fixture"
+      }
+    }
+  ],
+  "environment": {
+    "stream_ms": 3600000
+  }
 }

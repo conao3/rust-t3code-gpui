@@ -50,5 +50,19 @@
         "name": "Resume thread"
       }
     }
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "queue",
+      "arguments": {
+        "messages": [
+          "Queued alpha",
+          "Queued beta"
+        ]
+      }
+    }
+  ],
+  "environment": {
+    "stream_ms": 600000
+  }
 }

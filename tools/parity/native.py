@@ -11,11 +11,19 @@ from itertools import groupby
 from pathlib import Path
 
 
+class RemovedAccessible(RuntimeError):
+    pass
+
+
 def stale_object(error):
-    return "Unknown object" in str(error) or (
-        error.domain == "atspi_error"
-        and error.code == 1
-        and error.message.startswith("/org/a11y/atspi/accessible/")
+    return (
+        isinstance(error, RemovedAccessible)
+        or "Unknown object" in str(error)
+        or (
+            error.domain == "atspi_error"
+            and error.code == 1
+            and error.message.startswith("/org/a11y/atspi/accessible/")
+        )
     )
 
 
@@ -45,6 +53,36 @@ class Native:
                         "Native fixture did not open its window"
                     ) from None
                 time.sleep(0.1)
+
+    def measured(self, operation, callback):
+        if not os.environ.get("T3_PARITY_ATSPI_TRACE"):
+            return callback()
+        started = time.monotonic()
+        error = None
+        result = None
+        try:
+            result = callback()
+            return result
+        except Exception as failure:
+            error = str(failure)
+            raise
+        finally:
+            if path := os.environ.get("T3_PARITY_ATSPI_TRACE"):
+                with open(path, "a") as output:
+                    output.write(
+                        json.dumps(
+                            {
+                                "operation": operation,
+                                "started": started,
+                                "nodes": len(result)
+                                if operation == "snapshot" and result is not None
+                                else None,
+                                "seconds": time.monotonic() - started,
+                                "error": error,
+                            }
+                        )
+                        + "\n"
+                    )
 
     def renderer_info(self):
         prefix = "T3CODE_GPUI_RENDERER_INFO "
@@ -76,7 +114,7 @@ class Native:
         self.parent_paths = {}
         while queue:
             node, parents = queue.pop(0)
-            node.clear_cache()
+            self.measured("clear_cache", node.clear_cache)
             self.parent_paths[id(node)] = parents
             count += 1
             if count > 5000:
@@ -84,9 +122,24 @@ class Native:
                     "Accessible tree exceeds 5000 nodes; refusing an incomplete snapshot"
                 )
             yield node
-            queue.extend(
-                (child, parents + [id(node)]) for child in node if child is not None
+            children_count = self.measured(
+                "child_count", lambda node=node: node.childCount
             )
+            if children_count < 0:
+                state = self.measured("state", node.getState)
+                if state.contains(self.atspi.STATE_DEFUNCT):
+                    raise RemovedAccessible(
+                        "AT-SPI child count belongs to a removed node"
+                    )
+                self.measured("role", node.getRoleName)
+                raise RuntimeError("AT-SPI returned a negative child count")
+            for index in range(children_count):
+                child = self.measured(
+                    "child_at_index",
+                    lambda node=node, index=index: node.getChildAtIndex(index),
+                )
+                if child is not None:
+                    queue.append((child, parents + [id(node)]))
 
     def tree(self):
         from gi.repository import GLib
@@ -98,8 +151,8 @@ class Native:
             while context.pending():
                 context.iteration(False)
             try:
-                return self.snapshot()
-            except GLib.Error as error:
+                return self.measured("snapshot", self.snapshot)
+            except (GLib.Error, RemovedAccessible) as error:
                 if not stale_object(error) or attempts >= 3:
                     raise
                 time.sleep(0.05)
@@ -109,12 +162,17 @@ class Native:
         controls = {}
         identities = {}
         for node in self.nodes():
-            role = node.getRoleName()
-            name = node.name
+            role = self.measured("role", node.getRoleName)
+            name = self.measured("name", lambda node=node: node.name)
             identities[id(node)] = {"role": role, "name": name}
             controls.setdefault((role, name), []).append(node)
             try:
-                rect = node.queryComponent().getExtents(self.atspi.DESKTOP_COORDS)
+                rect = self.measured(
+                    "bounds",
+                    lambda node=node: node.queryComponent().getExtents(
+                        self.atspi.DESKTOP_COORDS
+                    ),
+                )
                 bounds = {
                     "x": rect.x,
                     "y": rect.y,
@@ -133,11 +191,16 @@ class Native:
                 "combo box",
             ]:
                 try:
-                    content = node.queryText()
-                    value = content.getText(0, content.characterCount)
+                    content = self.measured("query_text", node.queryText)
+                    value = self.measured(
+                        "text",
+                        lambda content=content: content.getText(
+                            0, content.characterCount
+                        ),
+                    )
                 except NotImplementedError:
                     pass
-            state = node.getState()
+            state = self.measured("state", node.getState)
             result.append(
                 {
                     "role": role,
@@ -172,6 +235,7 @@ class Native:
                 }
             )
         self.snapshot_controls = controls
+        self.snapshot_nodes = result
         return result
 
     def focus(self):
@@ -180,43 +244,59 @@ class Native:
         time.sleep(0.1)
 
     def focus_control(self, role, name, index=0):
+        self.snapshot_nodes = self.tree()
+        self.focus_snapshot(role, name, index)
+
+    def focus_snapshot(self, role, name, index=0):
         self.focus()
         node = self.reveal_control(role, name, index, require_focus=True)
         if not node.queryComponent().grabFocus():
             raise RuntimeError(f"Focus request failed: {role} {name!r}")
         deadline = time.monotonic() + 5
         while True:
-            matches = [
-                node
-                for node in self.tree()
-                if node["role"] == role and node["name"] == name
-            ]
-            if index < len(matches) and matches[index]["focused"]:
+            self.measured("clear_cache", node.clear_cache)
+            if self.measured("state", node.getState).contains(self.atspi.STATE_FOCUSED):
                 return
             if time.monotonic() >= deadline:
                 raise RuntimeError(f"Focus was not applied: {role} {name!r} #{index}")
             time.sleep(0.05)
 
     def reveal_control(self, role, name, index=0, *, require_focus=False):
-        matches = [
-            node
-            for node in self.tree()
-            if node["role"] == role and node["name"] == name
-        ]
-        if not 0 <= index < len(matches):
+        controls = self.snapshot_controls.get((role, name), [])
+        if not 0 <= index < len(controls):
             raise RuntimeError(
-                f"Cannot find {role} {name!r} #{index}; matches={len(matches)}"
+                f"Cannot find {role} {name!r} #{index} in the current snapshot"
             )
-        node = self.snapshot_controls[(role, name)][index]
-        state = node.getState()
+        node = controls[index]
+        node.clear_cache()
+        state = self.measured("state", node.getState)
         if not state.contains(self.atspi.STATE_ENABLED):
             raise RuntimeError(f"Target is disabled: {role} {name!r}")
         if require_focus and not state.contains(self.atspi.STATE_FOCUSABLE):
             raise RuntimeError(f"Target cannot take focus: {role} {name!r}")
         node.queryComponent().scrollTo(self.atspi.SCROLL_ANYWHERE)
         time.sleep(0.1)
+
+        def live_bounds(control):
+            self.measured("clear_cache", control.clear_cache)
+            try:
+                rect = self.measured(
+                    "bounds",
+                    lambda: control.queryComponent().getExtents(
+                        self.atspi.DESKTOP_COORDS
+                    ),
+                )
+            except NotImplementedError:
+                return None
+            return {
+                "x": rect.x,
+                "y": rect.y,
+                "width": rect.width,
+                "height": rect.height,
+            }
+
         for attempt in range(16):
-            nodes = self.tree()
+            nodes = self.tree() if attempt else self.snapshot_nodes
             matches = [
                 item for item in nodes if item["role"] == role and item["name"] == name
             ]
@@ -225,25 +305,20 @@ class Native:
                     f"Target disappeared while revealing: {role} {name!r}"
                 )
             target = matches[index]
-            rect = target["bounds"]
+            node = self.snapshot_controls[(role, name)][index]
+            rect = live_bounds(node)
             if rect is None or rect["width"] <= 0 or rect["height"] <= 0:
                 raise RuntimeError(f"Target has no bounds: {role} {name!r}")
-            viewport = next(
-                item["bounds"]
-                for item in nodes
-                if item["name"] == "Application content"
-            )
+            viewport = self.content_bounds()
             for ancestor in target["ancestors"]:
-                candidates = [
-                    item["bounds"]
-                    for item in nodes
-                    if item["role"] == ancestor["role"]
-                    and item["name"] == ancestor["name"]
-                    and item["bounds"] is not None
-                ]
+                candidates = self.snapshot_controls.get(
+                    (ancestor["role"], ancestor["name"]), []
+                )
                 if len(candidates) != 1:
                     continue
-                bounds = candidates[0]
+                bounds = live_bounds(candidates[0])
+                if bounds is None:
+                    continue
                 left = max(viewport["x"], bounds["x"])
                 top = max(viewport["y"], bounds["y"])
                 right = min(
@@ -265,7 +340,7 @@ class Native:
                 viewport["x"] <= center_x < viewport["x"] + viewport["width"]
                 and viewport["y"] <= center_y < viewport["y"] + viewport["height"]
             ):
-                return self.snapshot_controls[(role, name)][index]
+                return node
             if attempt == 0:
                 logging.getLogger(__name__).warning(
                     "Revealing off-screen native control with X11 wheel input: %s %r",
@@ -289,22 +364,19 @@ class Native:
         raise RuntimeError(f"Could not reveal native control: {role} {name!r}")
 
     def click(self, role, name, index=0):
+        self.snapshot_nodes = self.tree()
+        self.click_snapshot(role, name, index)
+
+    def click_snapshot(self, role, name, index=0):
         self.focus()
-        self.reveal_control(role, name, index)
-        matches = [
-            node
-            for node in self.tree()
-            if node["role"] == role and node["name"] == name
-        ]
-        if not 0 <= index < len(matches):
-            raise RuntimeError(
-                f"Cannot find {role} {name!r} #{index}; matches={len(matches)}"
-            )
-        rect = matches[index]["bounds"]
-        if matches[index].get("disabled", False):
+        node = self.reveal_control(role, name, index)
+        node.clear_cache()
+        if not node.getState().contains(self.atspi.STATE_ENABLED):
             raise RuntimeError(f"Target is disabled: {role} {name!r}")
-        if rect is None or rect["width"] <= 0 or rect["height"] <= 0:
+        rect = node.queryComponent().getExtents(self.atspi.DESKTOP_COORDS)
+        if rect.width <= 0 or rect.height <= 0:
             raise RuntimeError("Target has no visible bounds")
+        rect = {"x": rect.x, "y": rect.y, "width": rect.width, "height": rect.height}
         self.xdo(
             "mousemove", rect["x"] + rect["width"] // 2, rect["y"] + rect["height"] // 2
         )
@@ -398,12 +470,27 @@ class Native:
             )
 
     def content_bounds(self):
-        groups = [node for node in self.tree() if node["name"] == "Application content"]
-        if len(groups) != 1:
-            raise RuntimeError(
-                f"Expected one accessible application content group, got {len(groups)}"
-            )
-        return groups[0]["bounds"]
+        if not hasattr(self, "content_node"):
+            self.tree()
+            groups = [
+                node
+                for (_, name), nodes in self.snapshot_controls.items()
+                if name == "Application content"
+                for node in nodes
+            ]
+            if len(groups) != 1:
+                raise RuntimeError(
+                    f"Expected one accessible application content group, got {len(groups)}"
+                )
+            self.content_node = groups[0]
+        self.measured("clear_cache", self.content_node.clear_cache)
+        rect = self.measured(
+            "content_bounds",
+            lambda: self.content_node.queryComponent().getExtents(
+                self.atspi.DESKTOP_COORDS
+            ),
+        )
+        return {"x": rect.x, "y": rect.y, "width": rect.width, "height": rect.height}
 
     def geometry(self):
         return dict(
@@ -465,6 +552,7 @@ class Native:
                 current.save(path)
                 return
             if time.monotonic() >= deadline:
+                current.save(path.with_stem(path.stem + "-unstable"))
                 raise RuntimeError(
                     "Native checkpoint did not reach a stable painted frame"
                 )

@@ -1,6 +1,5 @@
 {
   "name": "device-panel",
-  "fixture": "panel",
   "viewport": [
     1400,
     900
@@ -99,6 +98,14 @@
         "name": "Set up devices"
       },
       "count": 1
+    }
+  ],
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "panel"
+      }
     }
   ]
 }

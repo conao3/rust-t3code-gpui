@@ -52,5 +52,22 @@
       },
       "count": 2
     }
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "queue",
+      "arguments": {
+        "messages": [
+          "Queued 1",
+          "Queued 2",
+          "Queued 3",
+          "Queued 4",
+          "Queued 5"
+        ]
+      }
+    }
+  ],
+  "environment": {
+    "stream_ms": 600000
+  }
 }

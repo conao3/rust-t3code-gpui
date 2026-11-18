@@ -43,5 +43,16 @@
       },
       "count": 0
     }
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Pane Alpha",
+          "Pane Beta"
+        ]
+      }
+    }
   ]
 }

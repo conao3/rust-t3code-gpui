@@ -27,5 +27,12 @@
       }
     }
   ],
-  "fixture": "panel"
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "panel"
+      }
+    }
+  ]
 }

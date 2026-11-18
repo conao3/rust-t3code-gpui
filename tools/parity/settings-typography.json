@@ -117,5 +117,21 @@
       },
       "text_contains": "16 px"
     }
+  ],
+  "prepare": [
+    {
+      "helper": "actions",
+      "arguments": {
+        "steps": [
+          {
+            "action": "click",
+            "selector": {
+              "role": "button",
+              "name": "Settings"
+            }
+          }
+        ]
+      }
+    }
   ]
 }

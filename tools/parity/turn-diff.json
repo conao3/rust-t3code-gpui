@@ -1,6 +1,5 @@
 {
   "name": "turn-diff",
-  "fixture": "turn",
   "viewport": [
     1400,
     900
@@ -140,6 +139,14 @@
         "name": "Copy file path"
       },
       "count": 3
+    }
+  ],
+  "prepare": [
+    {
+      "helper": "panel",
+      "arguments": {
+        "kind": "turn"
+      }
     }
   ]
 }

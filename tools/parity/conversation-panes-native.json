@@ -106,5 +106,19 @@
       },
       "value": "First pane draft"
     }
+  ],
+  "targets": [
+    "native"
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Pane Alpha",
+          "Pane Beta"
+        ]
+      }
+    }
   ]
 }

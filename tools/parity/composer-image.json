@@ -21,5 +21,14 @@
         "name": "composer-fixture.png"
       }
     }
-  ]
+  ],
+  "prepare": [
+    {
+      "helper": "image",
+      "arguments": {}
+    }
+  ],
+  "environment": {
+    "stream_ms": 600000
+  }
 }

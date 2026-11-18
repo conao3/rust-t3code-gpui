@@ -13,5 +13,43 @@
     {"action":"press","value":"enter"},
     {"action":"checkpoint","selector":{"role":"textbox","name":"Message Next interaction fixture","focused":true},"count":1},
     {"action":"checkpoint","selector":{"role":"button","name":"Settled 1"},"count":1}
+  ],
+  "prepare": [
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Next interaction fixture",
+          "Snooze interaction fixture"
+        ]
+      }
+    },
+    {
+      "helper": "snooze",
+      "arguments": {
+        "title": "Snooze interaction fixture"
+      }
+    },
+    {
+      "helper": "actions",
+      "arguments": {
+        "steps": [
+          {
+            "action": "click",
+            "selector": {
+              "role": "button",
+              "name": "Next interaction fixture, UI parity"
+            }
+          },
+          {
+            "action": "click",
+            "selector": {
+              "role": "button",
+              "name": "Snoozed 1"
+            }
+          }
+        ]
+      }
+    }
   ]
 }

@@ -70,5 +70,55 @@
       },
       "count": 1
     }
+  ],
+  "prepare": [
+    {
+      "helper": "provider",
+      "arguments": {
+        "instanceId": "codex_hub",
+        "instance": {
+          "driver": "codex",
+          "enabled": false,
+          "displayName": "Codex Hub",
+          "accentColor": "#1b4ed8"
+        }
+      }
+    },
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Provider fixture codex_hub"
+        ],
+        "model": {
+          "instanceId": "codex_hub",
+          "model": "gpt-6-luna"
+        }
+      }
+    },
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Provider fixture kiro"
+        ],
+        "model": {
+          "instanceId": "kiro",
+          "model": "gpt-6-luna"
+        }
+      }
+    },
+    {
+      "helper": "threads",
+      "arguments": {
+        "titles": [
+          "Provider fixture codex"
+        ],
+        "model": {
+          "instanceId": "codex",
+          "model": "gpt-6-luna"
+        }
+      }
+    }
   ]
 }
