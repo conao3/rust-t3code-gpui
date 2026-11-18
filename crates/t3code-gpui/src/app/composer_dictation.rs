@@ -78,19 +78,13 @@ impl Root {
             let stream = self.conversation.dictation.stream.take();
             let (cancel, cancelled) = tokio::sync::oneshot::channel();
             self.conversation.dictation.cancel = Some(cancel);
-            let mut options = json!({
+            let options = json!({
                 "speechLanguage": settings["speechLanguage"].as_str().unwrap_or("auto"),
                 "speechTranslateToEnglish": settings["speechTranslateToEnglish"].as_bool().unwrap_or(false),
                 "speechCustomWords": settings["speechCustomWords"].as_array().cloned().unwrap_or_default(),
                 "speechRemoveFillerWords": settings["speechRemoveFillerWords"].as_bool().unwrap_or(true),
                 "speechSilenceFiltering": settings["speechSilenceFiltering"].as_bool().unwrap_or(true)
             });
-            if let Some(cue) = settings
-                .get("speechCorrectionWord")
-                .filter(|value| value.is_string())
-            {
-                options["speechCorrectionWord"] = cue.clone();
-            }
             self.spawn_pane_in(window, cx, async move |this, cx| {
                 let result = on_runtime(&runtime, async move {
                     tokio::select! {
