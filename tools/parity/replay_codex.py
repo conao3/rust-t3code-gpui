@@ -11,6 +11,8 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument("--transcript", type=Path, required=True)
 parser.add_argument("--stream-ms", type=int, default=15000)
+parser.add_argument("--response-file", type=Path)
+parser.add_argument("--stream-ms-file", type=Path)
 args, extra = parser.parse_known_args()
 if "--version" in extra:
     print("codex-cli 0.167.2")
@@ -68,6 +70,7 @@ old_thread = responses["thread/start"]["thread"]["id"]
 old_turn = responses["turn/start"]["turn"]["id"]
 lock = threading.Lock()
 active_turns = {}
+active_requests = {}
 
 
 def write(value):
@@ -91,6 +94,9 @@ def replace(value, mapping):
 
 
 def stream(thread_id, turn_id, cwd, interrupted):
+    stream_ms = (
+        int(args.stream_ms_file.read_text()) if args.stream_ms_file else args.stream_ms
+    )
     mapping = {
         old_thread: thread_id,
         old_turn: turn_id,
@@ -100,14 +106,28 @@ def stream(thread_id, turn_id, cwd, interrupted):
         item = frame.get("params", {}).get("item")
         if item:
             mapping[item["id"]] = "fixture-item-" + uuid.uuid4().hex
-    text = "".join(
-        f"Fixture output {i:03d}: deterministic text, **Markdown**, 日本語の表示。\n\n"
-        for i in range(200)
+    text = (
+        args.response_file.read_text()
+        if args.response_file
+        else "".join(
+            f"Fixture output {i:03d}: deterministic text, **Markdown**, 日本語の表示。\n\n"
+            for i in range(200)
+        )
     )
     agent_item = None
     for frame in notifications:
         frame = replace(copy.deepcopy(frame), mapping)
         method, params = frame["method"], frame["params"]
+        if "id" in frame:
+            request_id = "fixture-request-" + uuid.uuid4().hex
+            resolved = threading.Event()
+            active_requests[request_id] = resolved
+            frame["id"] = request_id
+            write(frame)
+            while not resolved.wait(0.05) and not interrupted.is_set():
+                pass
+            del active_requests[request_id]
+            continue
         if method == "item/agentMessage/delta":
             continue
         if method == "item/started" and params["item"]["type"] == "agentMessage":
@@ -131,7 +151,7 @@ def stream(thread_id, turn_id, cwd, interrupted):
                 delay = (
                     started
                     + (index + 1)
-                    * args.stream_ms
+                    * stream_ms
                     / 1000
                     / len(text.splitlines(keepends=True))
                     - time.monotonic()
@@ -145,7 +165,7 @@ def stream(thread_id, turn_id, cwd, interrupted):
             for item in params["turn"]["items"]:
                 if item["type"] == "agentMessage":
                     item["text"] = text
-            params["turn"]["durationMs"] = args.stream_ms
+            params["turn"]["durationMs"] = stream_ms
             if interrupted.is_set():
                 params["turn"]["status"] = "interrupted"
         write(frame)
@@ -158,6 +178,9 @@ for line in sys.stdin:
     params = message.get("params") or {}
     request = message.get("id")
     result = None
+    if method is None and request in active_requests:
+        active_requests[request].set()
+        continue
     if method == "initialize":
         result = {
             "userAgent": "t3-parity-fixture/0.167.2",
