@@ -22,47 +22,185 @@
     },
     {
       "input": {
-        "hasPendingApprovals": true,
+        "hasPendingApprovals": false,
         "hasPendingUserInput": false,
         "pendingSubagentRequest": null,
         "pendingGuestMessageCount": 0,
-        "runtime": null,
+        "runtime": {
+          "status": "preparing",
+          "lastErrorClass": null
+        },
         "blockedOnThreadWait": false
       },
-      "expected": "approval"
+      "expected": "preparing"
     },
     {
       "input": {
         "hasPendingApprovals": false,
-        "hasPendingUserInput": true,
+        "hasPendingUserInput": false,
         "pendingSubagentRequest": null,
         "pendingGuestMessageCount": 0,
-        "runtime": null,
+        "runtime": {
+          "status": "queued",
+          "lastErrorClass": null
+        },
         "blockedOnThreadWait": false
       },
-      "expected": "input"
+      "expected": "working"
     },
     {
       "input": {
         "hasPendingApprovals": false,
         "hasPendingUserInput": false,
-        "pendingSubagentRequest": "approval",
+        "pendingSubagentRequest": null,
         "pendingGuestMessageCount": 0,
-        "runtime": null,
-        "blockedOnThreadWait": false
+        "runtime": {
+          "status": "queued",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": true
       },
-      "expected": "approval"
+      "expected": "working"
     },
     {
       "input": {
         "hasPendingApprovals": false,
         "hasPendingUserInput": false,
-        "pendingSubagentRequest": "user_input",
+        "pendingSubagentRequest": null,
         "pendingGuestMessageCount": 0,
-        "runtime": null,
+        "runtime": {
+          "status": "starting",
+          "lastErrorClass": null
+        },
         "blockedOnThreadWait": false
       },
-      "expected": "input"
+      "expected": "working"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "starting",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": true
+      },
+      "expected": "working"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "running",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": false
+      },
+      "expected": "working"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "running",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": true
+      },
+      "expected": "waiting"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "waiting",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": false
+      },
+      "expected": "working"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "waiting",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": true
+      },
+      "expected": "working"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "idle",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": false
+      },
+      "expected": "waiting"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "failed",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": false
+      },
+      "expected": "failed"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "failed",
+          "lastErrorClass": "usage_limit"
+        },
+        "blockedOnThreadWait": false
+      },
+      "expected": "limited"
+    },
+    {
+      "input": {
+        "hasPendingApprovals": false,
+        "hasPendingUserInput": false,
+        "pendingSubagentRequest": null,
+        "pendingGuestMessageCount": 0,
+        "runtime": {
+          "status": "stopped",
+          "lastErrorClass": null
+        },
+        "blockedOnThreadWait": false
+      },
+      "expected": "ready"
     },
     {
       "input": {
@@ -79,684 +217,45 @@
       "input": {
         "hasPendingApprovals": false,
         "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
+        "pendingSubagentRequest": "approval",
         "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "preparing",
-          "lastErrorClass": null
-        },
+        "runtime": null,
         "blockedOnThreadWait": false
       },
-      "expected": "preparing"
+      "expected": "approval"
     },
     {
       "input": {
         "hasPendingApprovals": false,
         "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
+        "pendingSubagentRequest": "user_input",
         "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "queued",
-          "lastErrorClass": null
-        },
+        "runtime": null,
         "blockedOnThreadWait": false
       },
-      "expected": "working"
+      "expected": "input"
     },
     {
       "input": {
         "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
+        "hasPendingUserInput": true,
         "pendingSubagentRequest": null,
         "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "starting",
-          "lastErrorClass": null
-        },
+        "runtime": null,
         "blockedOnThreadWait": false
       },
-      "expected": "working"
+      "expected": "input"
     },
     {
       "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "running",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "waiting",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "idle",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "waiting"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "failed",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "failed"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "stopped",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "ready"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
+        "hasPendingApprovals": true,
         "hasPendingUserInput": false,
         "pendingSubagentRequest": null,
         "pendingGuestMessageCount": 0,
         "runtime": null,
-        "blockedOnThreadWait": true
-      },
-      "expected": "ready"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": true,
-        "hasPendingUserInput": true,
-        "pendingSubagentRequest": "approval",
-        "pendingGuestMessageCount": 1,
-        "runtime": {
-          "status": "preparing",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": true,
-        "hasPendingUserInput": true,
-        "pendingSubagentRequest": "user_input",
-        "pendingGuestMessageCount": 1,
-        "runtime": {
-          "status": "queued",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": true,
-        "hasPendingUserInput": true,
-        "pendingSubagentRequest": "approval",
-        "pendingGuestMessageCount": 1,
-        "runtime": {
-          "status": "starting",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": true,
-        "hasPendingUserInput": true,
-        "pendingSubagentRequest": "approval",
-        "pendingGuestMessageCount": 1,
-        "runtime": {
-          "status": "running",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": true,
-        "hasPendingUserInput": true,
-        "pendingSubagentRequest": "approval",
-        "pendingGuestMessageCount": 1,
-        "runtime": {
-          "status": "waiting",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": true,
-        "hasPendingUserInput": true,
-        "pendingSubagentRequest": "approval",
-        "pendingGuestMessageCount": 1,
-        "runtime": {
-          "status": "idle",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": true,
-        "hasPendingUserInput": true,
-        "pendingSubagentRequest": "approval",
-        "pendingGuestMessageCount": 1,
-        "runtime": {
-          "status": "failed",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": true,
-        "hasPendingUserInput": true,
-        "pendingSubagentRequest": "approval",
-        "pendingGuestMessageCount": 1,
-        "runtime": {
-          "status": "stopped",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": "approval",
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "queued",
-          "lastErrorClass": null
-        },
         "blockedOnThreadWait": false
       },
       "expected": "approval"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": "user_input",
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "preparing",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "input"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": "user_input",
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "starting",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "input"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": "user_input",
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "running",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "input"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": "user_input",
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "waiting",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "input"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": "user_input",
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "idle",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "input"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": "user_input",
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "failed",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "input"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": "user_input",
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "stopped",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "input"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "preparing",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "preparing"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "preparing",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "preparing"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "preparing",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "preparing"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "queued",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "queued",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "queued",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "starting",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "starting",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "starting",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "running",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "running",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "waiting"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "running",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "waiting"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "waiting",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "waiting",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "waiting",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "working"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "idle",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "waiting"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "idle",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "waiting"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "idle",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "waiting"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "failed",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "limited"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "failed",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "failed"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "failed",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "limited"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "stopped",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": false
-      },
-      "expected": "ready"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "stopped",
-          "lastErrorClass": null
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "ready"
-    },
-    {
-      "input": {
-        "hasPendingApprovals": false,
-        "hasPendingUserInput": false,
-        "pendingSubagentRequest": null,
-        "pendingGuestMessageCount": 0,
-        "runtime": {
-          "status": "stopped",
-          "lastErrorClass": "usage_limit"
-        },
-        "blockedOnThreadWait": true
-      },
-      "expected": "ready"
     }
   ],
   "receding": [
@@ -772,6 +271,46 @@
     },
     {
       "input": {
+        "status": "approval",
+        "isUnread": false,
+        "isWoke": false,
+        "isActive": false,
+        "isSelected": true
+      },
+      "expected": false
+    },
+    {
+      "input": {
+        "status": "approval",
+        "isUnread": false,
+        "isWoke": false,
+        "isActive": true,
+        "isSelected": false
+      },
+      "expected": false
+    },
+    {
+      "input": {
+        "status": "approval",
+        "isUnread": false,
+        "isWoke": true,
+        "isActive": false,
+        "isSelected": false
+      },
+      "expected": false
+    },
+    {
+      "input": {
+        "status": "approval",
+        "isUnread": true,
+        "isWoke": false,
+        "isActive": false,
+        "isSelected": false
+      },
+      "expected": false
+    },
+    {
+      "input": {
         "status": "input",
         "isUnread": false,
         "isWoke": false,
@@ -802,7 +341,37 @@
     },
     {
       "input": {
+        "status": "preparing",
+        "isUnread": false,
+        "isWoke": true,
+        "isActive": false,
+        "isSelected": false
+      },
+      "expected": true
+    },
+    {
+      "input": {
         "status": "working",
+        "isUnread": false,
+        "isWoke": false,
+        "isActive": false,
+        "isSelected": false
+      },
+      "expected": true
+    },
+    {
+      "input": {
+        "status": "working",
+        "isUnread": false,
+        "isWoke": true,
+        "isActive": false,
+        "isSelected": false
+      },
+      "expected": true
+    },
+    {
+      "input": {
+        "status": "waiting",
         "isUnread": false,
         "isWoke": false,
         "isActive": false,
@@ -814,7 +383,7 @@
       "input": {
         "status": "waiting",
         "isUnread": false,
-        "isWoke": false,
+        "isWoke": true,
         "isActive": false,
         "isSelected": false
       },
@@ -852,121 +421,11 @@
     },
     {
       "input": {
-        "status": "approval",
-        "isUnread": true,
-        "isWoke": false,
-        "isActive": false,
-        "isSelected": false
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "approval",
-        "isUnread": false,
-        "isWoke": true,
-        "isActive": false,
-        "isSelected": false
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "approval",
-        "isUnread": false,
-        "isWoke": false,
-        "isActive": true,
-        "isSelected": false
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "approval",
-        "isUnread": false,
-        "isWoke": false,
-        "isActive": false,
-        "isSelected": true
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "input",
-        "isUnread": true,
-        "isWoke": true,
-        "isActive": true,
-        "isSelected": true
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "request",
-        "isUnread": true,
-        "isWoke": true,
-        "isActive": true,
-        "isSelected": true
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "preparing",
-        "isUnread": true,
-        "isWoke": true,
-        "isActive": true,
-        "isSelected": true
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "working",
-        "isUnread": true,
-        "isWoke": true,
-        "isActive": true,
-        "isSelected": true
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "waiting",
-        "isUnread": true,
-        "isWoke": true,
-        "isActive": true,
-        "isSelected": true
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "failed",
-        "isUnread": true,
-        "isWoke": true,
-        "isActive": true,
-        "isSelected": true
-      },
-      "expected": false
-    },
-    {
-      "input": {
-        "status": "limited",
-        "isUnread": true,
-        "isWoke": true,
-        "isActive": true,
-        "isSelected": true
-      },
-      "expected": false
-    },
-    {
-      "input": {
         "status": "ready",
-        "isUnread": true,
+        "isUnread": false,
         "isWoke": true,
-        "isActive": true,
-        "isSelected": true
+        "isActive": false,
+        "isSelected": false
       },
       "expected": false
     }
@@ -1252,105 +711,9 @@
         },
         "latestRun": {
           "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null
-        },
-        "latestRun": {
-          "runId": "run",
           "startedAt": null,
           "requestedAt": "2026-11-17T09:00:00.000Z",
           "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
         }
       },
       "expected": null
@@ -1363,32 +726,6 @@
         "latestRun": {
           "runId": "run",
           "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
           "requestedAt": "2026-11-17T09:00:00.000Z"
         }
       },
@@ -1453,73 +790,6 @@
     {
       "input": {
         "runtime": {
-          "activeRunId": "run"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
           "activeRunId": "another"
         },
         "latestRun": {
@@ -1534,242 +804,12 @@
     {
       "input": {
         "runtime": {
-          "activeRunId": "another"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
           "activeRunId": null,
           "activityStartedAt": null
         },
         "latestRun": {
           "runId": "run",
           "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
           "requestedAt": "2026-11-17T09:00:00.000Z"
         }
       },
@@ -1793,213 +833,6 @@
     {
       "input": {
         "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": null
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
           "activeRunId": null,
           "activityStartedAt": "invalid"
         },
@@ -2014,35 +847,7 @@
     {
       "input": {
         "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
+          "activeRunId": "run",
           "activityStartedAt": "invalid"
         },
         "latestRun": {
@@ -2058,733 +863,12 @@
       "input": {
         "runtime": {
           "activeRunId": null,
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "invalid"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": null
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
           "activityStartedAt": "2026-11-17T10:00:00.000Z"
         },
         "latestRun": {
           "runId": "run",
           "startedAt": null,
           "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": null,
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "run",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": null
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": null,
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "invalid",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
-        }
-      },
-      "expected": "2026-11-17T10:00:00.000Z"
-    },
-    {
-      "input": {
-        "runtime": {
-          "activeRunId": "another",
-          "activityStartedAt": "2026-11-17T10:00:00.000Z"
-        },
-        "latestRun": {
-          "runId": "run",
-          "startedAt": "2026-11-17T10:00:00.000Z",
-          "requestedAt": "2026-11-17T09:00:00.000Z",
-          "completedAt": "2026-11-17T11:00:00.000Z"
         }
       },
       "expected": "2026-11-17T10:00:00.000Z"

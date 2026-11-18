@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { stripTypeScriptTypes } from "node:module";
-import { pairwise } from "./pairwise.mjs";
+import { boundaries } from "./boundaries.mjs";
 import path from "node:path";
 
 const [sourcePath, outputPath] = process.argv.slice(2);
@@ -27,7 +27,7 @@ const thread = (id, parent = null, kind = null, extra = {}) => ({
 });
 const projection = (selected, extra = {}) => ({thread: selected, subagents: [], contextTransfers: [], ...extra});
 const cases = [];
-const add = (name, threads, selected, current = selected?.thread.id ?? "current") => {
+const relationship = (name, threads, selected, current = selected?.thread.id ?? "current") => {
   const graph = original.deriveThreadRelationshipGraph({
     threads: threads.map(value => ({...value, createdAt: value.createdAt == null ? null : new Date(value.createdAt)})),
     projection: selected,
@@ -36,7 +36,7 @@ const add = (name, threads, selected, current = selected?.thread.id ?? "current"
     rows: original.immediateThreadRelationships(graph, current), currentThreadId: current,
     mergeTargetThreadId: original.resolveMergeBackTargetThreadId(selected),
   });
-  cases.push({name, threads, projection: selected, current, expected: rows.map(row => {
+  return {name, threads, projection: selected, current, expected: rows.map(row => {
     const node = graph.nodes.get(row.threadId);
     const shell = threads.find(value => value.id === row.threadId);
     return {threadId: row.threadId, sourceThreadId: row.edge.sourceThreadId,
@@ -45,8 +45,9 @@ const add = (name, threads, selected, current = selected?.thread.id ?? "current"
       parent: original.isParentThreadRelationship(row.edge, current), title: node.thread?.title ?? row.threadId,
       missing: node.missing, sideChat: node.thread?.lineage.sideChat === true,
       createdAt: shell?.createdAt ?? null};
-  })});
+  })};
 };
+const add = (...values) => cases.push(relationship(...values));
 const root = thread("current");
 add("empty", [], null);
 add("parent from projection missing in shell", [], projection(thread("current", "missing", "fork")));
@@ -56,11 +57,12 @@ add("deduplicate related id across edge kinds", [root, thread("child", "current"
 add("transfer ordering and self transfer", [root, thread("older", null, null, {createdAt: "2020-01-01T00:00:00.000Z"}), thread("newer"), thread("unknown", null, null, {createdAt: null})], projection(root, {contextTransfers: ["unknown", "older", "current", "newer", "older"].map(targetThreadId => ({sourceThreadId: "current", targetThreadId, status: "resolved_portable"}))}));
 add("parent pinned before newest child", [thread("current", "parent", "fork"), thread("parent", null, null, {createdAt: "1960-01-01T00:00:00.000Z"}), thread("child", "current", "fork")], projection(thread("current", "parent", "fork")));
 add("side chats and missing unrelated edges", [root, thread("side", "current", "fork", {lineage: {parentThreadId: "current", relationshipToParent: "fork", sideChat: true}}), thread("unrelated", "elsewhere", "subagent")], projection(root));
-for (const [agentStatus, childStatus, latestRunId] of pairwise([["pending", "running", "waiting", "completed", "failed", "rolled_back", "idle", null], [null, "completed", "failed", "running"], [null, "run"]])) {
+cases.push(...boundaries([["pending", "running", "waiting", "completed", "failed", "rolled_back", "idle", null], [null, "completed", "failed", "running"], [null, "run"], [false, true]], ([agentStatus, childStatus, latestRunId, active]) => {
   const child = thread("child", "current", "subagent", {status: childStatus, latestRunId});
-  add(`subagent ${agentStatus}/${childStatus}/${latestRunId}`, [root, child], projection(root, {subagents: [{childThreadId: "child", status: agentStatus}]}));
-  add(`active child overrides ${agentStatus}/${childStatus}/${latestRunId}`, [root, {...child, activityRunStatus: "waiting"}], projection(root, {subagents: [{childThreadId: "child", status: agentStatus}]}));
-}
+  return active
+    ? relationship(`active child overrides ${agentStatus}/${childStatus}/${latestRunId}`, [root, {...child, activityRunStatus: "waiting"}], projection(root, {subagents: [{childThreadId: "child", status: agentStatus}]}))
+    : relationship(`subagent ${agentStatus}/${childStatus}/${latestRunId}`, [root, child], projection(root, {subagents: [{childThreadId: "child", status: agentStatus}]}));
+}));
 add("omitted subagents and duplicate transfers", [root], projection(root, {subagents: [{childThreadId: null, status: "running"}, {childThreadId: "missing", status: "rolled_back"}], contextTransfers: [{sourceThreadId: "current", targetThreadId: "transfer", status: "pending"}, {sourceThreadId: "current", targetThreadId: "transfer", status: "consumed"}]}));
 const titleCases = ["Subagent: /root/foo_bar", "Subagent: Subagent: /root/foo", "/root/a//b", "/root/a/", "/root//", "/root/", "/root/a//", "SUBAGENT:\uFEFF/root/foo\u3000bar", "Subagent:日本語", "/", "/root/ßeta_test", "/root/İstanbul", "/ROOT/x", "/root/a_b/c_d", "/root/___", "Subagent: ", "subagent:", "subagent::x", "Subagent:\u0085/root/a", "/root/a\u0085b", "普通の見出し"].map(input => ({input, expected: original.formatSubagentDisplayTitle(input)}));
 const promptCases = ["short", "a".repeat(80), "a".repeat(81), "a".repeat(76)+"🙂".repeat(5), "日本語".repeat(30), "🙂".repeat(41)].map(input => ({input, expected: original.promptTitle(input)}));

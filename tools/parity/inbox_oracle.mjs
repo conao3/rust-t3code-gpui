@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {createHash} from "node:crypto";
 import {stripTypeScriptTypes} from "node:module";
-import {pairwise,unique} from "./pairwise.mjs";
+import {boundaries,unique} from "./boundaries.mjs";
 const [root,destination]=process.argv.slice(2);
 if (!root||!destination) throw new Error("Expected original root and destination");
 const paths={inbox:"packages/client-runtime/src/state/threadInbox.ts",models:"packages/client-runtime/src/state/models.ts",settled:"packages/client-runtime/src/state/threadSettled.ts",sort:"packages/client-runtime/src/state/threadSort.ts",sidebar:"apps/web/src/components/Sidebar.tsx",logic:"apps/web/src/components/Sidebar.logic.ts"};
@@ -19,14 +19,12 @@ functions.push(extract('logic','firstValidTimestampMs'),`export function sortSno
 const original=await import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes('const WORKING_EXIT_GRACE_MS=2000;const DateTime={formatIso:value=>new Date(value).toISOString()};\n'+functions.join('\n'))).toString('base64'));
 const base={providerInstanceId:'codex',updatedAt:'2026-11-17T00:00:00.000Z',id:'thread',environmentId:'environment',createdAt:'2026-11-17T00:00:00.000Z',unsettledAt:null,interactionMode:'default',hasActionableProposedPlan:false,hasPendingApprovals:false,hasPendingUserInput:false,pendingSubagentRequest:null,pendingGuestMessageCount:0,runtime:{status:'running',activeRunId:'run',lastError:null},latestRun:{runId:'run',status:'running'},archivedAt:null,deletedAt:null,pinnedAt:null,settledOverride:'active',settledAt:null,snoozedAt:null,snoozedUntil:null,activeOrderKey:null};
 const working=[];
-for (const [status,runStatus,activeRunId,interactionMode,hasActionableProposedPlan] of pairwise([[null,'preparing','queued','starting','running','waiting','idle','failed','interrupted'],[null,'preparing','queued','starting','running','waiting','completed','failed'],[null,'run'],['default','plan'],[false,true]])) {
+working.push(...boundaries([[null,'preparing','queued','starting','running','waiting','idle','failed','interrupted'], [null,'preparing','queued','starting','running','waiting','completed','failed'], [null,'run'], ['default','plan'], [false,true]], ([status, runStatus, activeRunId, interactionMode, hasActionableProposedPlan]) => {
  const input={...base,runtime:status===null?null:{status,activeRunId},latestRun:runStatus===null?null:{runId:'run',status:runStatus},interactionMode,hasActionableProposedPlan};
- working.push({input,expected:original.isThreadWorking(input)});
-}
-for (const [hasPendingApprovals,hasPendingUserInput,pendingSubagentRequest,pendingGuestMessageCount] of pairwise([[false,true],[false,true],[null,'approval','user_input'],[0,1]])) {
+ return {input,expected:original.isThreadWorking(input)};}, value=>[value.expected,original.asLaunchingThread(value.input)!==value.input]));
+working.push(...boundaries([[false,true], [false,true], [null,'approval','user_input'], [0,1]], ([hasPendingApprovals, hasPendingUserInput, pendingSubagentRequest, pendingGuestMessageCount]) => {
  const input={...base,hasPendingApprovals,hasPendingUserInput,pendingSubagentRequest,pendingGuestMessageCount};
- working.push({input,expected:original.isThreadWorking(input)});
-}
+ return {input,expected:original.isThreadWorking(input)};}, value=>[value.expected,original.asLaunchingThread(value.input)!==value.input]));
 const RealDate=globalThis.Date;
 let clock=0,sequence=0;const timers=new Map();
 globalThis.Date=class extends RealDate {constructor(...args){super(...(args.length?args:[clock]));}static now(){return clock;}};

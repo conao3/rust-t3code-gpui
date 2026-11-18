@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { stripTypeScriptTypes } from "node:module";
-import { pairwise } from "./pairwise.mjs";
+import { boundaries } from "./boundaries.mjs";
 
 const [root, destination] = process.argv.slice(2);
 if (!root || !destination) throw new Error("Expected original source root and destination");
@@ -38,14 +38,16 @@ const base = {
   providerInstanceHistory:["a","b","previous"],
 };
 const presentation = [];
-const add = (extra, pendingSubagent=null) => {
+const present = (extra, pendingSubagent=null) => {
   const input={...base,...extra};
   const state=original.presentThreadShell("environment",input,pendingSubagent);
   const expected=Object.fromEntries(keys.filter(key=>state[key]!==undefined).map(key=>[key,state[key]]));
   expected.source={pendingRuntimeRequest:input.pendingRuntimeRequest};
-  presentation.push({input,pendingSubagent,expected,stack:original.resolveThreadProviderStack(state),activity:original.resolveThreadActivityTimestamp(state)});
+  return {input,pendingSubagent,expected,stack:original.resolveThreadProviderStack(state),activity:original.resolveThreadActivityTimestamp(state)};
 };
-for (const [status,ids,pendingBackgroundTasks] of pairwise([["idle","pending","running","waiting","completed","failed","cancelled","interrupted","rolled_back"],[{latestRunId:null,activeProviderThreadId:null},{latestRunId:"run",activeProviderThreadId:null},{latestRunId:null,activeProviderThreadId:"provider-thread"}],[[],[{kind:"command",awaited:false}],[{kind:"command",awaited:true}],[{kind:"subagent",awaited:false}],[{kind:"monitor",awaited:false}],[{kind:"background_task",awaited:false}]]])) add({status,...ids,pendingBackgroundTasks});
+const add = (extra, pendingSubagent) => presentation.push(present(extra, pendingSubagent));
+const derived = value => [value.stack, value.activity, Object.fromEntries(Object.entries(value.expected).filter(([key, field]) => JSON.stringify(field) !== JSON.stringify(value.input[key])))];
+presentation.push(...boundaries([["idle","pending","running","waiting","completed","failed","cancelled","interrupted","rolled_back"], [{latestRunId:null,activeProviderThreadId:null},{latestRunId:"run",activeProviderThreadId:null},{latestRunId:null,activeProviderThreadId:"provider-thread"}], [[],[{kind:"command",awaited:false}],[{kind:"command",awaited:true}],[{kind:"subagent",awaited:false}],[{kind:"monitor",awaited:false}],[{kind:"background_task",awaited:false}]]], ([status, ids, pendingBackgroundTasks]) => present({status,...ids,pendingBackgroundTasks}), derived));
 for (const status of ["idle","running","failed"]) for (const latestRunCompletedAt of [undefined,null,"2026-11-17T11:00:00.000Z"]) {
   add({status,latestRunId:"run",latestRunRequestedAt:"2026-11-17T10:30:00.000Z",latestRunStartedAt:"2026-11-17T10:31:00.000Z",...(latestRunCompletedAt===undefined?{}:{latestRunCompletedAt})});
 }
