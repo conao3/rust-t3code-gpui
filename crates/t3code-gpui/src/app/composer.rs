@@ -337,6 +337,9 @@ impl Root {
     /// Keeps the composer text as the draft of what the composer is for now. Call before the
     /// composer changes what it is for.
     pub(super) fn stash_composer(&mut self, cx: &mut Context<Self>) {
+        if let Some(draft) = &self.conversation.draft {
+            self.history_drafts.insert(draft.id.clone(), draft.clone());
+        }
         if self.conversation.queue_edit.is_some() {
             return;
         }
@@ -661,9 +664,12 @@ impl Root {
             .clone()
             .or_else(|| defaults.as_ref().map(|(m, _)| m.clone()))
             .and_then(|selected| {
-                config
-                    .as_ref()
-                    .and_then(|config| models::effective_selection(config, &selected))
+                config.as_ref().and_then(|config| {
+                    models::runnable_selection(
+                        &models::project_config(config, &project_id),
+                        &selected,
+                    )
+                })
             });
         let runtime_mode = draft
             .runtime_mode
@@ -674,13 +680,44 @@ impl Root {
     }
 
     pub(super) fn new_thread(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.begin_new_thread(cx);
+        if self.conversation.draft.is_none() {
+            let groups = self.project_groups();
+            let group = self
+                .open_entry()
+                .and_then(|entry| {
+                    groups
+                        .iter()
+                        .find(|group| group.contains(&entry.environment, &entry.project_id))
+                })
+                .or_else(|| groups.first());
+            let saved = self
+                .history_drafts
+                .values()
+                .find(|draft| draft.group.as_deref() == group.map(|group| group.key.as_str()))
+                .cloned();
+            if let Some(draft) = saved {
+                self.stash_composer(cx);
+                self.history
+                    .visit(crate::navigation::Target::Draft(draft.id.clone()));
+                self.conversation.draft = Some(draft);
+                self.pr_state.page = false;
+                self.close_thread(cx);
+                self.load_composer();
+                cx.notify();
+            } else {
+                self.begin_new_thread(cx);
+            }
+        }
         self.conversation
             .composer
             .update(cx, |state, cx| state.focus(window, cx));
     }
 
     pub(super) fn begin_new_thread(&mut self, cx: &mut Context<Self>) {
+        self.begin_new_thread_with_history(false, cx);
+    }
+
+    pub(super) fn begin_new_thread_with_history(&mut self, replace: bool, cx: &mut Context<Self>) {
         self.stash_composer(cx);
         let groups = self.project_groups();
         let from_open = self.open_entry().and_then(|entry| {
@@ -704,6 +741,13 @@ impl Root {
             runtime_mode: None,
             interaction_mode: "default".into(),
         });
+        let target =
+            crate::navigation::Target::Draft(self.conversation.draft.as_ref().unwrap().id.clone());
+        if replace {
+            self.history.replace(target);
+        } else {
+            self.history.visit(target);
+        }
         self.conversation.message = None;
         self.conversation.picker_open = false;
         self.conversation.branch_anchor = None;

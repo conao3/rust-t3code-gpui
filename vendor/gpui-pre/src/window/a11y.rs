@@ -530,6 +530,7 @@ impl A11yNodeBuilder {
                 accesskit::Role::TextInput
                     | accesskit::Role::MultilineTextInput
                     | accesskit::Role::SearchInput
+                    | accesskit::Role::EditableComboBox
             )
             && node.children().is_empty()
             && let Some(value) = node.value()

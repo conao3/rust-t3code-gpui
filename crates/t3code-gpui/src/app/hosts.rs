@@ -119,9 +119,8 @@ impl Root {
         {
             self.close_thread(cx);
         }
-        if self.host_filter.as_deref() == Some(label.as_str()) {
-            self.host_filter = None;
-        }
+        self.host_filter.retain(|host| host != &label);
+        self.change_setting("gpuiSidebarHostScopeIds", json!(self.host_filter), cx);
         self.shell_dirty = true;
         self.refresh(window, cx);
     }

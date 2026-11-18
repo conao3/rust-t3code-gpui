@@ -1,0 +1,23 @@
+{
+  "name": "add-project-sources-local-folder-and-git-url",
+  "theme": "dark",
+  "viewport": [1400, 900],
+  "settle_ms": 350,
+  "steps": [
+    {"action": "click", "selector": {"role": "button", "name": "New thread"}},
+    {"action": "click", "selector": {"role": "button", "name": "Add project"}},
+    {"action": "checkpoint", "selector": {"role": "dialog", "name": "Command palette"}, "count": 1},
+    {"action": "click", "selector": {"role": "option", "name": "Local folder Browse a folder on disk"}, "native": {"role": "list item", "name": "Local folder Browse a folder on disk"}},
+    {"action": "checkpoint", "selector": {"role": "combobox", "name": "Enter path (e.g. ~/projects/my-app)"}, "count": 1, "value": "~/"},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Add (Enter)"}, "count": 1, "screenshot": false},
+    {"action": "press", "value": "escape"},
+    {"action": "click", "selector": {"role": "button", "name": "Add project"}},
+    {"action": "click", "selector": {"role": "option", "name": "Git URL Clone from a remote URL"}, "native": {"role": "list item", "name": "Git URL Clone from a remote URL"}},
+    {"action": "checkpoint", "selector": {"role": "combobox", "name": "Enter Git clone URL"}, "count": 1},
+    {"action": "click", "selector": {"role": "combobox", "name": "Enter Git clone URL"}},
+    {"action": "type", "value": "https://github.com/example/repository.git"},
+    {"action": "press", "value": "enter"},
+    {"action": "checkpoint", "selector": {"role": "button", "name": "Create & Clone (Enter)"}, "count": 1},
+    {"action": "press", "value": "escape"}
+  ]
+}

@@ -73,6 +73,7 @@ mod settings_tasks;
 mod sidebar_branding;
 mod sidebar_controls;
 mod sidebar_header;
+mod sidebar_notice;
 mod sidebar_projects;
 mod sidebar_view;
 mod snooze_controls;
@@ -398,7 +399,7 @@ struct SidebarStamp {
     history_available: (bool, bool),
     entries_revision: u64,
     open: Option<(String, String)>,
-    filter: Option<String>,
+    filter: Vec<String>,
     collapsed: HashSet<sidebar::Section>,
     families: HashSet<(String, String)>,
     connections: Vec<(String, Option<String>, ConnectionStatus)>,
@@ -476,6 +477,7 @@ pub struct Root {
     panel_pane: Entity<right_panel::Pane>,
     conversation: ConversationState,
     thread_undos: Vec<thread_commands::UndoEntry>,
+    sidebar_notices: Vec<Entity<sidebar_notice::Notice>>,
     thread_undo_epoch: u64,
     thread_undo_claimed: bool,
     panes: HashMap<u64, ConversationState>,
@@ -510,6 +512,7 @@ pub struct Root {
     sidebar_resizing: bool,
     window_drag_pending: bool,
     history: crate::navigation::History,
+    history_drafts: HashMap<String, NewThreadDraft>,
     sidebar_pane: Entity<SidebarPane>,
     sidebar_header: sidebar_header::State,
     sidebar_scroll: ScrollHandle,
@@ -522,7 +525,7 @@ pub struct Root {
     entries: Vec<ThreadEntry>,
     entries_revision: u64,
     statuses: HashMap<(String, String), ThreadStatus>,
-    host_filter: Option<String>,
+    host_filter: Vec<String>,
     palette: Entity<CommandState>,
     palette_open: bool,
     project_search: project_search::ProjectSearch,
@@ -704,6 +707,14 @@ impl Root {
         .zip(settings.shelf_expanded)
         .filter_map(|(section, expanded)| (!expanded).then_some(section))
         .collect();
+        let host_filter = sidebar_header::saved_scope(&settings, "gpuiSidebarHostScopeIds")
+            .into_iter()
+            .filter(|host| {
+                connections
+                    .iter()
+                    .any(|connection| connection.label() == host)
+            })
+            .collect();
         Self {
             context_usage_stamp: None,
             context_usage: None,
@@ -733,6 +744,7 @@ impl Root {
                 cx,
             ),
             thread_undos: Vec::new(),
+            sidebar_notices: Vec::new(),
             thread_undo_epoch: 0,
             thread_undo_claimed: false,
             panes: HashMap::new(),
@@ -770,10 +782,11 @@ impl Root {
             sidebar_resizing: false,
             window_drag_pending: false,
             history: crate::navigation::History::default(),
+            history_drafts: HashMap::new(),
             sidebar_pane: cx.new(|_| SidebarPane {
                 root: sidebar_root.clone(),
             }),
-            sidebar_header: sidebar_header::State::new(window, cx),
+            sidebar_header: sidebar_header::State::new(&settings, window, cx),
             sidebar_scroll: ScrollHandle::new(),
             sidebar_stamp: None,
             runtime,
@@ -784,7 +797,7 @@ impl Root {
             entries: Vec::new(),
             entries_revision: 0,
             statuses: HashMap::new(),
-            host_filter: None,
+            host_filter,
             palette,
             palette_open: false,
             project_search: project_search::ProjectSearch::new(window, cx),
@@ -1490,14 +1503,10 @@ impl Render for Root {
                 }
             }))
             .on_action(cx.listener(|root, _: &HistoryBack, _, cx| {
-                if let Some((environment, thread_id)) = root.history.step(false) {
-                    root.open_thread(environment, thread_id, cx);
-                }
+                root.step_history(false, cx);
             }))
             .on_action(cx.listener(|root, _: &HistoryForward, _, cx| {
-                if let Some((environment, thread_id)) = root.history.step(true) {
-                    root.open_thread(environment, thread_id, cx);
-                }
+                root.step_history(true, cx);
             }))
             .on_action(cx.listener(|root, _: &ToggleSidebar, _, cx| {
                 root.sidebar_hidden = !root.sidebar_hidden;
@@ -1677,6 +1686,7 @@ impl Render for Root {
             .when(self.settings_open, |root_el| {
                 root_el.child(self.render_settings(window,cx))
             })
+            .child(self.render_sidebar_notices(cx))
             .when(self.file_picker_open, |root_el| {
                 root_el.child(self.render_file_picker(cx))
             })

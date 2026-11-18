@@ -1,5 +1,15 @@
 use super::*;
 
+pub(super) fn saved_scope(settings: &ClientSettings, key: &str) -> Vec<String> {
+    settings.values[key]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+
 pub(super) struct State {
     pub search: Entity<InputState>,
     pub query: String,
@@ -18,7 +28,7 @@ pub(super) struct State {
 }
 
 impl State {
-    pub fn new(window: &mut Window, cx: &mut Context<Root>) -> Self {
+    pub fn new(settings: &ClientSettings, window: &mut Window, cx: &mut Context<Root>) -> Self {
         let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search"));
         let scope_search =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search projects..."));
@@ -67,7 +77,7 @@ impl State {
             scope_open: false,
             scope_search,
             scope_query: String::new(),
-            scope_keys: Vec::new(),
+            scope_keys: saved_scope(settings, "gpuiSidebarProjectScopeKeys"),
             scope_index: 0,
             focus: cx.focus_handle(),
             _subscriptions: subscriptions,
@@ -168,8 +178,12 @@ impl Root {
         if key == "all" {
             self.sidebar_header.scope_keys.clear();
         } else if let Some(host) = key.strip_prefix("host:") {
-            self.host_filter = (self.host_filter.as_deref() != Some(host)).then(|| host.into());
-            cx.notify();
+            if self.host_filter.iter().any(|id| id == host) {
+                self.host_filter.retain(|id| id != host);
+            } else {
+                self.host_filter.push(host.into());
+            }
+            self.change_setting("gpuiSidebarHostScopeIds", json!(self.host_filter), cx);
             return;
         } else if multiple {
             if self
@@ -182,12 +196,21 @@ impl Root {
             } else {
                 self.sidebar_header.scope_keys.push(key.into());
             }
-            cx.notify();
+            self.change_setting(
+                "gpuiSidebarProjectScopeKeys",
+                json!(self.sidebar_header.scope_keys),
+                cx,
+            );
             return;
         } else {
             self.sidebar_header.scope_keys = vec![key.into()];
         }
         self.sidebar_header.scope_open = false;
+        self.change_setting(
+            "gpuiSidebarProjectScopeKeys",
+            json!(self.sidebar_header.scope_keys),
+            cx,
+        );
         self.sidebar_header.focus.focus(window, cx);
         cx.notify();
     }
@@ -260,7 +283,7 @@ impl Root {
                                     let selected = if key == "all" {
                                         self.sidebar_header.scope_keys.is_empty()
                                     } else if let Some(host) = key.strip_prefix("host:") {
-                                        self.host_filter.as_deref() == Some(host)
+                                        self.host_filter.iter().any(|id| id == host)
                                     } else {
                                         self.sidebar_header.scope_keys.contains(&key)
                                     };
@@ -312,8 +335,15 @@ impl Root {
             .collect();
         let label = if !selected.is_empty() {
             format!("Filter threads by project: {}", selected.join(", "))
-        } else if let Some(host) = &self.host_filter {
-            format!("Filter threads by host: {}", self.host_label(host))
+        } else if !self.host_filter.is_empty() {
+            format!(
+                "Filter threads by host: {}",
+                self.host_filter
+                    .iter()
+                    .map(|host| self.host_label(host))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         } else {
             "Filter threads by project".into()
         };
@@ -350,7 +380,7 @@ impl Root {
                     }))
                     .child(
                         Input::new(&self.sidebar_header.search)
-                            .role(accesskit::Role::ComboBox)
+                            .role(accesskit::Role::EditableComboBox)
                             .aria_label("Search threads")
                             .appearance(false)
                             .h(px(32.))

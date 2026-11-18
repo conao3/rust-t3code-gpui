@@ -366,6 +366,7 @@ def worker(slot_path):
     options = state["options"]
     state["supervisor"] = process_identity(os.getpid())
     children = []
+    launches = {}
     stopping = False
 
     def stop(*_):
@@ -415,6 +416,7 @@ def worker(slot_path):
             start_new_session=True,
         )
         children.append(process)
+        launches[name] = (process, command, extra)
         state.setdefault("processes", {})[name] = process_identity(process.pid)
         save(name)
         return process
@@ -591,35 +593,107 @@ def worker(slot_path):
         }
         save("desktop-readiness")
         from cdp import Cdp
-        from native import Native
         from run import wait_for
 
-        async def ready():
+        async def ready(reference_ready=True):
             for target, environment in configurations.items():
                 save(target + "-provider")
-                await verify_provider(environment)
-            save("reference-accessibility")
-            async with Cdp(manifest["endpoint"]) as reference:
-                actual = origin(await reference.server_origin())
-                if actual != inspected["reference"]["origin"]:
-                    raise SlotError("Electron connected to an unexpected origin")
-                distinct(
-                    actual,
-                    [inspected["native"]],
-                    environment_descriptor(actual)["environmentId"],
+                await asyncio.to_thread(
+                    wait,
+                    lambda environment=environment: environment_descriptor(
+                        environment["httpBaseUrl"]
+                    ),
                 )
-                await wait_for(reference, {"role": "button", "name": "New thread"})
+                await verify_provider(environment)
+            if reference_ready:
+                save("reference-accessibility")
+                async with Cdp(manifest["endpoint"]) as reference:
+                    actual = origin(await reference.server_origin())
+                    if actual != inspected["reference"]["origin"]:
+                        raise SlotError("Electron connected to an unexpected origin")
+                    distinct(
+                        actual,
+                        [inspected["native"]],
+                        environment_descriptor(actual)["environmentId"],
+                    )
+                    await wait_for(reference, {"role": "button", "name": "New thread"})
             save("native-accessibility")
-            native = Native(session)
-            await wait_for(native, {"role": "button", "name": "New thread"})
-            save("theme")
-            await set_theme(manifest, options["theme"])
+            with (generation / "readiness.log").open("a") as log:
+                await asyncio.to_thread(
+                    subprocess.run,
+                    [
+                        sys.executable,
+                        "-c",
+                        (
+                            "import asyncio,sys; from native import Native; from run import wait_for; "
+                            "asyncio.run(wait_for(Native(sys.argv[1]), {'role':'button','name':'New thread'}))"
+                        ),
+                        str(session),
+                    ],
+                    cwd=TOOLS,
+                    stdout=log,
+                    stderr=log,
+                    timeout=120,
+                    check=True,
+                )
+            if reference_ready:
+                save("theme")
+                with (generation / "readiness.log").open("a") as log:
+                    await asyncio.to_thread(
+                        subprocess.run,
+                        [
+                            sys.executable,
+                            "-c",
+                            (
+                                "import asyncio,json,sys; from env import set_theme; "
+                                "asyncio.run(set_theme(json.loads(sys.argv[1]), sys.argv[2]))"
+                            ),
+                            json.dumps(manifest),
+                            options["theme"],
+                        ],
+                        cwd=TOOLS,
+                        stdout=log,
+                        stderr=log,
+                        timeout=120,
+                        check=True,
+                    )
 
         asyncio.run(ready())
         write_json(slot_path / "manifest.json", manifest)
         state["status"] = "ready"
         save("ready")
         while not stopping:
+            restart_path = generation / "restart.json"
+            if restart_path.exists():
+                request = read_json(restart_path)
+                state["status"] = "restarting"
+                save("restart")
+                names = ["native-desktop"]
+                if request["target"] == "both":
+                    names.append("reference-electron")
+                for name in names:
+                    process, command, extra = launches[name]
+                    identity = state["processes"][name]
+                    if process_identity(process.pid) != identity:
+                        raise SlotError("Restart target identity changed")
+                    if identity not in owned_processes(state["owner"]):
+                        raise SlotError("Restart target is not owned by this slot")
+                    os.killpg(process.pid, signal.SIGTERM)
+                    try:
+                        process.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        os.killpg(process.pid, signal.SIGKILL)
+                        process.wait(timeout=5)
+                    children.remove(process)
+                    if name == "native-desktop":
+                        session.unlink(missing_ok=True)
+                    launch(name, command, extra)
+                wait(session.exists)
+                asyncio.run(ready(reference_ready=request["target"] == "both"))
+                restart_path.unlink()
+                state["restart_completed"] = request["id"]
+                state["status"] = "ready"
+                save("ready")
             if any(child.poll() is not None for child in children):
                 raise SlotError("A slot process exited")
             time.sleep(0.2)
@@ -763,11 +837,14 @@ def main():
     )
     commands = parser.add_subparsers(dest="operation", required=True)
     parsers = {}
-    for name in ["up", "down", "status", "theme", "reset", "_worker"]:
+    for name in ["up", "down", "status", "theme", "reset", "restart", "_worker"]:
         command = commands.add_parser(name)
         command.add_argument("--slot", required=True, type=int)
         parsers[name] = command
     parsers["theme"].add_argument("--theme", choices=["dark", "light"], required=True)
+    parsers["restart"].add_argument(
+        "--target", choices=["native", "both"], default="both"
+    )
     launch = parsers["up"]
     launch.add_argument("--theme", choices=["dark", "light"], default="dark")
     launch.add_argument(
@@ -830,6 +907,23 @@ def main():
             asyncio.run(set_theme(manifest, args.theme))
             manifest["theme"] = args.theme
             write_json(slot_path / "manifest.json", manifest)
+        elif args.operation == "restart":
+            if status(slot_path, args.slot)["status"] != "ready":
+                raise SlotError("Restart requires a ready slot")
+            state = read_json(slot_path / "state.json")
+            request_id = uuid.uuid4().hex
+            write_json(
+                Path(state["generation"]) / "restart.json",
+                {"id": request_id, "target": args.target},
+            )
+            deadline = time.monotonic() + 180
+            while True:
+                state = read_json(slot_path / "state.json")
+                if state.get("restart_completed") == request_id:
+                    break
+                if state["status"] == "failed" or time.monotonic() >= deadline:
+                    raise SlotError("Slot restart did not complete")
+                time.sleep(0.2)
         print(json.dumps(status(slot_path, args.slot), indent=2))
 
 

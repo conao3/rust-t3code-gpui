@@ -1,0 +1,29 @@
+{
+  "name": "titlebar-history-retains-home-and-drafts",
+  "theme": "dark",
+  "viewport": [1400, 900],
+  "settle_ms": 350,
+  "steps": [
+    {"action": "click", "selector": {"role": "button", "name": "Model defaults fixture, UI parity"}},
+    {"action": "click", "selector": {"role": "button", "name": "New thread"}},
+    {"action": "click", "selector": {"role": "textbox", "name": "Message New thread"}},
+    {"action": "press", "value": "ctrl+a"},
+    {"action": "type", "value": "Navigation draft marker"},
+    {"action": "click", "selector": {"role": "button", "name": "Model defaults fixture, UI parity"}},
+    {"action": "click", "selector": {"role": "button", "name": "Go back"}},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message New thread"}, "value": "Navigation draft marker"},
+    {"action": "click", "selector": {"role": "button", "name": "Go back"}},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Model defaults fixture"}, "count": 1, "screenshot": false},
+    {"action": "click", "selector": {"role": "button", "name": "Go forward"}},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message New thread"}, "value": "Navigation draft marker", "screenshot": false},
+    {"action": "click", "selector": {"role": "button", "name": "Model defaults fixture, UI parity"}},
+    {"action": "click", "selector": {"role": "link", "name": "T3 Code home"}},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message New thread"}, "screenshot": false, "count": 1, "reference": {"role": "textbox", "name": "Message New thread", "value": "\n"}, "native": {"role": "textbox", "name": "Message New thread", "value": ""}},
+    {"action": "click", "selector": {"role": "button", "name": "New thread"}},
+    {"action": "click", "selector": {"role": "button", "name": "New thread"}},
+    {"action": "click", "selector": {"role": "button", "name": "Go back"}},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Model defaults fixture"}, "count": 1, "screenshot": false},
+    {"action": "click", "selector": {"role": "button", "name": "Go forward"}},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message New thread"}, "count": 1, "reference": {"role": "textbox", "name": "Message New thread", "value": "\n"}, "native": {"role": "textbox", "name": "Message New thread", "value": ""}}
+  ]
+}

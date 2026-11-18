@@ -430,12 +430,12 @@ impl Root {
                             .gap_4()
                             .w_full()
                             .text_sm()
-                            .child(label.clone())
+                            .child(settings_controls::text(label.clone()))
                             .child(div().flex_1())
                             .child(
                                 div()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(detail.clone()),
+                                    .child(settings_controls::text(detail.clone())),
                             )
                     })
                     .accessibility_label(format!("{} {}", preset.label, preset.when_label))
