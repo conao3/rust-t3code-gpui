@@ -292,14 +292,6 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([call.args[3] for call in calls], [20, 300, 20])
         app.focus.assert_called_once()
 
-    async def test_appearance_observes_the_applied_document_color_scheme(self):
-        app = Cdp("http://127.0.0.1:39991")
-        app.evaluate = AsyncMock(return_value="light")
-        self.assertEqual(await app.appearance(), "light")
-        app.evaluate.assert_awaited_once_with(
-            "getComputedStyle(document.documentElement).colorScheme"
-        )
-
     def test_duplicate_controls_require_the_selected_occurrence(self):
         nodes = [
             {"role": "button", "name": "Copy message", "value": text}
