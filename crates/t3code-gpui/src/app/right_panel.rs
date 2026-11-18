@@ -10,6 +10,8 @@ pub(super) struct State {
     pub pull_requests: HashMap<String, (String, Value)>,
     pub width: Option<f32>,
     #[serde(skip)]
+    pub(super) task_to_edit: std::cell::RefCell<Option<Value>>,
+    #[serde(skip)]
     files: HashMap<String, FilePanel>,
     #[serde(skip)]
     tab_scroll: ScrollHandle,
@@ -17,6 +19,12 @@ pub(super) struct State {
     terminals: HashMap<String, Entity<crate::terminal_view::TerminalView>>,
     #[serde(skip)]
     diff: diff_controls::State,
+    #[serde(skip)]
+    device: Option<Entity<device_panel::DevicePanel>>,
+    #[serde(skip)]
+    pub(super) file_search: Option<Entity<InputState>>,
+    #[serde(skip)]
+    file_search_subscription: Option<Subscription>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -39,9 +47,11 @@ pub(super) struct Pane {
 }
 
 impl Render for Pane {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
-            .update(cx, |root, cx| root.render_panel_contents(cx))
+            .update(cx, |root, cx| {
+                root.render_panel_contents(f32::from(window.viewport_size().width), cx)
+            })
             .expect("panel root")
     }
 }
@@ -233,6 +243,9 @@ impl Root {
         };
         self.right_panel.tabs.remove(index);
         self.right_panel.files.remove(id);
+        if id == "device" {
+            self.right_panel.device = None;
+        }
         if let Some(terminal) = id.strip_prefix("terminal:") {
             self.right_panel.terminals.remove(id);
             if let Some((environment, thread)) = self.current()
@@ -295,6 +308,31 @@ impl Root {
 
     pub(super) fn prepare_right_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.follow_right_panel(cx);
+        if self.right_panel.file_search.is_none() {
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder("Search files"));
+            self.right_panel.file_search_subscription =
+                Some(cx.subscribe(&input, |root, input, event, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        root.search_files(input.read(cx).value().to_string(), cx);
+                        root.panel_revision += 1;
+                        cx.notify();
+                    }
+                }));
+            self.right_panel.file_search = Some(input);
+        }
+        if self.right_panel.active.as_deref() == Some("device")
+            && self.right_panel.device.is_none()
+            && let Some((environment, _)) = self.current()
+            && let Some(connection) = self.connection(&environment)
+        {
+            let root = cx.entity().downgrade();
+            let runtime = self.runtime.clone();
+            self.right_panel.device =
+                Some(cx.new(|cx| {
+                    device_panel::DevicePanel::new(root, connection, runtime, window, cx)
+                }));
+            self.panel_revision += 1;
+        }
         if let Some(id) = self
             .right_panel
             .active
@@ -587,14 +625,14 @@ impl Root {
             .into_any_element()
     }
 
-    fn render_panel_contents(&self, cx: &Context<Self>) -> AnyElement {
+    fn render_panel_contents(&self, width: f32, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let body = if self.right_panel.active.is_none() {
             self.render_surface_launcher(cx)
         } else {
             match self.right_panel.active.as_deref() {
                 Some(id) if id.starts_with("pull-request:") || id == "pull-requests" => {
-                    self.render_pull_requests(cx)
+                    self.render_pull_requests(width, cx)
                 }
                 Some(id) if id.starts_with("terminal:") => self
                     .right_panel
@@ -623,7 +661,20 @@ impl Root {
                             }),
                     )
                     .into_any_element(),
-                Some(id) if matches!(id, "browser" | "device" | "side-chat") => v_flex()
+                Some("device") => self
+                    .right_panel
+                    .device
+                    .as_ref()
+                    .map(|device| {
+                        if device.read(cx).setup {
+                            div().into_any_element()
+                        } else {
+                            device.clone().into_any_element()
+                        }
+                    })
+                    .unwrap_or_else(|| div().into_any_element()),
+                Some("side-chat") => self.render_side_chat_surface(cx),
+                Some(id) if id == "browser" => v_flex()
                     .p_4()
                     .gap_2()
                     .child(text!(panel_title(id)))
@@ -714,7 +765,7 @@ impl Root {
                                 .into_iter()
                                 .map(|(label, key)| {
                                     Button::new(label)
-                                        .label(format!("{label}    {key}"))
+                                        .label(format!("{label} {key}"))
                                         .accessibility_label(label)
                                         .role(accesskit::Role::MenuItem)
                                         .ghost()
@@ -867,7 +918,13 @@ impl Root {
                                         .child(key),
                                 ),
                         )
-                        .accessibility_label(label)
+                        .accessibility_label(
+                            if matches!(label, "Pull request" | "Linked pull requests") {
+                                label.to_string()
+                            } else {
+                                format!("{label} {key}")
+                            },
+                        )
                         .ghost()
                         .w(px(320.))
                         .on_click(cx.listener(move |root, _, _, cx| {
@@ -939,5 +996,63 @@ fn surface_icon(id: &str) -> gpui_kit::assets::IconName {
         "side-chat" => IconName::MessagesSquare,
         _ if id.starts_with("pull-request") => IconName::GitPullRequest,
         _ => IconName::File,
+    }
+}
+
+impl Root {
+    fn render_side_chat_surface(&self, cx: &Context<Self>) -> AnyElement {
+        let title = self
+            .current()
+            .and_then(|(environment, id)| self.thread_value(&environment, &id))
+            .and_then(|thread| thread["title"].as_str().map(str::to_string))
+            .unwrap_or_default();
+        v_flex()
+            .size_full()
+            .min_h_0()
+            .child(
+                h_flex()
+                    .h(px(40.))
+                    .px_3()
+                    .gap_2()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(text!("Side chat")),
+                    )
+                    .child(div().flex_1())
+                    .child(
+                        Button::new("close-side-chat")
+                            .icon(IconName::Close)
+                            .ghost()
+                            .compact()
+                            .accessibility_label("Close side chat")
+                            .on_click(
+                                cx.listener(|root, _, _, cx| root.close_panel_tab("side-chat", cx)),
+                            ),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .px_3()
+                    .py_2()
+                    .gap_1()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(text!("Context from"))
+                    .child(text!("·"))
+                    .child(text!(title)),
+            )
+            .child(
+                div()
+                    .id("side-chat-conversation")
+                    .role(accesskit::Role::Region)
+                    .aria_label("Side chat conversation")
+                    .flex_1()
+                    .min_h_0(),
+            )
+            .into_any_element()
     }
 }

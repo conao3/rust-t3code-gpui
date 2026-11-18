@@ -1,0 +1,129 @@
+{
+  "name": "project-script",
+  "fixture": "panel",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Add project script"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Add Action"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "textbox",
+        "name": "Name"
+      }
+    },
+    {
+      "action": "type",
+      "value": "Parity echo"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "textbox",
+        "name": "Command"
+      }
+    },
+    {
+      "action": "type",
+      "value": "printf 'script parity\\n'"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "textbox",
+        "name": "Keybinding"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+u"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Keybinding"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Save action"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Run Parity echo"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+u"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "native": {
+        "role": "terminal"
+      },
+      "count": 1
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+u"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Terminal input"
+      },
+      "native": {
+        "role": "terminal"
+      },
+      "count": 1
+    }
+  ]
+}

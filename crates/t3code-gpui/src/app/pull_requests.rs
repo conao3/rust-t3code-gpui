@@ -37,15 +37,21 @@ pub(super) struct Detail {
     busy: bool,
     request: u64,
     error: Option<String>,
+    collapsed: HashSet<String>,
+    oldest_comments: bool,
+    show_bots: bool,
+    show_resolved: bool,
 }
 
 pub(super) struct Pane {
     pub root: WeakEntity<Root>,
 }
 impl Render for Pane {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.root
-            .update(cx, |root, cx| root.render_pull_requests(cx))
+            .update(cx, |root, cx| {
+                root.render_pull_requests(f32::from(window.viewport_size().width), cx)
+            })
             .expect("pull requests root")
     }
 }
@@ -515,10 +521,34 @@ impl Root {
                         };
                         input["cursors"] = cursor.clone();
                     }
-                    results.push((
-                        connection.label().to_string(),
-                        connection.request("pullRequests.list", input).await,
-                    ));
+                    let involvements = input["involvement"]
+                        .as_str()
+                        .map(|value| vec![value.to_string()])
+                        .unwrap_or_else(|| {
+                            vec!["authored".into(), "reviewing".into(), "all".into()]
+                        });
+                    let mut seen = HashSet::new();
+                    for involvement in involvements {
+                        input["involvement"] = json!(involvement);
+                        let result = connection
+                            .request("pullRequests.list", input.clone())
+                            .await
+                            .map(|mut result| {
+                                if let Some(entries) = result["entries"].as_array_mut() {
+                                    entries.retain(|entry| {
+                                        seen.insert(format!(
+                                            "{}:{}:{}",
+                                            entry["host"], entry["repository"], entry["number"]
+                                        ))
+                                    });
+                                    for entry in entries {
+                                        entry["_group"] = json!(involvement);
+                                    }
+                                }
+                                result
+                            });
+                        results.push((connection.label().to_string(), result));
+                    }
                 }
                 Ok(results)
             })
@@ -616,6 +646,10 @@ impl Root {
             busy: false,
             request: 0,
             error: None,
+            collapsed: HashSet::from(["Checks".into()]),
+            oldest_comments: false,
+            show_bots: false,
+            show_resolved: false,
         });
         self.load_pull_request(id, cx);
     }
@@ -881,7 +915,7 @@ impl Root {
         });
     }
 
-    pub(super) fn render_pull_requests(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_pull_requests(&self, width: f32, cx: &Context<Self>) -> AnyElement {
         if !self.pr_state.page
             && let Some(id) = self.pull_request_id()
             && let Some(view) = self.pr_state.views.get(&id)
@@ -911,33 +945,101 @@ impl Root {
             .min_h_0()
             .overflow_y_scroll();
         let mut entries = self.pr_state.entries.iter().collect::<Vec<_>>();
-        entries.sort_by(|a, b| compare_entries(a, b, &self.pr_state.sort));
-        for entry in entries {
+        entries.sort_by(|a, b| {
+            pr_group_rank(a)
+                .cmp(&pr_group_rank(b))
+                .then_with(|| compare_entries(a, b, &self.pr_state.sort))
+        });
+        let mut group = None;
+        for entry in &entries {
+            let rank = pr_group_rank(entry);
+            if self.pr_state.page && group != Some(rank) {
+                group = Some(rank);
+                list = list.child(
+                    h_flex()
+                        .id(("pr-group", rank))
+                        .gap_2()
+                        .px_3()
+                        .py_2()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(text!(match rank {
+                            0 => "Authored",
+                            1 => "Review requested",
+                            _ => "Others",
+                        }))
+                        .child(text!(
+                            entries
+                                .iter()
+                                .filter(|entry| pr_group_rank(entry) == rank)
+                                .count()
+                                .to_string()
+                        )),
+                );
+            }
             let label = format!(
                 "#{} {}",
                 entry["number"],
                 entry["title"].as_str().unwrap_or_default()
             );
-            let entry = entry.clone();
+            let entry = (*entry).clone();
+            let status = if entry["isDraft"] == true {
+                "Draft"
+            } else {
+                match entry["state"].as_str() {
+                    Some("merged") => "Merged",
+                    Some("closed") => "Closed",
+                    _ => "Open",
+                }
+            };
+            let author = entry["author"]["login"].as_str().unwrap_or_default();
+            let repository = entry["repository"].as_str().unwrap_or_default();
+            let elapsed = pr_relative_time(entry["updatedAt"].as_str().unwrap_or_default());
+            let accessible = format!(
+                "{status} {label} +{} -{} {author} {repository} {elapsed}",
+                entry["additions"].as_u64().unwrap_or_default(),
+                entry["deletions"].as_u64().unwrap_or_default()
+            );
             list = list.child(
                 Button::new(SharedString::from(format!(
                     "{}:{}:{}",
                     entry["environment"], entry["repository"], entry["number"]
                 )))
                 .child(
-                    v_flex().items_start().child(label.clone()).child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(format!(
-                                "{} · {} · {}",
-                                entry["repository"].as_str().unwrap_or_default(),
-                                entry["state"].as_str().unwrap_or_default(),
-                                entry["author"]["login"].as_str().unwrap_or_default()
-                            )),
-                    ),
+                    v_flex()
+                        .w_full()
+                        .items_start()
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .gap_2()
+                                .child(
+                                    Icon::new(gpui_kit::assets::IconName::GitPullRequest)
+                                        .size(px(14.)),
+                                )
+                                .child(label.clone())
+                                .child(div().flex_1())
+                                .child(div().text_xs().text_color(cx.theme().success).child(
+                                    format!("+{}", entry["additions"].as_u64().unwrap_or_default()),
+                                ))
+                                .child(div().text_xs().text_color(cx.theme().danger).child(
+                                    format!("-{}", entry["deletions"].as_u64().unwrap_or_default()),
+                                )),
+                        )
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .gap_2()
+                                .pl(px(22.))
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(author.to_string())
+                                .child(repository.to_string())
+                                .child(div().flex_1())
+                                .child(elapsed),
+                        ),
                 )
-                .accessibility_label(label)
+                .accessibility_label(accessible)
                 .ghost()
                 .w_full()
                 .h_auto()
@@ -980,7 +1082,7 @@ impl Root {
                 .child(body.flex_1().w_0())
                 .child(
                     div()
-                        .w(px(self.right_panel_width))
+                        .w(px((width / 2.).floor()))
                         .h_full()
                         .border_l_1()
                         .border_color(cx.theme().border)
@@ -1058,85 +1160,7 @@ impl Root {
                 }
             }
             _ => {
-                if let Some(body) = &view.body {
-                    content = content.child(TextView::new(body).selectable(true));
-                }
-                content = content.child(div().text_sm().child(format!(
-                    "{} ← {}   +{} −{}",
-                    value["baseBranch"].as_str().unwrap_or_default(),
-                    value["headBranch"].as_str().unwrap_or_default(),
-                    value["additions"],
-                    value["deletions"]
-                )));
-                for check in value["checks"].as_array().into_iter().flatten() {
-                    let url = check["url"].as_str().map(str::to_string);
-                    content = content.child(
-                        Button::new(SharedString::from(format!("check-{}", check["name"])))
-                            .label(format!(
-                                "{} · {}",
-                                check["status"].as_str().unwrap_or_default(),
-                                check["name"].as_str().unwrap_or_default()
-                            ))
-                            .ghost()
-                            .on_click(move |_, _, cx| {
-                                if let Some(url) = &url {
-                                    cx.open_url(url);
-                                }
-                            }),
-                    );
-                }
-                let actions = value["viewerPermissions"]["actions"].as_array();
-                for action in [
-                    "merge",
-                    "ready",
-                    "draft",
-                    "close",
-                    "reopen",
-                    "update-branch",
-                    "delete-branch",
-                    "enable-auto-merge",
-                    "disable-auto-merge",
-                ] {
-                    if actions
-                        .is_some_and(|actions| actions.iter().any(|a| a.as_str() == Some(action)))
-                    {
-                        if action == "merge" {
-                            for method in value["capabilities"]["mergeMethods"]
-                                .as_array()
-                                .into_iter()
-                                .flatten()
-                                .filter_map(Value::as_str)
-                            {
-                                if value["mergeCapabilities"][method].as_bool() != Some(true) {
-                                    continue;
-                                }
-                                let method = method.to_string();
-                                content = content.child(
-                                    Button::new(SharedString::from(format!("merge-{method}")))
-                                        .label(format!("Merge ({method})"))
-                                        .disabled(view.busy)
-                                        .on_click(cx.listener(move |root, _, window, cx| {
-                                            root.confirm_pr_action(
-                                                "merge",
-                                                Some(method.clone()),
-                                                window,
-                                                cx,
-                                            )
-                                        })),
-                                );
-                            }
-                        } else {
-                            content = content.child(
-                                Button::new(action)
-                                    .label(action_label(action))
-                                    .disabled(view.busy)
-                                    .on_click(cx.listener(move |root, _, window, cx| {
-                                        root.confirm_pr_action(action, None, window, cx)
-                                    })),
-                            );
-                        }
-                    }
-                }
+                content = content.child(self.render_pr_summary(view, cx));
             }
         }
         v_flex()
@@ -1147,53 +1171,10 @@ impl Root {
                 body.role(accesskit::Role::Region)
                     .aria_label(format!("Workspace panel: #{}", view.reference["number"]))
             })
-            .child(
-                h_flex()
-                    .p_3()
-                    .gap_2()
-                    .child(
-                        Button::new("pr-back")
-                            .label("Back")
-                            .ghost()
-                            .on_click(cx.listener(|root, _, _, cx| {
-                                root.open_pull_requests(root.pr_state.page, cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("copy-pr-number")
-                            .label(format!("#{}", view.reference["number"]))
-                            .accessibility_label("Copy pull request number")
-                            .ghost()
-                            .on_click(
-                                cx.listener(|root, _, _, cx| root.copy_pull_request_number(cx)),
-                            ),
-                    )
-                    .child(
-                        div().flex_1().child(
-                            value["title"]
-                                .as_str()
-                                .unwrap_or("Pull request")
-                                .to_string(),
-                        ),
-                    )
-                    .child(Button::new("refresh-pr").label("Refresh").ghost().on_click(
-                        cx.listener(|root, _, _, cx| {
-                            if let Some(id) = root.pull_request_id() {
-                                root.load_pull_request(id, cx);
-                            }
-                        }),
-                    )),
-            )
-            .child(
-                div()
-                    .px_4()
-                    .text_sm()
-                    .child(if value["isDraft"].as_bool() == Some(true) {
-                        "Draft".to_string()
-                    } else {
-                        value["state"].as_str().unwrap_or_default().to_string()
-                    }),
-            )
+            .when(self.pr_state.page, |panel| {
+                panel.child(self.render_pr_page_tabs(view, cx))
+            })
+            .child(self.render_pr_header(view, cx))
             .child(
                 h_flex()
                     .id("pr-tabs")
@@ -1217,13 +1198,23 @@ impl Root {
                         .map(|(tab, label)| {
                             Button::new(label)
                                 .label(label)
+                                .small()
                                 .ghost()
                                 .selected(view.tab == tab)
                                 .on_click(
                                     cx.listener(move |root, _, _, cx| root.select_pr_tab(tab, cx)),
                                 )
                         }),
-                    ),
+                    )
+                    .when(view.tab == "summary", |row| {
+                        row.child(
+                            div()
+                                .flex_1()
+                                .text_right()
+                                .text_xs()
+                                .child(text!(pr_checks_label(value))),
+                        )
+                    }),
             )
             .child(content)
             .child(self.render_pr_composer(view, cx))
@@ -1721,7 +1712,14 @@ impl Root {
                 .child(if wide {
                     div()
                         .text_xs()
-                        .child(text!(format!("Stop {} of {}", position + 1, stops.len())))
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .child(text!("Stop"))
+                                .child(text!((position + 1).to_string()))
+                                .child(text!("of"))
+                                .child(text!(stops.len().to_string())),
+                        )
                         .into_any_element()
                 } else {
                     Button::new("guide-stops")
@@ -1773,11 +1771,14 @@ impl Root {
             .aria_label("Review tour")
             .gap_2();
         if wide {
-            rail = rail.child(text!(format!(
-                "{} of {} read",
-                view.guide_seen.len(),
-                stops.len()
-            )));
+            rail = rail.child(
+                h_flex()
+                    .gap_1()
+                    .child(text!(view.guide_seen.len().to_string()))
+                    .child(text!("of"))
+                    .child(text!(stops.len().to_string()))
+                    .child(text!("read")),
+            );
         }
         if view.guide_rail || wide {
             for (index, stop) in stops.iter().enumerate() {
@@ -1791,11 +1792,32 @@ impl Root {
                             v_flex()
                                 .items_start()
                                 .gap_1()
-                                .child(format!(
-                                    "{} {}",
-                                    index + 1,
-                                    stop["title"].as_str().unwrap_or_default()
-                                ))
+                                .w_full()
+                                .child(
+                                    h_flex()
+                                        .gap_2()
+                                        .when(view.guide_seen.contains(&index), |row| {
+                                            row.child(
+                                                Icon::new(IconName::Check)
+                                                    .size(px(14.))
+                                                    .text_color(cx.theme().success),
+                                            )
+                                        })
+                                        .when(!view.guide_seen.contains(&index), |row| {
+                                            row.child((index + 1).to_string())
+                                        })
+                                        .child(
+                                            stop["title"].as_str().unwrap_or_default().to_string(),
+                                        ),
+                                )
+                                .when(!stop["attention"].is_null(), |column| {
+                                    column.child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(cx.theme().warning)
+                                            .child("Look closely"),
+                                    )
+                                })
                                 .child(
                                     div()
                                         .text_xs()
@@ -1891,27 +1913,39 @@ impl Root {
             );
         }
         body = body.child(
-            Button::new("ask-guide")
-                .ghost()
-                .label("Ask about this stop")
-                .disabled(true)
-                .tooltip("Guide questions are not implemented in T3 Code GPUI."),
+            h_flex().child(
+                Button::new("ask-guide")
+                    .ghost()
+                    .label("Ask about this stop")
+                    .disabled(true)
+                    .tooltip("Guide questions are not implemented in T3 Code GPUI."),
+            ),
         );
-        body = body.child(if let Some(next) = stops.get(position + 1) {
-            Button::new("guide-continue")
-                .label(format!(
-                    "Next: {}",
-                    next["title"].as_str().unwrap_or_default()
-                ))
-                .on_click(cx.listener(move |root, _, _, cx| root.step_pr_guide(position + 1, cx)))
-        } else {
-            Button::new("guide-finish")
-                .label("Finish review")
-                .on_click(cx.listener(move |root, _, window, cx| {
-                    root.step_pr_guide(position + 1, cx);
-                    root.open_pr_composer(true, window, cx);
-                }))
-        });
+        body = body.child(
+            h_flex()
+                .justify_end()
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .pt_4()
+                .child(if let Some(next) = stops.get(position + 1) {
+                    Button::new("guide-continue")
+                        .label(format!(
+                            "Next: {}",
+                            next["title"].as_str().unwrap_or_default()
+                        ))
+                        .on_click(
+                            cx.listener(move |root, _, _, cx| root.step_pr_guide(position + 1, cx)),
+                        )
+                } else {
+                    Button::new("guide-finish")
+                        .primary()
+                        .label("Finish review")
+                        .on_click(cx.listener(move |root, _, window, cx| {
+                            root.step_pr_guide(position + 1, cx);
+                            root.open_pr_composer(true, window, cx);
+                        }))
+                }),
+        );
         if wide {
             h_flex()
                 .items_start()
@@ -1957,6 +1991,11 @@ impl Root {
             let comment =
                 cx.new(|cx| TextareaState::new(window, cx).placeholder("Leave a comment"));
             let verdict = choice_select::state(&verdicts, "comment", window, cx);
+            cx.observe(&summary, |root, _, cx| {
+                root.panel_revision += 1;
+                cx.notify();
+            })
+            .detach();
             let root = cx.entity().downgrade();
             let environment = view.environment.clone();
             let reference = view.reference.clone();
@@ -2003,7 +2042,16 @@ impl Root {
             .child(
                 Button::new("pr-composer-trigger")
                     .icon(gpui_kit::assets::IconName::MessageSquare)
-                    .accessibility_label("Comment on pull request")
+                    .accessibility_label(
+                        if view.review.as_ref().is_some_and(|review| {
+                            review.read(cx).review_mode
+                                && !review.read(cx).summary.read(cx).value().is_empty()
+                        }) {
+                            "Review pull request"
+                        } else {
+                            "Comment on pull request"
+                        },
+                    )
                     .ghost()
                     .on_click(
                         cx.listener(|root, _, window, cx| root.open_pr_composer(false, window, cx)),
@@ -2241,12 +2289,16 @@ impl Render for ReviewComposer {
                     .when(self.review_mode, |row| {
                         row.child(
                             Select::new(&self.verdict)
+                                .small()
+                                .flex_none()
+                                .w(px(128.))
                                 .accessibility_label("Review verdict")
                                 .disabled(self.busy),
                         )
                     })
                     .child(
                         Button::new("submit-pr-review")
+                            .primary()
                             .label(if self.busy {
                                 "Submitting..."
                             } else if self.review_mode {
@@ -2301,6 +2353,615 @@ impl Root {
         };
         self.step_pr_guide(position, cx);
         true
+    }
+}
+
+impl Root {
+    fn render_pr_page_tabs(&self, view: &Detail, cx: &Context<Self>) -> AnyElement {
+        h_flex()
+            .h(px(28.))
+            .px_2()
+            .gap_1()
+            .child(
+                Button::new("close-page-pr")
+                    .icon(IconName::Close)
+                    .ghost()
+                    .compact()
+                    .accessibility_label(format!("Close #{}", view.reference["number"]))
+                    .on_click(cx.listener(|root, _, _, cx| {
+                        root.pr_state.page_panel_open = false;
+                        root.panel_revision += 1;
+                        cx.notify();
+                    })),
+            )
+            .child(
+                Button::new("page-pr-tab")
+                    .label(format!("#{}", view.reference["number"]))
+                    .ghost()
+                    .compact(),
+            )
+            .child(
+                Button::new("page-pr-add")
+                    .icon(IconName::Plus)
+                    .ghost()
+                    .compact()
+                    .accessibility_label("Add panel surface")
+                    .on_click(cx.listener(|root, _, _, cx| {
+                        root.pr_state.selected = None;
+                        root.pr_state.page_panel_open = false;
+                        root.panel_revision += 1;
+                        cx.notify();
+                    })),
+            )
+            .child(div().flex_1())
+            .child(
+                Button::new("page-pr-maximize")
+                    .icon(if self.pr_state.page_maximized {
+                        gpui_kit::assets::IconName::Minimize2
+                    } else {
+                        gpui_kit::assets::IconName::Maximize2
+                    })
+                    .ghost()
+                    .compact()
+                    .accessibility_label(if self.pr_state.page_maximized {
+                        "Restore panel size"
+                    } else {
+                        "Maximize panel"
+                    })
+                    .on_click(cx.listener(|root, _, _, cx| {
+                        root.pr_state.page_maximized = !root.pr_state.page_maximized;
+                        root.panel_revision += 1;
+                        cx.notify();
+                    })),
+            )
+            .into_any_element()
+    }
+
+    fn render_pr_header(&self, view: &Detail, cx: &Context<Self>) -> AnyElement {
+        use gpui_kit::component::menu::PopupMenuItem;
+        let value = &view.value;
+        let url = value["url"].as_str().unwrap_or_default().to_string();
+        let repository = value["repository"].as_str().unwrap_or_default().to_string();
+        let repository_url = url.split("/pull/").next().unwrap_or(&url).to_string();
+        let author = value["author"]["login"]
+            .as_str()
+            .unwrap_or("ghost")
+            .to_string();
+        let profile = value["author"]["url"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                format!(
+                    "https://{}/{author}",
+                    value["host"].as_str().unwrap_or("github.com")
+                )
+            });
+        let branch = value["headBranch"].as_str().unwrap_or_default().to_string();
+        let checkout = format!("gh pr checkout {}", view.reference["number"]);
+        let weak = cx.entity().downgrade();
+        let actions = value["viewerPermissions"]["actions"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let menu_url = url.clone();
+        let number = view.reference["number"].to_string();
+        let files = value["changedFiles"].as_u64().unwrap_or_default();
+        v_flex()
+            .gap_1()
+            .px_4()
+            .pb_2()
+            .child(
+                h_flex()
+                    .h(px(22.))
+                    .gap_2()
+                    .child(
+                        Button::new("pr-repository")
+                            .label(repository)
+                            .ghost()
+                            .compact()
+                            .on_click(move |_, _, cx| cx.open_url(&repository_url)),
+                    )
+                    .child(
+                        Button::new("pr-on-host")
+                            .label(format!("#{number}"))
+                            .accessibility_label(format!("Open pull request #{number} on host"))
+                            .ghost()
+                            .compact()
+                            .on_click(move |_, _, cx| cx.open_url(&url)),
+                    )
+                    .child(div().flex_1())
+                    .when(actions.iter().any(|action| action == "merge"), |row| {
+                        row.children(
+                            value["capabilities"]["mergeMethods"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .filter_map(Value::as_str)
+                                .filter(|method| value["mergeCapabilities"][*method] == true)
+                                .map(|method| {
+                                    let method = method.to_string();
+                                    Button::new(SharedString::from(format!("merge-{method}")))
+                                        .label(format!("Merge ({method})"))
+                                        .primary()
+                                        .small()
+                                        .disabled(view.busy)
+                                        .on_click(cx.listener(move |root, _, window, cx| {
+                                            root.confirm_pr_action(
+                                                "merge",
+                                                Some(method.clone()),
+                                                window,
+                                                cx,
+                                            )
+                                        }))
+                                }),
+                        )
+                    })
+                    .child(
+                        Button::new("pr-checkout")
+                            .icon(gpui_kit::assets::IconName::GitBranch)
+                            .label("Check out")
+                            .outline()
+                            .small()
+                            .disabled(view.busy)
+                            .dropdown_menu({
+                                let weak = weak.clone();
+                                move |mut menu, _, _| {
+                                    for (mode, label) in [
+                                        ("worktree", "In a separate worktree"),
+                                        ("local", "In this repository"),
+                                    ] {
+                                        let weak = weak.clone();
+                                        menu = menu.item(PopupMenuItem::new(label).on_click(
+                                            move |_, _, cx| {
+                                                let _ = weak.update(cx, |root, cx| {
+                                                    root.checkout_pr(mode, cx)
+                                                });
+                                            },
+                                        ));
+                                    }
+                                    menu
+                                }
+                            }),
+                    )
+                    .child(
+                        Button::new("pr-more")
+                            .icon(gpui_kit::assets::IconName::Ellipsis)
+                            .ghost()
+                            .compact()
+                            .accessibility_label("More pull request actions")
+                            .dropdown_menu(move |mut menu, _, _| {
+                                for (key, label) in [
+                                    ("refresh", "Refresh from host"),
+                                    ("copy", "Copy pull request number"),
+                                    ("open", "Open on GitHub"),
+                                    ("guide", "Rewrite guide"),
+                                ] {
+                                    let weak = weak.clone();
+                                    let url = menu_url.clone();
+                                    menu = menu.item(PopupMenuItem::new(label).on_click(
+                                        move |_, _, cx| {
+                                            let _ = weak.update(cx, |root, cx| match key {
+                                                "refresh" => {
+                                                    if let Some(id) = root.pull_request_id() {
+                                                        root.load_pull_request(id, cx);
+                                                    }
+                                                }
+                                                "copy" => root.copy_pull_request_number(cx),
+                                                "open" => cx.open_url(&url),
+                                                _ => root.mutate_pr(
+                                                    "pullRequests.generateReviewGuide",
+                                                    json!({}),
+                                                    cx,
+                                                ),
+                                            });
+                                        },
+                                    ));
+                                }
+                                for action in [
+                                    "ready",
+                                    "draft",
+                                    "close",
+                                    "reopen",
+                                    "update-branch",
+                                    "delete-branch",
+                                    "enable-auto-merge",
+                                    "disable-auto-merge",
+                                ] {
+                                    if !actions.iter().any(|value| value.as_str() == Some(action)) {
+                                        continue;
+                                    }
+                                    let weak = weak.clone();
+                                    menu = menu.item(
+                                        PopupMenuItem::new(action_label(action)).on_click(
+                                            move |_, window, cx| {
+                                                let _ = weak.update(cx, |root, cx| {
+                                                    root.confirm_pr_action(action, None, window, cx)
+                                                });
+                                            },
+                                        ),
+                                    );
+                                }
+                                menu
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .text_base()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(text!(
+                        value["title"]
+                            .as_str()
+                            .unwrap_or("Pull request")
+                            .to_string()
+                    )),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(
+                        Button::new("pr-author")
+                            .label(author.clone())
+                            .accessibility_label(format!("Open {author}'s profile"))
+                            .ghost()
+                            .compact()
+                            .on_click(move |_, _, cx| cx.open_url(&profile)),
+                    )
+                    .child(text!("updated"))
+                    .child(text!(pr_relative_time(
+                        value["updatedAt"].as_str().unwrap_or_default()
+                    )))
+                    .child(div().flex_1())
+                    .child(
+                        Button::new("pr-checkout-copy")
+                            .label(checkout.clone())
+                            .accessibility_label("Copy checkout command")
+                            .ghost()
+                            .compact()
+                            .on_click(move |_, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(checkout.clone()))
+                            }),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .text_xs()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(text!(
+                        value["baseBranch"].as_str().unwrap_or_default().to_string()
+                    ))
+                    .child(Icon::new(IconName::ArrowLeft).size(px(14.)))
+                    .child(
+                        Button::new("pr-branch-copy")
+                            .label(branch.clone())
+                            .accessibility_label("Copy pull request branch")
+                            .ghost()
+                            .compact()
+                            .on_click(move |_, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(branch.clone()))
+                            }),
+                    )
+                    .child(div().flex_1())
+                    .child(text!(format!(
+                        "{files} {}",
+                        if files == 1 { "file" } else { "files" }
+                    )))
+                    .child(
+                        h_flex()
+                            .text_color(cx.theme().success)
+                            .child(text!("+"))
+                            .child(text!(
+                                value["additions"].as_u64().unwrap_or_default().to_string()
+                            )),
+                    )
+                    .child(
+                        h_flex()
+                            .text_color(cx.theme().danger)
+                            .child(text!("-"))
+                            .child(text!(
+                                value["deletions"].as_u64().unwrap_or_default().to_string()
+                            )),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn render_pr_summary(&self, view: &Detail, cx: &Context<Self>) -> AnyElement {
+        use gpui_kit::component::menu::PopupMenuItem;
+        let mut body = v_flex().gap_2().text_xs();
+        let reviewers = view.value["reviewers"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        body = body.child(
+            h_flex()
+                .gap_2()
+                .child(div().w(px(96.)).child(text!("Reviewers")))
+                .child(text!(if reviewers.is_empty() {
+                    "None".into()
+                } else {
+                    reviewers
+                        .iter()
+                        .filter_map(|v| v["login"].as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })),
+        );
+        for section in ["Description", "Checks", "Comments"] {
+            let open = !view.collapsed.contains(section);
+            let count = view.activity["commentCount"]
+                .as_u64()
+                .unwrap_or(view.comments.len() as u64);
+            let label = if section == "Comments" {
+                format!("Comments ({count})")
+            } else {
+                section.into()
+            };
+            let mut header = h_flex().gap_1().child(
+                Button::new(SharedString::from(format!("pr-section-{section}")))
+                    .label(label)
+                    .icon(if open {
+                        IconName::ChevronDown
+                    } else {
+                        IconName::ChevronRight
+                    })
+                    .ghost()
+                    .small()
+                    .on_click(cx.listener(move |root, _, _, cx| {
+                        if let Some(view) = root
+                            .pull_request_id()
+                            .and_then(|id| root.pr_state.views.get_mut(&id))
+                            && !view.collapsed.remove(section)
+                        {
+                            view.collapsed.insert(section.into());
+                        }
+                        root.panel_revision += 1;
+                        cx.notify();
+                    })),
+            );
+            if section == "Comments" {
+                let weak = cx.entity().downgrade();
+                let bots = view.show_bots;
+                let resolved = view.show_resolved;
+                header = header
+                    .child(div().flex_1())
+                    .child(
+                        Button::new("pr-comment-filter")
+                            .label("Filter")
+                            .accessibility_label("Filter comments")
+                            .ghost()
+                            .small()
+                            .dropdown_menu(move |mut menu, _, _| {
+                                menu = menu.label("Show");
+                                for (key, label, checked) in [
+                                    ("bots", "Bot comments", bots),
+                                    ("resolved", "Resolved or dismissed", resolved),
+                                ] {
+                                    let weak = weak.clone();
+                                    menu = menu.item(
+                                        PopupMenuItem::new(label).checked(checked).on_click(
+                                            move |_, _, cx| {
+                                                let _ = weak.update(cx, |root, cx| {
+                                                    if let Some(view) =
+                                                        root.pull_request_id().and_then(|id| {
+                                                            root.pr_state.views.get_mut(&id)
+                                                        })
+                                                    {
+                                                        if key == "bots" {
+                                                            view.show_bots = !view.show_bots;
+                                                        } else {
+                                                            view.show_resolved =
+                                                                !view.show_resolved;
+                                                        }
+                                                    }
+                                                    root.panel_revision += 1;
+                                                    cx.notify();
+                                                });
+                                            },
+                                        ),
+                                    );
+                                }
+                                menu
+                            }),
+                    )
+                    .child(
+                        Button::new("pr-comment-order")
+                            .label(if view.oldest_comments {
+                                "Oldest first"
+                            } else {
+                                "Newest first"
+                            })
+                            .accessibility_label(if view.oldest_comments {
+                                "Show newest comments first"
+                            } else {
+                                "Show oldest comments first"
+                            })
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(|root, _, _, cx| {
+                                if let Some(view) = root
+                                    .pull_request_id()
+                                    .and_then(|id| root.pr_state.views.get_mut(&id))
+                                {
+                                    view.oldest_comments = !view.oldest_comments;
+                                }
+                                root.panel_revision += 1;
+                                cx.notify();
+                            })),
+                    );
+            }
+            body = body.child(header);
+            if !open {
+                continue;
+            }
+            if section == "Description" {
+                if let Some(document) = &view.body {
+                    body = body.child(
+                        div()
+                            .id("pr-description-text")
+                            .role(accesskit::Role::Label)
+                            .aria_value(view.value["body"].as_str().unwrap_or_default().to_string())
+                            .child(TextView::new(document).selectable(true)),
+                    );
+                }
+            } else if section == "Checks" {
+                let checks = view.value["checks"].as_array().cloned().unwrap_or_default();
+                if checks.is_empty() {
+                    body = body.child(text!("No checks reported."));
+                }
+                for (index, check) in checks.iter().enumerate() {
+                    let url = check["url"].as_str().map(str::to_string);
+                    body = body.child(
+                        Button::new(("pr-check", index))
+                            .label(format!(
+                                "{} {}",
+                                check["name"].as_str().unwrap_or_default(),
+                                check["status"].as_str().unwrap_or_default()
+                            ))
+                            .ghost()
+                            .disabled(url.is_none())
+                            .on_click(move |_, _, cx| {
+                                if let Some(url) = &url {
+                                    cx.open_url(url);
+                                }
+                            }),
+                    );
+                }
+            } else if view.comments.is_empty() {
+                body = body.child(text!("No comments yet."));
+            } else {
+                let mut indices = (0..view.comments.len()).collect::<Vec<_>>();
+                indices.sort_by(|a, b| {
+                    view.activity["comments"][*a]["createdAt"]
+                        .as_str()
+                        .cmp(&view.activity["comments"][*b]["createdAt"].as_str())
+                });
+                if !view.oldest_comments {
+                    indices.reverse();
+                }
+                for index in indices {
+                    let comment = &view.activity["comments"][index];
+                    if !view.show_bots && comment["author"]["isBot"] == true
+                        || !view.show_resolved && comment["isResolved"] == true
+                    {
+                        continue;
+                    }
+                    body = body.child(
+                        v_flex()
+                            .id(("pr-comment", index))
+                            .gap_2()
+                            .child(text!(
+                                comment["author"]["login"]
+                                    .as_str()
+                                    .unwrap_or("ghost")
+                                    .to_string()
+                            ))
+                            .child(TextView::new(&view.comments[index]).selectable(true)),
+                    );
+                }
+            }
+        }
+        body.into_any_element()
+    }
+}
+
+fn pr_checks_label(value: &Value) -> String {
+    match value["checksState"].as_str() {
+        Some("passing") => "All checks passed".into(),
+        Some("failing") => "Some checks failed".into(),
+        Some("pending") => "Checks pending".into(),
+        _ => "No checks reported".into(),
+    }
+}
+
+fn pr_relative_time(value: &str) -> String {
+    let Ok(time) = humantime::parse_rfc3339(value) else {
+        return String::new();
+    };
+    let elapsed = SystemTime::now()
+        .duration_since(time)
+        .unwrap_or_default()
+        .as_secs();
+    match elapsed {
+        0..60 => "just now".into(),
+        60..3600 => format!("{}m ago", elapsed / 60),
+        3600..86400 => format!("{}h ago", elapsed / 3600),
+        _ => format!("{}d ago", elapsed / 86400),
+    }
+}
+
+impl Root {
+    fn checkout_pr(&mut self, mode: &'static str, cx: &mut Context<Self>) {
+        let Some(id) = self.pull_request_id() else {
+            return;
+        };
+        let Some(view) = self.pr_state.views.get_mut(&id) else {
+            return;
+        };
+        let environment = view.environment.clone();
+        let project_id = view.reference["projectId"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let input =
+            json!({"cwd":view.value["workspaceRoot"],"reference":view.value["url"],"mode":mode});
+        view.busy = true;
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let runtime = self.runtime.clone();
+        cx.spawn(async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                connection
+                    .request("git.preparePullRequestThread", input)
+                    .await
+            })
+            .await;
+            let _ = this.update(cx, |root, cx| {
+                if let Some(view) = root.pr_state.views.get_mut(&id) {
+                    view.busy = false;
+                    if let Err(error) = &result {
+                        view.error = Some(format!(
+                            "Could not prepare the pull request checkout: {error:#}"
+                        ));
+                    }
+                }
+                if let Ok(value) = result {
+                    let group = root
+                        .project_groups()
+                        .iter()
+                        .find(|group| group.contains(&environment, &project_id))
+                        .map(|group| group.key.clone());
+                    root.begin_new_thread(cx);
+                    if let Some(draft) = root.conversation.draft.as_mut() {
+                        draft.environment = Some(environment);
+                        draft.group = group;
+                        draft.workspace_strategy = if value["worktreePath"].is_string() {
+                            json!({"type":"existing_worktree","worktreePath":value["worktreePath"],"branch":value["branch"]})
+                        } else {
+                            json!({"type":"root"})
+                        };
+                    }
+                    root.pr_state.page = false;
+                }
+                root.panel_revision += 1;
+                cx.notify();
+            });
+        })
+        .detach();
+        self.panel_revision += 1;
+        cx.notify();
+    }
+}
+
+fn pr_group_rank(entry: &Value) -> usize {
+    match entry["_group"].as_str() {
+        Some("authored") => 0,
+        Some("reviewing") => 1,
+        _ => 2,
     }
 }
 

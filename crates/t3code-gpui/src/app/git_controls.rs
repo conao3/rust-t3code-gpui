@@ -13,6 +13,7 @@ pub(super) struct State {
     pub busy: bool,
     pub result: Option<String>,
     pub progress: Vec<String>,
+    pub last_script: HashMap<String, String>,
 }
 
 impl Root {
@@ -479,10 +480,23 @@ impl Root {
         let Some(key) = self.terminal_key() else {
             return;
         };
-        let id = format!("script-{}", uuid::Uuid::new_v4());
         let mut layout = self.terminal_store.get(&key);
         layout.open = true;
-        layout.add(id.clone(), None);
+        let panel_ids = self
+            .right_panel
+            .tabs
+            .iter()
+            .filter_map(|id| id.strip_prefix("terminal:").map(str::to_string))
+            .collect::<HashSet<_>>();
+        if let Some((_, project)) = self.current_project() {
+            self.git_state.last_script.insert(
+                format!(
+                    "{environment}:{}",
+                    project["id"].as_str().unwrap_or_default()
+                ),
+                script["id"].as_str().unwrap_or_default().to_string(),
+            );
+        }
         let runtime = self.runtime.clone();
         let command = script["command"].as_str().unwrap_or_default().to_string();
         let worktree = self
@@ -490,12 +504,28 @@ impl Root {
             .and_then(|thread| thread["worktreePath"].as_str().map(str::to_string));
         cx.spawn_in(window, async move |this, cx| {
             let result = on_runtime(&runtime, async move {
+                use t3_client::rpc::StreamLimits;
+                let mut stream = connection.subscribe("subscribeTerminalMetadata", json!({}), StreamLimits::new(4, 1 << 20).expect("positive stream limits")).await?;
+                let chunk = stream.next().await.ok_or_else(|| anyhow::anyhow!("Terminal metadata stream closed before its snapshot"))??;
+                let snapshot = chunk.values().iter().find(|event| event["type"] == "snapshot").ok_or_else(|| anyhow::anyhow!("Terminal metadata did not start with a snapshot"))?;
+                let sessions = snapshot["terminals"].as_array().ok_or_else(|| anyhow::anyhow!("Invalid terminal metadata snapshot"))?;
+                let mut ids = layout.ids();
+                for session in sessions.iter().filter(|session| session["threadId"] == thread_id) {
+                    if let Some(id) = session["terminalId"].as_str() && !ids.iter().any(|existing| existing == id) { ids.push(id.into()); }
+                }
+                let reusable = |id: &&String| !panel_ids.contains(*id) && sessions.iter().any(|session| session["threadId"] == thread_id && session["terminalId"] == **id && session["hasRunningSubprocess"] == false);
+                let reuse = if script["stopOnSettle"] == true { None } else { ids.iter().filter(reusable).find(|id| **id == layout.active).or_else(|| ids.iter().find(reusable)).cloned() };
+                let id = reuse.unwrap_or_else(|| crate::terminal::next_id(ids.into_iter().chain(panel_ids), true));
+                chunk.accept();
+                drop(stream);
+                if !layout.select(&id) { layout.add(id.clone(), None); }
                 connection.request("terminal.open", json!({"threadId":thread_id,"terminalId":id,"cwd":cwd,"worktreePath":worktree,"cols":120,"rows":30,"stopOnSettle":script["stopOnSettle"].as_bool().unwrap_or(false)})).await?;
-                connection.request("terminal.write", json!({"threadId":thread_id,"terminalId":id,"data":format!(" {command}\r")})).await
+                connection.request("terminal.write", json!({"threadId":thread_id,"terminalId":id,"data":format!(" {command}\r")})).await?;
+                Ok(layout)
             }).await;
             let _ = this.update_in(cx, |root, window, cx| {
                 match result {
-                    Ok(_) => {
+                    Ok(layout) => {
                         root.terminal_store.set(key, &layout);
                         root.terminal_revision += 1;
                         root.save_terminal_layout(cx);
@@ -638,129 +668,135 @@ impl Root {
             )
             .into_any_element()
     }
+
     pub(super) fn render_project_scripts(&self, cx: &Context<Self>) -> AnyElement {
-        let focus = self.focus.clone();
         let scripts = self.project_scripts();
-        let script_focus = focus.clone();
+        let script_focus = self.focus.clone();
         let script_root = cx.entity().downgrade();
         let no_scripts = scripts.is_empty();
+        let last = self.current_project().and_then(|(environment, project)| {
+            self.git_state.last_script.get(&format!(
+                "{environment}:{}",
+                project["id"].as_str().unwrap_or_default()
+            ))
+        });
         let primary_script = scripts
             .iter()
-            .find(|script| script["runOnWorktreeCreate"] != true && script["runOnSettle"] != true)
+            .find(|script| last.is_some_and(|id| script["id"].as_str() == Some(id)))
+            .or_else(|| {
+                scripts.iter().find(|script| {
+                    script["runOnWorktreeCreate"] != true && script["runOnSettle"] != true
+                })
+            })
             .or_else(|| scripts.iter().find(|script| script["runOnSettle"] != true))
             .cloned();
-        v_flex()
-            .child(
-                h_flex()
-                    .id("project-scripts")
-                    .role(accesskit::Role::Group)
-                    .when_some(primary_script, |row, script| {
-                        let name = script["name"].as_str().unwrap_or_default().to_string();
-                        row.child(
-                            Button::new("run-project-script")
-                                .label(name.clone())
-                                .accessibility_label(format!("Run {name}"))
-                                .ghost()
-                                .flex_1()
-                                .on_click(cx.listener(move |root, _, window, cx| {
-                                    root.run_project_script(script.clone(), window, cx)
-                                })),
-                        )
-                    })
-                    .when(!no_scripts, |row| {
-                        row.child(
-                            Button::new("project-script-actions")
-                                .icon(IconName::ChevronDown)
-                                .accessibility_label("Script actions")
-                                .ghost()
-                                .compact()
-                                .dropdown_menu(move |mut menu, _, cx| {
-                                    for script in &scripts {
-                                        let name =
-                                            script["name"].as_str().unwrap_or_default().to_string();
-                                        let edit = script.clone();
-                                        let root = script_root.clone();
-                                        let popup = cx.entity().downgrade();
-                                        menu =
-                                            menu.item(
-                                                PopupMenuItem::element(move |_, _| {
-                                                    let edit = edit.clone();
-                                                    let root = root.clone();
-                                                    let popup = popup.clone();
-                                                    h_flex()
-                                                    .w_full()
-                                                    .child(name.clone())
-                                                    .child(div().flex_1())
-                                                    .child(
-                                                        Button::new(SharedString::from(format!(
-                                                            "edit-{}",
-                                                            edit["id"]
-                                                        )))
-                                                        .icon(gpui_kit::assets::IconName::Settings)
-                                                        .accessibility_label(format!("Edit {name}"))
-                                                        .ghost()
-                                                        .size(px(24.))
-                                                        .on_click(move |_, window, cx| {
-                                                            cx.stop_propagation();
-                                                            let _ = popup.update(cx, |_, cx| {
-                                                                cx.emit(gpui::DismissEvent)
-                                                            });
-                                                            let _ = root.update(cx, |root, cx| {
-                                                                root.open_script_editor(
-                                                                    edit.clone(),
-                                                                    window,
-                                                                    cx,
-                                                                )
-                                                            });
-                                                        }),
-                                                    )
-                                                })
-                                                .accessibility_label(
-                                                    script["name"]
-                                                        .as_str()
-                                                        .unwrap_or_default()
-                                                        .to_string(),
-                                                )
-                                                .action(Box::new(GitAction {
-                                                    kind: "script".into(),
-                                                    value: script.clone(),
-                                                })),
-                                            );
-                                    }
-                                    menu.menu(
-                                        "Add project script",
-                                        Box::new(GitAction {
-                                            kind: "edit-script".into(),
-                                            value: Value::Null,
-                                        }),
+        h_flex()
+            .id("project-scripts")
+            .role(accesskit::Role::Group)
+            .aria_label("Project scripts")
+            .when_some(primary_script, |row, script| {
+                let name = script["name"].as_str().unwrap_or_default().to_string();
+                row.child(
+                    Button::new("run-project-script")
+                        .label(name.clone())
+                        .accessibility_label(format!("Run {name}"))
+                        .ghost()
+                        .flex_1()
+                        .on_click(cx.listener(move |root, _, window, cx| {
+                            root.run_project_script(script.clone(), window, cx)
+                        })),
+                )
+            })
+            .when(!no_scripts, |row| {
+                row.child(
+                    Button::new("project-script-actions")
+                        .icon(IconName::ChevronDown)
+                        .accessibility_label("Script actions")
+                        .ghost()
+                        .compact()
+                        .dropdown_menu(move |mut menu, _, cx| {
+                            for script in &scripts {
+                                let name = script["name"].as_str().unwrap_or_default().to_string();
+                                let edit = script.clone();
+                                let root = script_root.clone();
+                                let popup = cx.entity().downgrade();
+                                menu = menu.item(
+                                    PopupMenuItem::element(move |_, _| {
+                                        let edit = edit.clone();
+                                        let root = root.clone();
+                                        let popup = popup.clone();
+                                        h_flex()
+                                            .w_full()
+                                            .child(name.clone())
+                                            .child(div().flex_1())
+                                            .child(
+                                                Button::new(SharedString::from(format!(
+                                                    "edit-{}",
+                                                    edit["id"]
+                                                )))
+                                                .icon(gpui_kit::assets::IconName::Settings)
+                                                .accessibility_label(format!("Edit {name}"))
+                                                .ghost()
+                                                .size(px(24.))
+                                                .on_click(move |_, window, cx| {
+                                                    cx.stop_propagation();
+                                                    let _ = popup.update(cx, |_, cx| {
+                                                        cx.emit(gpui::DismissEvent)
+                                                    });
+                                                    let _ = root.update(cx, |root, cx| {
+                                                        root.open_script_editor(
+                                                            edit.clone(),
+                                                            window,
+                                                            cx,
+                                                        )
+                                                    });
+                                                }),
+                                            )
+                                    })
+                                    .accessibility_label(
+                                        script["name"].as_str().unwrap_or_default().to_string(),
                                     )
-                                    .action_context(script_focus.clone())
+                                    .action(Box::new(
+                                        GitAction {
+                                            kind: "script".into(),
+                                            value: script.clone(),
+                                        },
+                                    )),
+                                );
+                            }
+                            menu.menu(
+                                "Add project script",
+                                Box::new(GitAction {
+                                    kind: "edit-script".into(),
+                                    value: Value::Null,
                                 }),
-                        )
-                    })
-                    .when(no_scripts, |row| {
-                        row.child(
-                            Button::new("add-project-script")
-                                .child(
-                                    h_flex()
-                                        .w_full()
-                                        .gap_2p5()
-                                        .child(Icon::new(IconName::Plus).size(px(16.)))
-                                        .child(text!("Add project script")),
-                                )
-                                .accessibility_label("Add project script")
-                                .ghost()
+                            )
+                            .action_context(script_focus.clone())
+                        }),
+                )
+            })
+            .when(no_scripts, |row| {
+                row.child(
+                    Button::new("add-project-script")
+                        .child(
+                            h_flex()
                                 .w_full()
-                                .h(px(32.))
-                                .px_2p5()
-                                .justify_start()
-                                .text_size(px(13.))
-                                .on_click(cx.listener(|root, _, window, cx| {
-                                    root.open_script_editor(Value::Null, window, cx)
-                                })),
+                                .gap_2p5()
+                                .child(Icon::new(IconName::Plus).size(px(16.)))
+                                .child(text!("Add project script")),
                         )
-                    }),
-            )
+                        .accessibility_label("Add project script")
+                        .ghost()
+                        .w_full()
+                        .h(px(32.))
+                        .px_2p5()
+                        .justify_start()
+                        .text_size(px(13.))
+                        .on_click(cx.listener(|root, _, window, cx| {
+                            root.open_script_editor(Value::Null, window, cx)
+                        })),
+                )
+            })
             .into_any_element()
     }
 }
@@ -1198,7 +1234,7 @@ impl Render for ScriptEditor {
             )
             .child(text!("Keybinding"))
             .child(Input::new(&self.keybinding).aria_label("Keybinding").readonly(true))
-            .child(div().text_xs().child(text!("Press a shortcut. Use Backspace to clear. Shortcuts are environment-wide. Projects using the same action share its shortcut.")))
+            .child(h_flex().flex_wrap().gap_1().text_xs().child(text!("Press a shortcut. Use")).child(text!("Backspace")).child(div().w_full().whitespace_normal().child(text!("to clear. Shortcuts are environment-wide. Projects using the same action share its shortcut."))))
             .child(text!("Command"))
             .child(
                 Textarea::new(&self.command)
@@ -1221,8 +1257,8 @@ impl Render for ScriptEditor {
                 .into_iter()
                 .enumerate()
                 .map(|(index, label)| {
-                    Switch::new(label)
-                        .label(label)
+                    h_flex().id(("script-option", index)).justify_between().gap_3().child(div().flex_1().min_w_0().whitespace_normal().child(text!(label))).child(Switch::new(("script-flag", index))
+                        .accessibility_label(label)
                         .checked(self.flags[index])
                         .disabled(
                             self.saving
@@ -1232,7 +1268,7 @@ impl Render for ScriptEditor {
                         .on_click(cx.listener(move |view, checked, _, cx| {
                             view.flags[index] = *checked;
                             cx.notify();
-                        }))
+                        })))
                 }),
             )
             .children(

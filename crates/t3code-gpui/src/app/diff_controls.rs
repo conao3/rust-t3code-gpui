@@ -56,6 +56,8 @@ impl Root {
             selection.scope.clone()
         };
         self.diff_view.commit = selection.commit.clone();
+        self.diff_view.collapsed = true;
+        self.file_panel = None;
         self.refresh_diff(cx);
     }
 
@@ -162,22 +164,49 @@ impl Root {
                         } else {
                             DiffMode::Unified
                         };
-                        let state = cx.new(|cx| {
-                            let mut state = DiffState::new(files, cx)
-                                .with_mode(mode)
-                                .with_syntax_max_line_length(500);
-                            if root.diff_view.collapsed {
-                                let paths = state
-                                    .files()
-                                    .iter()
-                                    .map(|file| file.path().to_string())
-                                    .collect::<Vec<_>>();
-                                for path in paths {
-                                    state.set_file_collapsed(&path, true, cx);
-                                }
-                            }
+                        let existing =
+                            root.file_panel
+                                .as_ref()
+                                .and_then(|panel| match &panel.body {
+                                    PanelBody::Diff(state) => Some(state.clone()),
+                                    _ => None,
+                                });
+                        let state = if let Some(state) = existing {
+                            state.update(cx, |state, cx| {
+                                state.set_files(files, cx);
+                                state.set_mode(mode, cx);
+                            });
                             state
-                        });
+                        } else {
+                            let state = cx.new(|cx| {
+                                let mut state = DiffState::new(files, cx)
+                                    .with_mode(mode)
+                                    .with_syntax_max_line_length(500);
+                                if root.diff_view.collapsed {
+                                    let paths = state
+                                        .files()
+                                        .iter()
+                                        .map(|file| file.path().to_string())
+                                        .collect::<Vec<_>>();
+                                    for path in paths {
+                                        state.set_file_collapsed(&path, true, cx);
+                                    }
+                                }
+                                state
+                            });
+                            cx.observe(&state, |root, state, cx| {
+                                if root.file_panel.as_ref().is_some_and(|panel| {
+                                    matches!(&panel.body, PanelBody::Diff(current) if current.entity_id() == state.entity_id())
+                                }) {
+                                    let diff = state.read(cx);
+                                    root.diff_view.collapsed = diff.files().iter().all(|file| diff.is_file_collapsed(file.path()));
+                                    root.panel_revision += 1;
+                                    cx.notify();
+                                }
+                            })
+                            .detach();
+                            state
+                        };
                         let panel = FilePanel::new(
                             DIFF_TITLE.into(),
                             PanelBody::Diff(state),
@@ -443,6 +472,9 @@ impl Root {
                     .when_some(stats, |row, (additions, deletions)| {
                         row.child(
                             h_flex()
+                                .id("diff-line-stat")
+                                .role(accesskit::Role::Group)
+                                .aria_label(format!("{additions} additions, {deletions} deletions"))
                                 .gap_1()
                                 .text_xs()
                                 .child(
@@ -457,19 +489,21 @@ impl Root {
                                 ),
                         )
                     })
-                    .child(
-                        Button::new("refresh-diff")
-                            .icon(IconName::RefreshCw)
-                            .accessibility_label(if self.diff_view.loading {
-                                "Refreshing diff"
-                            } else {
-                                "Refresh diff"
-                            })
-                            .ghost()
-                            .compact()
-                            .disabled(self.diff_view.loading)
-                            .on_click(cx.listener(|root, _, _, cx| root.refresh_diff(cx))),
-                    )
+                    .when(!self.diff_view.scope.starts_with("turn:"), |row| {
+                        row.child(
+                            Button::new("refresh-diff")
+                                .icon(IconName::RefreshCw)
+                                .accessibility_label(if self.diff_view.loading {
+                                    "Refreshing diff"
+                                } else {
+                                    "Refresh diff"
+                                })
+                                .ghost()
+                                .compact()
+                                .disabled(self.diff_view.loading)
+                                .on_click(cx.listener(|root, _, _, cx| root.refresh_diff(cx))),
+                        )
+                    })
                     .child(
                         Button::new("collapse-diff-files")
                             .icon(gpui_kit::assets::IconName::ChevronsUpDown)

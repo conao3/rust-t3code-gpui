@@ -8,6 +8,22 @@
   "settle_ms": 1200,
   "steps": [
     {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
       "action": "press",
       "value": "ctrl+d"
     },
@@ -113,6 +129,53 @@
         "name": "Collapse all files"
       },
       "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Collapse panel-fixture.txt"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Expand panel-fixture.txt"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Refresh diff"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Refresh diff"
+      },
+      "count": 1
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Expand panel-fixture.txt"
+      },
+      "count": 1
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Collapse zz-selected.txt"
+      },
+      "count": 1
     }
-  ]
+  ],
+  "fixture": "panel"
 }

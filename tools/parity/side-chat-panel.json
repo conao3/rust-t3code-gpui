@@ -1,0 +1,53 @@
+{
+  "name": "side-chat-panel",
+  "fixture": "panel",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+b"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Add panel surface"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "s"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Close side chat"
+      },
+      "count": 1
+    }
+  ]
+}

@@ -15,6 +15,15 @@
       }
     },
     {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
       "action": "press",
       "value": "ctrl+alt+b"
     },
@@ -112,5 +121,6 @@
       },
       "count": 1
     }
-  ]
+  ],
+  "fixture": "panel"
 }

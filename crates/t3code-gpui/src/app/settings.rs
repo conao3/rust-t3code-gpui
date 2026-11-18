@@ -741,6 +741,9 @@ impl Root {
                 cx,
                 |window, cx| settings_tasks::Tasks::new(root, environment, self, window, cx),
             );
+            if let Some(task) = self.right_panel.task_to_edit.borrow_mut().take() {
+                panel.update(cx, |editor, cx| editor.edit(task, window, cx));
+            }
             content = content.child(panel);
         }
         if page == "connections" {

@@ -1,0 +1,145 @@
+{
+  "name": "turn-diff",
+  "fixture": "turn",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 1500,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Panel fixture, Done, UI parity"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Toggle thread details panel"
+      },
+      "count": 1,
+      "screenshot": false
+    },
+    {
+      "action": "press",
+      "value": "ctrl+d"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Diff scope: Changes"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Diff scope: Changes"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Latest turn"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Latest turn"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Expand turn-fixture.txt"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Expand turn-fixture.txt"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Collapse turn-fixture.txt"
+      },
+      "count": 1
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Diff scope: Latest turn"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "menuitemradio",
+        "name": "Changes"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "combobox",
+        "name": "Change comparison target. Currently Automatic"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "option",
+        "name": "comparison-base"
+      },
+      "count": 1,
+      "native": {
+        "role": "list item",
+        "name": "comparison-base"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "option",
+        "name": "comparison-base"
+      },
+      "native": {
+        "role": "list item",
+        "name": "comparison-base"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "combobox",
+        "name": "Change comparison target. Currently comparison-base"
+      },
+      "count": 1
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Copy file path"
+      },
+      "count": 3
+    }
+  ]
+}

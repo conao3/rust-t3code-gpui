@@ -172,7 +172,7 @@ impl Tasks {
         }
         view
     }
-    fn edit(&mut self, task: Value, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn edit(&mut self, task: Value, window: &mut Window, cx: &mut Context<Self>) {
         let schedule = task["schedule"]["type"].as_str().unwrap_or("fixed_time");
         let schedule_value = match schedule {
             "interval" => {

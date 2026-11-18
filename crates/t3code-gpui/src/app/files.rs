@@ -17,7 +17,7 @@ impl Root {
         cx.notify();
     }
 
-    fn search_files(&mut self, query: String, cx: &mut Context<Self>) {
+    pub(super) fn search_files(&mut self, query: String, cx: &mut Context<Self>) {
         let Some((environment, cwd)) = self.composer_cwd() else {
             return;
         };
@@ -43,6 +43,7 @@ impl Root {
                     .filter(|e| e.get("kind").and_then(Value::as_str) == Some("file"))
                     .filter_map(|e| e.get("path").and_then(Value::as_str).map(str::to_string))
                     .collect();
+                root.panel_revision += 1;
                 cx.notify();
             });
         })
@@ -240,7 +241,32 @@ impl Root {
     pub(super) fn render_explorer(&self, cx: &Context<Self>) -> Option<AnyElement> {
         let open = self.explorer.as_ref()?;
         let theme = cx.theme();
-        let lines = Rc::new(explorer::lines(&open.directories, &open.expanded));
+        let query = self
+            .right_panel
+            .file_search
+            .as_ref()
+            .map(|input| input.read(cx).value().to_string())
+            .unwrap_or_default();
+        let lines = Rc::new(if query.is_empty() {
+            explorer::lines(&open.directories, &open.expanded)
+        } else {
+            self.file_hits
+                .iter()
+                .map(|path| explorer::Line {
+                    entry: explorer::Entry {
+                        path: path.clone(),
+                        directory: false,
+                    },
+                    depth: 0,
+                    expanded: false,
+                    loading: false,
+                })
+                .collect()
+        });
+        let project_title = self
+            .current_project()
+            .map(|(_, project)| project["title"].as_str().unwrap_or_default().to_string())
+            .unwrap_or_default();
         let current = self.file_panel.as_ref().map(|p| p.path.clone());
         let (muted, selected) = (theme.muted_foreground, theme.muted);
         let weak = cx.entity().downgrade();
@@ -254,22 +280,29 @@ impl Root {
                 .border_color(theme.border)
                 .child(
                     h_flex()
-                        .px_3()
-                        .py_2()
-                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .gap_1()
                         .border_b_1()
                         .border_color(theme.border)
-                        .child(div().flex_1().text_sm().child("Files"))
                         .child(
-                            Button::new("close-explorer")
-                                .label("Close")
+                            Button::new("refresh-workspace-files")
+                                .icon(IconName::RefreshCw)
+                                .accessibility_label("Refresh workspace files")
+                                .ghost()
                                 .compact()
-                                .outline()
                                 .on_click(cx.listener(|root, _, _, cx| {
-                                    root.close_panel_tab("files", cx);
-                                    cx.notify();
+                                    if let Some((environment, cwd)) = root.composer_cwd() {
+                                        root.start_explorer(environment, cwd, cx);
+                                    }
                                 })),
-                        ),
+                        )
+                        .children(self.right_panel.file_search.as_ref().map(|input| {
+                            Input::new(input)
+                                .small()
+                                .role(accesskit::Role::SearchInput)
+                                .aria_label(format!("Search {project_title} files"))
+                        })),
                 )
                 .children(open.error.clone().map(|error| {
                     div()
@@ -299,11 +332,11 @@ impl Root {
                                     (true, false) => "▸ ",
                                     _ => "  ",
                                 };
-                                let label = format!(
-                                    "{mark}{}{}",
-                                    line.entry.name(),
-                                    if line.loading { "  …" } else { "" }
-                                );
+                                let name = line.entry.name();
+                                let (stem, extension) = name
+                                    .rsplit_once('.')
+                                    .map(|(stem, ext)| (format!("{stem}."), ext.to_string()))
+                                    .unwrap_or_else(|| (name.to_string(), String::new()));
                                 let entry = line.entry.clone();
                                 let weak = weak.clone();
                                 div()
@@ -323,7 +356,15 @@ impl Root {
                                             root.click_entry(entry.clone(), cx)
                                         });
                                     })
-                                    .child(label)
+                                    .child(
+                                        h_flex()
+                                            .child(mark)
+                                            .child(text!(stem))
+                                            .when(!extension.is_empty(), |row| {
+                                                row.child(text!(extension))
+                                            })
+                                            .when(line.loading, |row| row.child(text!("…"))),
+                                    )
                                     .into_any_element()
                             })
                             .collect()
@@ -336,6 +377,7 @@ impl Root {
 
     pub(super) fn render_file_panel(&self, cx: &Context<Self>) -> Option<AnyElement> {
         let panel = self.file_panel.as_ref()?;
+        let turn_diff = self.diff_view.scope.starts_with("turn:");
         let theme = cx.theme();
         let finding = self.file_find_open && !self.file_find_input.read(cx).value().is_empty();
         let count = if panel.hits.is_empty() {
@@ -365,7 +407,7 @@ impl Root {
                     .min_w_0()
                     .child(
                         Diff::new(state)
-                            .render_header(|file, _, cx| {
+                            .render_header(move |file, _, cx| {
                                 use gpui_kit::component::diff::DiffFileStatus;
                                 let icon = match file.status() {
                                     DiffFileStatus::Added => gpui_kit::assets::IconName::CirclePlus,
@@ -415,13 +457,23 @@ impl Root {
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().success)
-                                            .child(format!("+{}", file.additions())),
+                                            .when(!turn_diff, |view| {
+                                                view.child(format!("+{}", file.additions()))
+                                            })
+                                            .when(turn_diff && file.additions() > 0, |view| {
+                                                view.child(text!(format!("+{}", file.additions())))
+                                            }),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().danger)
-                                            .child(format!("-{}", file.deletions())),
+                                            .when(!turn_diff, |view| {
+                                                view.child(format!("-{}", file.deletions()))
+                                            })
+                                            .when(turn_diff && file.deletions() > 0, |view| {
+                                                view.child(text!(format!("-{}", file.deletions())))
+                                            }),
                                     )
                             })
                             .soft_wrap(self.diff_view.wrap)

@@ -808,6 +808,8 @@ impl Root {
         match action.kind.as_str() {
             "diff-base" => {
                 self.diff_view.base_ref = action.value.as_str().map(str::to_string);
+                self.diff_view.collapsed = true;
+                self.file_panel = None;
                 self.branch_anchor = None;
                 self.refresh_diff(cx);
                 self.panel_focus.focus(window, cx);
@@ -1317,15 +1319,21 @@ impl Render for ThreadServices {
                 let title = task["title"].as_str().unwrap_or_default().to_string();
                 let id = task["id"].clone();
                 let toggle_id = id.clone();
+                let edit_task = task.clone();
                 let enabled = task["enabled"] == true;
-                let mut schedule = task_schedule_label(&task["schedule"]);
-                if let Some(blocked) = task["blockedByPolicy"].as_str() {
-                    schedule.push_str(&format!(" · {blocked}"));
+                let schedule = task_schedule_label(&task["schedule"]);
+                let suffix = if let Some(blocked) = task["blockedByPolicy"].as_str() {
+                    format!("· {blocked}")
                 } else if !enabled {
-                    schedule.push_str(" · paused");
-                }
+                    "· paused".into()
+                } else if !task["nextRunAt"].is_null() {
+                    "· next".into()
+                } else {
+                    String::new()
+                };
                 tasks = tasks.child(
                     h_flex()
+                        .id(SharedString::from(format!("automation-{id}")))
                         .py_1p5()
                         .gap_2()
                         .child(
@@ -1333,7 +1341,18 @@ impl Render for ThreadServices {
                                 div()
                                     .text_xs()
                                     .text_color(cx.theme().muted_foreground)
-                                    .child(text!(schedule)),
+                                    .child(
+                                        h_flex()
+                                            .gap_1()
+                                            .child(text!(schedule))
+                                            .child(text!(suffix))
+                                            .when(
+                                                enabled
+                                                    && task["blockedByPolicy"].is_null()
+                                                    && !task["nextRunAt"].is_null(),
+                                                |row| row.child(text!(task_next_label(task))),
+                                            ),
+                                    ),
                             ),
                         )
                         .child(
@@ -1342,8 +1361,13 @@ impl Render for ThreadServices {
                                 .accessibility_label(format!("Edit {title}"))
                                 .ghost()
                                 .small()
-                                .disabled(true)
-                                .tooltip("Opening an automation directly for editing is not implemented in T3 Code GPUI."),
+                                .on_click(cx.listener(move |view, _, _, cx| {
+                                    let task = edit_task.clone();
+                                    let _ = view.root.update(cx, |root, _| {
+                                        *root.right_panel.task_to_edit.borrow_mut() = Some(task);
+                                    });
+                                    view.manage_tasks(cx);
+                                })),
                         )
                         .when(task["schedule"]["type"] != "webhook", |row| {
                             row.child(
@@ -1457,4 +1481,45 @@ fn split_branch_label(value: &str) -> (String, String) {
         cut = index;
     }
     (chars[..cut].iter().collect(), chars[cut..].iter().collect())
+}
+
+fn task_next_label(task: &Value) -> String {
+    let Some(time) = task["nextRunAt"]
+        .as_str()
+        .and_then(|time| humantime::parse_rfc3339(time).ok())
+    else {
+        return String::new();
+    };
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        / 60
+        * 60;
+    let timestamp = time
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    if timestamp <= now {
+        let seconds = now - timestamp;
+        return match seconds {
+            0..60 => "just now".into(),
+            60..3600 => format!("{}m ago", seconds / 60),
+            3600..86400 => format!("{}h ago", seconds / 3600),
+            _ => format!("{}d ago", seconds / 86400),
+        };
+    }
+    let minutes = (timestamp - now).div_ceil(60);
+    if minutes < 2 {
+        "in under a minute".into()
+    } else if minutes < 60 {
+        format!("in {minutes}m")
+    } else {
+        let hours = (minutes + 30) / 60;
+        if hours < 24 {
+            format!("in {hours}h")
+        } else {
+            format!("in {}d", (hours + 12) / 24)
+        }
+    }
 }
