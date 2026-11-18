@@ -99,7 +99,7 @@
       "action": "click",
       "selector": {
         "role": "combobox",
-        "name": "Change comparison target. Currently main"
+        "name": "Change comparison target. Currently Automatic"
       }
     },
     {

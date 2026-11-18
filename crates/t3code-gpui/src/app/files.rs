@@ -377,6 +377,7 @@ impl Root {
 
     pub(super) fn render_file_panel(&self, cx: &Context<Self>) -> Option<AnyElement> {
         let panel = self.file_panel.as_ref()?;
+        let turn_diff = self.diff_view.scope.starts_with("turn:");
         let theme = cx.theme();
         let finding = self.file_find_open && !self.file_find_input.read(cx).value().is_empty();
         let count = if panel.hits.is_empty() {
@@ -406,7 +407,7 @@ impl Root {
                     .min_w_0()
                     .child(
                         Diff::new(state)
-                            .render_header(|file, _, cx| {
+                            .render_header(move |file, _, cx| {
                                 use gpui_kit::component::diff::DiffFileStatus;
                                 let icon = match file.status() {
                                     DiffFileStatus::Added => gpui_kit::assets::IconName::CirclePlus,
@@ -456,13 +457,23 @@ impl Root {
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().success)
-                                            .child(format!("+{}", file.additions())),
+                                            .when(!turn_diff, |view| {
+                                                view.child(format!("+{}", file.additions()))
+                                            })
+                                            .when(turn_diff && file.additions() > 0, |view| {
+                                                view.child(text!(format!("+{}", file.additions())))
+                                            }),
                                     )
                                     .child(
                                         div()
                                             .text_xs()
                                             .text_color(cx.theme().danger)
-                                            .child(format!("-{}", file.deletions())),
+                                            .when(!turn_diff, |view| {
+                                                view.child(format!("-{}", file.deletions()))
+                                            })
+                                            .when(turn_diff && file.deletions() > 0, |view| {
+                                                view.child(text!(format!("-{}", file.deletions())))
+                                            }),
                                     )
                             })
                             .soft_wrap(self.diff_view.wrap)

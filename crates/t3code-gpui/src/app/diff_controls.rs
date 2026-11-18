@@ -178,7 +178,7 @@ impl Root {
                             });
                             state
                         } else {
-                            cx.new(|cx| {
+                            let state = cx.new(|cx| {
                                 let mut state = DiffState::new(files, cx)
                                     .with_mode(mode)
                                     .with_syntax_max_line_length(500);
@@ -193,7 +193,19 @@ impl Root {
                                     }
                                 }
                                 state
+                            });
+                            cx.observe(&state, |root, state, cx| {
+                                if root.file_panel.as_ref().is_some_and(|panel| {
+                                    matches!(&panel.body, PanelBody::Diff(current) if current.entity_id() == state.entity_id())
+                                }) {
+                                    let diff = state.read(cx);
+                                    root.diff_view.collapsed = diff.files().iter().all(|file| diff.is_file_collapsed(file.path()));
+                                    root.panel_revision += 1;
+                                    cx.notify();
+                                }
                             })
+                            .detach();
+                            state
                         };
                         let panel = FilePanel::new(
                             DIFF_TITLE.into(),
@@ -477,22 +489,21 @@ impl Root {
                                 ),
                         )
                     })
-                    .child(
-                        Button::new("refresh-diff")
-                            .icon(IconName::RefreshCw)
-                            .when(self.diff_view.scope.starts_with("turn:"), |button| {
-                                button.invisible()
-                            })
-                            .accessibility_label(if self.diff_view.loading {
-                                "Refreshing diff"
-                            } else {
-                                "Refresh diff"
-                            })
-                            .ghost()
-                            .compact()
-                            .disabled(self.diff_view.loading)
-                            .on_click(cx.listener(|root, _, _, cx| root.refresh_diff(cx))),
-                    )
+                    .when(!self.diff_view.scope.starts_with("turn:"), |row| {
+                        row.child(
+                            Button::new("refresh-diff")
+                                .icon(IconName::RefreshCw)
+                                .accessibility_label(if self.diff_view.loading {
+                                    "Refreshing diff"
+                                } else {
+                                    "Refresh diff"
+                                })
+                                .ghost()
+                                .compact()
+                                .disabled(self.diff_view.loading)
+                                .on_click(cx.listener(|root, _, _, cx| root.refresh_diff(cx))),
+                        )
+                    })
                     .child(
                         Button::new("collapse-diff-files")
                             .icon(gpui_kit::assets::IconName::ChevronsUpDown)
