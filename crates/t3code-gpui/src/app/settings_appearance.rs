@@ -155,18 +155,84 @@ fn preview(mode: &str, light: &str, dark: &str) -> Div {
 }
 
 impl Root {
+    fn save_theme_selection(&mut self, changes: &[(&str, Option<Value>)], cx: &mut Context<Self>) {
+        match client_settings::update_entries(&self.settings_path, changes) {
+            Ok(settings) => {
+                self.settings = settings;
+                crate::appearance::apply(&self.settings, cx);
+                crate::appearance::apply_typography(&self.settings, cx);
+                self.settings.light_theme = !cx.theme().mode.is_dark();
+            }
+            Err(error) => self.message = Some(format!("Couldn’t save theme selection: {error:#}")),
+        }
+        cx.notify();
+    }
+
     fn select_settings_theme(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.change_setting("gpuiThemeLight", json!(id), cx);
-        self.change_setting("gpuiThemeDark", json!(id), cx);
+        let mode = self.settings.values["t3code:theme-appearance-mode"]
+            .as_str()
+            .unwrap_or("system");
+        let theme = if id == "t3-code" { mode } else { id };
+        self.save_theme_selection(
+            &[
+                ("t3code:theme-appearance-mode", Some(json!(mode))),
+                ("t3code:theme", Some(json!(theme))),
+                ("t3code:theme-halves:v1", None),
+            ],
+            cx,
+        );
+    }
+
+    fn select_settings_theme_half(&mut self, id: &str, light: bool, cx: &mut Context<Self>) {
+        let mode = if light { "light" } else { "dark" };
+        let other = if light { "dark" } else { "light" };
+        let mut halves = self.settings.values["t3code:theme-halves:v1"]
+            .as_str()
+            .map(|raw| serde_json::from_str::<Value>(raw).expect("valid saved theme halves"))
+            .unwrap_or_else(|| json!({}));
+        let base = self.settings.values["t3code:theme"]
+            .as_str()
+            .unwrap_or("system");
+        let mut changes = vec![];
+        if id == "t3-code" && !matches!(base, "system" | "light" | "dark") {
+            let owner = halves[other].as_str().unwrap_or(base).to_string();
+            halves = json!({other: owner});
+            changes.push((
+                "t3code:theme",
+                Some(json!(
+                    self.settings.values["t3code:theme-appearance-mode"]
+                        .as_str()
+                        .unwrap_or("system")
+                )),
+            ));
+        } else if id == "t3-code" {
+            halves
+                .as_object_mut()
+                .expect("theme halves object")
+                .remove(mode);
+        } else {
+            halves[mode] = json!(id);
+        }
+        changes.push((
+            "t3code:theme-halves:v1",
+            if halves.as_object().expect("theme halves object").is_empty() {
+                None
+            } else {
+                Some(json!(halves.to_string()))
+            },
+        ));
+        self.save_theme_selection(&changes, cx);
     }
 
     pub(super) fn render_appearance_library(&self, cx: &Context<Self>) -> impl IntoElement {
         let theme = cx.theme().colors;
-        let mode = self.settings.values["gpuiAppearance"]
+        let mode = self.settings.values["t3code:theme-appearance-mode"]
             .as_str()
-            .unwrap_or("dark");
+            .unwrap_or("system");
         v_flex()
             .id("appearance-library")
+            .role(accesskit::Role::Group)
+            .aria_label("Colors & themes")
             .gap_6()
             .child(
                 v_flex()
@@ -210,12 +276,8 @@ impl Root {
                                                     .gap_2()
                                                     .child(preview(
                                                         value,
-                                                        self.settings.values["gpuiThemeLight"]
-                                                            .as_str()
-                                                            .unwrap_or("t3-code"),
-                                                        self.settings.values["gpuiThemeDark"]
-                                                            .as_str()
-                                                            .unwrap_or("t3-code"),
+                                                        &crate::appearance::theme_half(&self.settings.values, "light"),
+                                                        &crate::appearance::theme_half(&self.settings.values, "dark"),
                                                     ))
                                                     .child(
                                                         settings_controls::text(label)
@@ -225,7 +287,7 @@ impl Root {
                                             )
                                             .on_click(cx.listener(move |root, _, _, cx| {
                                                 root.change_setting(
-                                                    "gpuiAppearance",
+                                                    "t3code:theme-appearance-mode",
                                                     json!(value),
                                                     cx,
                                                 )
@@ -238,9 +300,11 @@ impl Root {
                 v_flex()
                     .gap_3()
                     .child(
-                        settings_controls::text("Themes")
-                            .px_4()
-                            .font_weight(FontWeight::SEMIBOLD),
+                        h_flex().px_4().justify_between()
+                            .child(settings_controls::text("Themes").font_weight(FontWeight::SEMIBOLD))
+                            .child(h_flex().gap_2()
+                                .child(Button::new("create-theme").label("Create theme").outline().compact().on_click(|_, window, cx| theme_editor_notice("Create theme", window, cx)))
+                                .child(Button::new("add-theme").label("Add theme").outline().compact().on_click(|_, window, cx| theme_editor_notice("Add theme", window, cx)))),
                     )
                     .children(
                         [
@@ -270,14 +334,7 @@ impl Root {
                                         .child(h_flex().justify_center().gap_4().children(
                                             [("light", true), ("dark", false)].into_iter().map(
                                                 |(mode, light)| {
-                                                    let picked = self.settings.values[if light {
-                                                        "gpuiThemeLight"
-                                                    } else {
-                                                        "gpuiThemeDark"
-                                                    }]
-                                                    .as_str()
-                                                    .unwrap_or("t3-code")
-                                                        == id;
+                                                    let picked = crate::appearance::theme_half(&self.settings.values, mode) == id;
                                                     Button::new(mode)
                                                         .accessibility_label(format!(
                                                             "Use {label} {mode} mode"
@@ -299,39 +356,135 @@ impl Root {
                                                         )
                                                         .on_click(cx.listener(
                                                             move |root, _, _, cx| {
-                                                                root.change_setting(
-                                                                    if light {
-                                                                        "gpuiThemeLight"
-                                                                    } else {
-                                                                        "gpuiThemeDark"
-                                                                    },
-                                                                    json!(id),
-                                                                    cx,
-                                                                );
+                                                                root.select_settings_theme_half(id, light, cx);
                                                                 cx.stop_propagation();
                                                             },
                                                         ))
                                                 },
                                             ),
                                         ))
-                                        .child(
+                                        .child(h_flex().justify_between().child(
                                             Button::new("use-theme")
                                                 .toggled(false)
                                                 .accessibility_label(format!("Use {label} theme"))
                                                 .ghost()
                                                 .justify_start()
-                                                .w_full()
+                                                .flex_1()
+                                                .min_w_0()
                                                 .h(px(20.))
                                                 .p_0()
                                                 .child(settings_controls::text(label).w_full().text_sm())
                                                 .on_click(cx.listener(move |root, _, _, cx| {
                                                     root.select_settings_theme(id, cx);
                                                     cx.stop_propagation();
-                                                })),
-                                        )
+                                                }))
+                                        ).child(Button::new("duplicate-theme")
+                                            .icon(gpui_kit::assets::IconName::Copy)
+                                            .accessibility_label(format!("Duplicate {label}"))
+                                            .ghost().compact().on_click(move |_, window, cx| {
+                                                cx.stop_propagation();
+                                                theme_editor_notice(&format!("Duplicate {label}"), window, cx);
+                                            })))
                                 }))
                         }),
                     ),
             )
+    }
+}
+
+fn theme_editor_notice(title: &str, window: &mut Window, cx: &mut App) {
+    let title = title.to_string();
+    window.open_alert_dialog(cx, move |dialog, _, _| {
+        dialog
+            .title(title.clone())
+            .description("Theme editing and importing are not implemented in this client.")
+    });
+}
+
+const DETAILS_ITEMS: [(&str, &str, bool); 12] = [
+    ("environment", "Environment and worktree", true),
+    ("openIn", "Open in editor", true),
+    ("scripts", "Project scripts", true),
+    ("branch", "Branch and pull request", true),
+    ("gitActions", "Git actions", true),
+    ("changes", "Changes", true),
+    ("servers", "Servers", true),
+    ("automations", "Automations", true),
+    ("lineage", "Lineage", true),
+    ("sideChats", "Side chats", true),
+    ("usage", "Usage limits", false),
+    ("context", "Context window", false),
+];
+
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = t3code_gpui, no_json)]
+pub(super) struct SetThreadDetails {
+    item: String,
+    visible: bool,
+}
+
+impl Root {
+    pub(super) fn set_thread_details(
+        &mut self,
+        action: &SetThreadDetails,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if action.item.is_empty() {
+            self.change_setting("threadDetailsItems", json!({}), cx);
+            self.change_setting("threadDetailsUsageEnabled", json!(false), cx);
+            return;
+        }
+        let Some((id, _, default)) = DETAILS_ITEMS.iter().find(|(id, _, _)| *id == action.item)
+        else {
+            return;
+        };
+        let default = if matches!(*id, "usage" | "context") {
+            self.settings.values["threadDetailsUsageEnabled"] == true
+        } else {
+            *default
+        };
+        let mut items = self.settings.values["threadDetailsItems"]
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
+        if action.visible == default {
+            items.remove(*id);
+        } else {
+            items.insert(id.to_string(), json!(action.visible));
+        }
+        self.change_setting("threadDetailsItems", json!(items), cx);
+    }
+
+    pub(super) fn render_thread_details_setting(&self, cx: &Context<Self>) -> impl IntoElement {
+        let values = self.settings.values.clone();
+        let visibility = DETAILS_ITEMS.map(|(id, _, default)| {
+            values["threadDetailsItems"][id].as_bool().unwrap_or(
+                if matches!(id, "usage" | "context") {
+                    values["threadDetailsUsageEnabled"] == true
+                } else {
+                    default
+                },
+            )
+        });
+        let count = visibility.iter().filter(|visible| **visible).count();
+        let changed = DETAILS_ITEMS
+            .iter()
+            .zip(visibility)
+            .any(|((_, _, default), visible)| *default != visible);
+        h_flex().id("thread-details-setting").px_4().py_3().gap_4().border_b_1().border_color(cx.theme().border)
+            .child(v_flex().flex_1().gap_1()
+                .child(settings_controls::text("Thread details").text_sm())
+                .child(settings_controls::text("Choose what the thread details card shows. You can also right-click the card.").text_xs().text_color(cx.theme().muted_foreground)))
+            .when(changed, |row| row.child(Button::new("reset-thread-details").icon(gpui_kit::assets::IconName::Undo2).accessibility_label("Reset thread details to default").ghost().compact().on_click(cx.listener(|root, _, window, cx| root.set_thread_details(&SetThreadDetails { item: String::new(), visible: false }, window, cx)))))
+            .child(Button::new("thread-details-items").accessibility_label(format!("Thread details: {count} of 12 on"))
+                .outline().w(px(160.)).h(px(28.)).child(h_flex().gap_1().children([count.to_string(), "of".into(), "12".into(), "on".into()].into_iter().enumerate().map(|(index, value)| settings_controls::text(value).id(("thread-details-count", index)))))
+                .dropdown_menu(move |mut menu, _, _| {
+                    menu = menu.label("Show in thread details");
+                    for ((id, label, _), visible) in DETAILS_ITEMS.into_iter().zip(visibility) {
+                        menu = menu.menu_with_check(label, visible, Box::new(SetThreadDetails { item: id.to_string(), visible: !visible }));
+                    }
+                    menu.separator().item(PopupMenuItem::new("Reset to default").disabled(!changed).on_click(|_, window, cx| window.dispatch_action(Box::new(SetThreadDetails { item: String::new(), visible: false }), cx)))
+                }))
     }
 }

@@ -69,6 +69,7 @@ mod settings_appearance;
 mod settings_archive;
 mod settings_catalog;
 mod settings_controls;
+mod settings_font_previews;
 mod settings_keybindings;
 mod settings_labs;
 mod settings_providers;
@@ -656,7 +657,11 @@ impl Root {
         let weak = cx.entity().downgrade();
         let subscriptions = vec![
             cx.observe_window_appearance(window, |root, _, cx| {
-                if root.settings.values["gpuiAppearance"] == "system" {
+                if root.settings.values["t3code:theme-appearance-mode"]
+                    .as_str()
+                    .unwrap_or("system")
+                    == "system"
+                {
                     crate::appearance::apply(&root.settings, cx);
                     root.settings.light_theme = !cx.theme().mode.is_dark();
                     crate::appearance::apply_typography(&root.settings, cx);
@@ -1588,7 +1593,7 @@ impl Render for Root {
             }))
             .on_action(cx.listener(|root, _: &CycleAppearance, _, cx| {
                 root.change_setting(
-                    "gpuiAppearance",
+                    "t3code:theme-appearance-mode",
                     Value::from(if root.settings.light_theme {
                         "dark"
                     } else {

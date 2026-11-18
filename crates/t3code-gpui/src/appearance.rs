@@ -42,22 +42,31 @@ pub fn preset_color(id: &str, role: &str, light: bool) -> Hsla {
     crate::appearance_presets::palette(id, light).color(role)
 }
 
+pub fn theme_half(values: &serde_json::Value, mode: &str) -> String {
+    let halves = values["t3code:theme-halves:v1"].as_str().map(|raw| {
+        serde_json::from_str::<serde_json::Value>(raw).expect("valid saved theme halves")
+    });
+    let theme = halves
+        .as_ref()
+        .and_then(|halves| halves[mode].as_str())
+        .or_else(|| values["t3code:theme"].as_str())
+        .unwrap_or("system");
+    match theme {
+        "light" | "dark" | "system" => "t3-code".to_string(),
+        id => id.to_string(),
+    }
+}
+
 pub fn apply(settings: &crate::client_settings::ClientSettings, cx: &mut App) {
-    let light = match settings.values["gpuiAppearance"].as_str() {
-        Some("system") => matches!(
+    let light = match settings.values["t3code:theme-appearance-mode"].as_str() {
+        None | Some("system") => matches!(
             cx.window_appearance(),
             WindowAppearance::Light | WindowAppearance::VibrantLight
         ),
         _ => settings.light_theme,
     };
-    let id = settings.values[if light {
-        "gpuiThemeLight"
-    } else {
-        "gpuiThemeDark"
-    }]
-    .as_str()
-    .unwrap_or("t3-code");
-    let mut palette = crate::appearance_presets::palette(id, light);
+    let id = theme_half(&settings.values, if light { "light" } else { "dark" });
+    let mut palette = crate::appearance_presets::palette(&id, light);
     palette.contrast = settings.values["appearanceContrast"]
         .as_f64()
         .unwrap_or(100.) as f32;

@@ -8,6 +8,7 @@ pub(super) enum Control {
     Range(f32, f32, f32),
     Font(&'static str, f64, f64),
     Text,
+    Retention(f64),
 }
 
 #[derive(Clone)]
@@ -186,10 +187,10 @@ pub(super) fn settings() -> Vec<Setting> {
     add(
         "appearance",
         "Colors & themes",
-        "gpuiAppearance",
+        "t3code:theme-appearance-mode",
         "Color scheme",
         "",
-        json!("dark"),
+        json!("system"),
         false,
         Select(&[("dark", "Dark"), ("light", "Light")]),
     );
@@ -851,13 +852,133 @@ pub(super) fn settings() -> Vec<Setting> {
             ("rebase", "Rebase and merge"),
         ]),
     );
+    add(
+        "source-control",
+        "Commits & pull requests",
+        "sourceControlWritingStyle",
+        "Commit and pull request writing",
+        "Commit messages and pull request titles and descriptions match each project's history.",
+        json!({"mode":"repo_conventions","customInstructions":"","followChangeRequestTemplates":true}),
+        true,
+        Select(&[
+            ("repo_conventions", "Repository conventions"),
+            ("conventional_commits", "Conventional Commits"),
+            ("custom", "Custom instructions"),
+        ]),
+    );
+    add(
+        "source-control",
+        "Commits & pull requests",
+        "reviewGuidesEnabled",
+        "Review guides (beta)",
+        "Add a Guide tab to pull requests. An agent explains the changes and points out decisions that need review.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "worktrees",
+        "Cleanup",
+        "storageCleanup.worktreeOnDelete",
+        "Delete worktrees with deleted threads",
+        "Remove unused worktrees when active or archived threads are deleted. Worktrees with local changes are kept.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "worktrees",
+        "Cleanup",
+        "storageCleanup.worktreeOnMerge",
+        "Delete merged worktrees",
+        "Remove worktrees whose pull request is merged and whose commits are included in the default branch.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "worktrees",
+        "Cleanup",
+        "storageCleanup.worktreeAfterDays",
+        "Delete inactive worktrees",
+        "Remove worktrees after their threads have been inactive for this many days. Branches and thread history are kept.",
+        Value::Null,
+        true,
+        Retention(1.),
+    );
+    add(
+        "worktrees",
+        "Cleanup",
+        "storageCleanup.worktreeSettledAfterDays",
+        "Delete settled worktrees",
+        "Remove worktrees this many days after their thread settles. Set 0 days to remove them at the next cleanup. Branches and thread history are kept.",
+        Value::Null,
+        true,
+        Retention(0.),
+    );
+    add(
+        "worktrees",
+        "Cleanup",
+        "storageCleanup.worktreeUnchanged",
+        "Delete unchanged worktrees",
+        "Remove worktrees with no commits beyond the default branch.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "worktrees",
+        "Cleanup",
+        "storageCleanup.worktreeKeepWhen",
+        "Keep worktrees with local changes",
+        "Includes ignored files, except node_modules.",
+        json!("uncommitted-changes"),
+        true,
+        Select(&[
+            ("any-local-files", "Any local files"),
+            ("uncommitted-changes", "Uncommitted changes"),
+            ("tracked-changes", "Edited tracked files"),
+        ]),
+    );
+    add(
+        "maintenance",
+        "Artifacts and logs",
+        "storageCleanup.browserArtifactsAfterDays",
+        "Delete old browser artifacts",
+        "Delete saved browser captures after this many days. Older capture links will no longer open.",
+        Value::Null,
+        true,
+        Retention(1.),
+    );
+    add(
+        "maintenance",
+        "Artifacts and logs",
+        "storageCleanup.logsAfterDays",
+        "Delete old rotated logs",
+        "Delete inactive rotated log files after this many days. Current logs are kept.",
+        Value::Null,
+        true,
+        Retention(1.),
+    );
+    for definition in &mut values {
+        if matches!(
+            definition.key,
+            "storageCleanup.worktreeSettledAfterDays"
+                | "storageCleanup.worktreeUnchanged"
+                | "storageCleanup.worktreeKeepWhen"
+        ) {
+            definition.advanced = true;
+        }
+    }
     values
 }
 
 pub(super) fn project_scoped(key: &str) -> bool {
     matches!(
         key,
-        "defaultAutoPull"
+        "sourceControlWritingStyle"
+            | "reviewGuidesEnabled"
+            | "defaultAutoPull"
             | "removeAgentCreditsOnMerge"
             | "pullRequestMergeMethod"
             | "threadTitleInstructions"

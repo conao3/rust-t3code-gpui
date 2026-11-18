@@ -344,7 +344,7 @@ async def set_theme(manifest, theme):
     native = Native(manifest["session"])
     settings_path = Path(native.session["home"]) / "userdata/client-settings.json"
     settings = read_json(settings_path) if settings_path.exists() else {}
-    if settings.get("gpuiAppearance", "dark") != theme:
+    if settings.get("t3code:theme-appearance-mode", "system") != theme:
         await invoke(native, "click", "button", "Settings")
         await wait_for(native, {"role": "tree item", "name": "Appearance"})
         await invoke(native, "click", "tree item", "Appearance")
@@ -354,7 +354,7 @@ async def set_theme(manifest, theme):
     deadline = time.monotonic() + 10
     while True:
         settings = read_json(settings_path) if settings_path.exists() else {}
-        if settings.get("gpuiAppearance", "dark") == theme:
+        if settings.get("t3code:theme-appearance-mode", "system") == theme:
             break
         if time.monotonic() >= deadline:
             raise SlotError("Native appearance did not change")
@@ -560,6 +560,9 @@ def worker(slot_path):
         )
         session = generation / "desktop/native-session.json"
         session.parent.mkdir()
+        settings_path = session.parent / "native-home/userdata/client-settings.json"
+        settings_path.parent.mkdir(parents=True)
+        write_json(settings_path, {"t3code:theme-appearance-mode": options["theme"]})
         launch(
             "native-desktop",
             [
