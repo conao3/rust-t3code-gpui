@@ -3912,6 +3912,8 @@ impl Window {
     }
 
     fn draw_roots(&mut self, cx: &mut App) {
+        let a11y_trace = std::env::var_os("T3CODE_GPUI_TRACE_A11Y").is_some();
+        let a11y_frame_start = std::time::Instant::now();
         self.invalidator.set_phase(DrawPhase::Prepaint);
         self.tooltip_bounds.take();
 
@@ -4030,7 +4032,11 @@ impl Window {
                 tab_stop_count: self.next_frame.tab_stops.tab_stop_count(),
             };
             // clear the builder state regardless
+            let a11y_build_start = std::time::Instant::now();
             let tree_update = self.a11y.end_frame(frame_info);
+            let a11y_build_us = a11y_build_start.elapsed().as_micros();
+            let a11y_nodes = tree_update.nodes.len();
+            let a11y_update_start = std::time::Instant::now();
 
             if should_send_a11y_update {
                 log::debug!(
@@ -4039,6 +4045,13 @@ impl Window {
                 );
                 self.platform_window.a11y_update_window_bounds();
                 self.platform_window.a11y_tree_update(tree_update);
+            }
+            if a11y_trace {
+                eprintln!(
+                    "T3CODE_GPUI_TRACE_A11Y {{\"nodes\":{a11y_nodes},\"build_us\":{a11y_build_us},\"update_us\":{},\"frame_us\":{}}}",
+                    a11y_update_start.elapsed().as_micros(),
+                    a11y_frame_start.elapsed().as_micros()
+                );
             }
         }
     }
