@@ -10,10 +10,11 @@ anyhow.workspace = true
 async-channel.workspace = true
 clap.workspace = true
 chrono = "=0.4.45"
+chrono-tz = "=0.10.4"
 iana-time-zone = "=0.1.65"
 html-escape = "=0.2.15"
 icu_calendar = "=2.4.0"
-icu_datetime = { version = "=2.4.0", default-features = false, features = ["compiled_data"] }
+icu_datetime = { version = "=2.4.0", default-features = false, features = ["compiled_data", "unstable"] }
 icu_locale_core = "=2.4.0"
 sys-locale = "=0.3.2"
 gpui-kit = { version = "=0.9.1", features = ["syntect"] }
@@ -41,7 +42,6 @@ gpui-fast = ["gpui-kit/gpui-fast"]
 
 [dev-dependencies]
 gpui = { package = "gpui-pre", version = "=0.3.12", features = ["test-support"] }
-chrono-tz = "=0.10.4"
 tempfile.workspace = true
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]

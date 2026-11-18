@@ -170,6 +170,39 @@ impl Formatter {
         .unwrap_or_default()
     }
 
+    pub fn hour12(&self) -> bool {
+        let pattern = self
+            .time
+            .format(&Time::try_new(12, 0, 0, 0).expect("noon"))
+            .pattern();
+        let components = icu_datetime::provider::fields::components::Bag::from(&pattern);
+        matches!(components.hour_cycle, Some(HourCycle::H11 | HourCycle::H12))
+    }
+
+    pub fn upcoming_in<Tz: TimeZone>(&self, source: &str, now: &DateTime<Tz>) -> Option<String> {
+        let value = DateTime::parse_from_rfc3339(source)
+            .ok()?
+            .with_timezone(&now.timezone());
+        let days = value
+            .date_naive()
+            .signed_duration_since(now.date_naive())
+            .num_days();
+        if days <= 0 {
+            return self.display_in(source, now).map(|(label, _)| label);
+        }
+        let time = self.short_in(&value);
+        if days == 1 {
+            return Some(format!("tomorrow at {time}"));
+        }
+        let date =
+            Date::try_new_gregorian(value.year(), value.month() as u8, value.day() as u8).ok()?;
+        Some(if value.year() == now.year() {
+            format!("{} {time}", self.date.format(&date))
+        } else {
+            format!("{} {time}", self.year_date.format(&date))
+        })
+    }
+
     pub fn weekday_in<Tz: TimeZone>(&self, value: &DateTime<Tz>) -> String {
         Date::try_new_gregorian(value.year(), value.month() as u8, value.day() as u8)
             .ok()
@@ -206,9 +239,54 @@ pub fn weekday<Tz: TimeZone>(value: &DateTime<Tz>, cx: &App) -> String {
     cx.global::<Formatter>().weekday_in(value)
 }
 
+pub fn upcoming(source: &str, cx: &App) -> String {
+    cx.global::<Formatter>()
+        .upcoming_in(source, &Local::now())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn usage_reset_labels_follow_calendar_days_across_dst() {
+        let zone = chrono_tz::America::New_York;
+        let now = DateTime::parse_from_rfc3339("2026-11-01T04:30:00Z")
+            .unwrap()
+            .with_timezone(&zone);
+        let formatter = Formatter::new("en-US".parse().unwrap(), Format::Clock24).unwrap();
+        for (source, expected) in [
+            ("2026-11-01T06:30:00Z", "01:30"),
+            ("2026-11-02T06:30:00Z", "tomorrow at 01:30"),
+            ("2026-10-31T05:30:00Z", "yesterday at 01:30"),
+            ("2026-11-03T06:30:00Z", "11/3 01:30"),
+            ("2027-01-02T06:30:00Z", "1/2/2027 01:30"),
+        ] {
+            assert_eq!(
+                formatter.upcoming_in(source, &now).as_deref(),
+                Some(expected)
+            );
+        }
+        assert!(formatter.upcoming_in("invalid", &now).is_none());
+    }
+
+    #[test]
+    fn usage_hour_cycle_resolves_system_preference_and_explicit_override() {
+        for (locale, format, hour12) in [
+            ("en-US", Format::Locale, true),
+            ("en-GB", Format::Locale, false),
+            ("ja-JP", Format::Locale, false),
+            ("en-US", Format::Clock24, false),
+            ("ja-JP", Format::Clock12, true),
+        ] {
+            assert_eq!(
+                Formatter::new(locale.parse().unwrap(), format)
+                    .unwrap()
+                    .hour12(),
+                hour12
+            );
+        }
+    }
     #[test]
     fn system_locale_identifier_normalization_matches_desktop() {
         for (source, expected) in [

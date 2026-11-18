@@ -346,8 +346,10 @@ async def set_theme(manifest, theme):
     settings = read_json(settings_path) if settings_path.exists() else {}
     if settings.get("gpuiAppearance", "dark") != theme:
         await invoke(native, "click", "button", "Settings")
-        await wait_for(native, {"role": "button", "name": theme.title()})
-        await invoke(native, "click", "button", theme.title())
+        await wait_for(native, {"role": "tree item", "name": "Appearance"})
+        await invoke(native, "click", "tree item", "Appearance")
+        await wait_for(native, {"role": "toggle button", "name": f"Use {theme} mode"})
+        await invoke(native, "click", "toggle button", f"Use {theme} mode")
         await invoke(native, "click", "button", "Close")
     deadline = time.monotonic() + 10
     while True:

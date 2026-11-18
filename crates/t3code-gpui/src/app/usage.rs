@@ -614,7 +614,7 @@ impl UsagePage {
                 .bg(theme.popover)
                 .text_xs()
                 .child(
-                    settings_controls::text(self.period_label(&periods[index]))
+                    settings_controls::text(self.period_label(&periods[index], cx))
                         .text_color(theme.muted_foreground),
                 );
             for (label, values, _) in &series {
@@ -641,34 +641,32 @@ impl UsagePage {
             chart = chart.child(tooltip);
         }
         v_flex()
+            .id("usage-chart-layout")
             .gap_2()
             .child(
                 h_flex()
                     .gap_2()
-                    .child(
-                        div()
-                            .relative()
-                            .w(px(56.))
-                            .h(px(224.))
-                            .children(ticks.iter().map(|tick| {
-                                settings_controls::text(if *tick == 0. {
-                                    "0".to_string()
+                    .child(div().relative().w(px(56.)).h(px(224.)).children(
+                        ticks.iter().enumerate().map(|(index, tick)| {
+                            settings_controls::text(if *tick == 0. {
+                                "0".to_string()
+                            } else {
+                                format(*tick)
+                            })
+                            .id(("usage-value-axis", index))
+                            .absolute()
+                            .right_0()
+                            .top(px(224.
+                                - if maximum > 0. {
+                                    (*tick / maximum) as f32 * 224. * (252. / 260.)
                                 } else {
-                                    format(*tick)
-                                })
-                                .absolute()
-                                .right_0()
-                                .top(px(224.
-                                    - if maximum > 0. {
-                                        (*tick / maximum) as f32 * 224. * (252. / 260.)
-                                    } else {
-                                        0.
-                                    }
-                                    - 8.))
-                                .text_xs()
-                                .text_color(theme.muted_foreground)
-                            })),
-                    )
+                                    0.
+                                }
+                                - 8.))
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                        }),
+                    ))
                     .child(chart),
             )
             .child(
@@ -685,23 +683,26 @@ impl UsagePage {
                                 periods.get(period).map(|period| {
                                     div()
                                         .id(("usage-axis", index))
-                                        .child(settings_controls::text(self.period_label(period)))
+                                        .child(settings_controls::text(
+                                            self.period_label(period, cx),
+                                        ))
                                 })
                             }),
                     ),
             )
             .into_any_element()
     }
-    fn period_label(&self, period: &str) -> String {
+    fn period_label(&self, period: &str, cx: &App) -> String {
         if self.days == 1 {
-            chrono::DateTime::parse_from_rfc3339(period)
-                .map(|value| {
-                    value
-                        .with_timezone(&chrono::Local)
-                        .format("%-I %p")
-                        .to_string()
-                })
-                .unwrap_or_else(|_| period.to_string())
+            data::hour_label(
+                period,
+                self.window["timeZone"]
+                    .as_str()
+                    .expect("usage window zone")
+                    .parse()
+                    .expect("IANA usage zone"),
+                cx.global::<crate::timestamp::Formatter>().hour12(),
+            )
         } else {
             chrono::NaiveDate::parse_from_str(period, "%Y-%m-%d")
                 .map(|date| date.format("%b %-d").to_string())
@@ -857,7 +858,10 @@ impl UsagePage {
                                                     div()
                                                         .text_xs()
                                                         .text_color(theme.muted_foreground)
-                                                        .child(format!("Resets {reset}")),
+                                                        .child(format!(
+                                                            "Resets {}",
+                                                            crate::timestamp::upcoming(reset, cx)
+                                                        )),
                                                 )
                                             })
                                     }),
@@ -912,56 +916,61 @@ impl Render for UsagePage {
                     0.
                 })
             );
-            let mut summary = v_flex().w(px(288.)).flex_none().gap_5().child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_size(rems(2.25))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(if self.metric == "tokens" {
-                                data::tokens(total.total_tokens())
-                            } else {
-                                data::usd(total.cost)
-                            }),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(settings_controls::text(format!(
-                                "{} sessions{}",
-                                data::count(total.sessions),
-                                if self.metric == "cost" {
-                                    " · API estimate"
+            let mut summary = v_flex()
+                .id("usage-summary")
+                .w(px(288.))
+                .flex_none()
+                .gap_5()
+                .child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_size(rems(2.25))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(if self.metric == "tokens" {
+                                    data::tokens(total.total_tokens())
                                 } else {
-                                    ""
-                                }
-                            )))
-                            .when(self.metric == "cost" && total.unpriced > 0., |row| {
-                                let content = quality.clone();
-                                row.child(
-                                    Popover::new("usage-unpriced")
-                                        .anchor(Anchor::BottomCenter)
-                                        .trigger(
-                                            Button::new("usage-unpriced-trigger")
-                                                .icon(IconName::Info)
-                                                .accessibility_label("Unpriced usage details")
-                                                .tooltip(quality.clone())
-                                                .ghost()
-                                                .small()
-                                                .compact(),
-                                        )
-                                        .content(move |_, _, _| {
-                                            settings_controls::text(content.clone())
-                                                .text_xs()
-                                                .max_w(px(300.))
-                                        }),
-                                )
-                            }),
-                    ),
-            );
+                                    data::usd(total.cost)
+                                }),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child(settings_controls::text(format!(
+                                    "{} sessions{}",
+                                    data::count(total.sessions),
+                                    if self.metric == "cost" {
+                                        " · API estimate"
+                                    } else {
+                                        ""
+                                    }
+                                )))
+                                .when(self.metric == "cost" && total.unpriced > 0., |row| {
+                                    let content = quality.clone();
+                                    row.child(
+                                        Popover::new("usage-unpriced")
+                                            .anchor(Anchor::BottomCenter)
+                                            .trigger(
+                                                Button::new("usage-unpriced-trigger")
+                                                    .icon(IconName::Info)
+                                                    .accessibility_label("Unpriced usage details")
+                                                    .tooltip(quality.clone())
+                                                    .ghost()
+                                                    .small()
+                                                    .compact(),
+                                            )
+                                            .content(move |_, _, _| {
+                                                settings_controls::text(content.clone())
+                                                    .text_xs()
+                                                    .max_w(px(300.))
+                                            }),
+                                    )
+                                }),
+                        ),
+                );
             let mut providers = self.merged.providers.iter().collect::<Vec<_>>();
             providers.sort_by(|(_, a), (_, b)| {
                 let metric = |value: &Totals| {
@@ -992,6 +1001,7 @@ impl Render for UsagePage {
                 };
                 summary = summary.child(
                     v_flex()
+                        .id(SharedString::from(format!("usage-provider:{provider}")))
                         .gap_1()
                         .child(
                             h_flex()
@@ -1063,6 +1073,7 @@ impl Render for UsagePage {
                 )
                 .child(
                     v_flex()
+                        .id("usage-totals")
                         .gap_2()
                         .child(
                             settings_controls::text("Totals")
@@ -1081,6 +1092,7 @@ impl Render for UsagePage {
                                 .into_iter()
                                 .map(|(label, value)| {
                                     v_flex()
+                                        .id(SharedString::from(label))
                                         .flex_1()
                                         .gap_1()
                                         .child(
@@ -1093,6 +1105,9 @@ impl Render for UsagePage {
                             ),
                         ),
                 );
+            if total.total_tokens() > 0. {
+                body = body.child(render_share_bars(total, self.metric == "tokens", cx));
+            }
             body = body.child(
                 h_flex()
                     .justify_between()
@@ -1166,7 +1181,7 @@ impl Render for UsagePage {
                 for (period, values) in self.merged.periods.iter().rev() {
                     let cost = values.values().map(|value| value.cost).sum();
                     let tokens = values.values().map(Totals::total_tokens).sum();
-                    let label = self.period_label(period);
+                    let label = self.period_label(period, cx);
                     table = table.child(
                         h_flex()
                             .id(SharedString::from(format!("usage-time:{period}")))
@@ -1200,38 +1215,7 @@ impl Render for UsagePage {
                 }
                 body = body.child(table);
             } else {
-                let mut models = self.merged.models.iter().collect::<Vec<_>>();
-                models.sort_by(|(_, a), (_, b)| {
-                    if self.metric == "tokens" {
-                        b.total_tokens().total_cmp(&a.total_tokens())
-                    } else {
-                        b.cost.total_cmp(&a.cost)
-                    }
-                });
-                body =
-                    body.children(models.into_iter().enumerate().map(|(index, (key, total))| {
-                        let key = key.clone();
-                        h_flex()
-                            .gap_3()
-                            .py_2()
-                            .border_b_1()
-                            .border_color(theme.border)
-                            .child(
-                                Button::new(("usage-model", index))
-                                    .label(key.1.clone())
-                                    .ghost()
-                                    .on_click(cx.listener(move |view, _, window, cx| {
-                                        view.open_model(&key, window, cx)
-                                    })),
-                            )
-                            .child(div().flex_1())
-                            .child(if total.records > 0. && total.unpriced >= total.records {
-                                "Unpriced".to_string()
-                            } else {
-                                data::usd(total.cost)
-                            })
-                            .child(data::tokens(total.total_tokens()))
-                    }));
+                body = body.child(self.render_models(cx));
             }
         }
         v_flex()
@@ -1417,5 +1401,366 @@ impl Root {
             })
             .detach();
         }
+    }
+}
+
+fn share_bar(
+    label: &'static str,
+    values: Vec<(&'static str, f64, f32)>,
+    format: fn(f64) -> String,
+    premium: Option<f64>,
+    cx: &App,
+) -> AnyElement {
+    let values = values
+        .into_iter()
+        .filter(|(_, value, _)| *value > 0.)
+        .collect::<Vec<_>>();
+    let total = values.iter().map(|(_, value, _)| value).sum::<f64>();
+    if total <= 0. {
+        return div().into_any_element();
+    }
+    let color = |amount| {
+        crate::appearance_presets::mix_oklab(cx.theme().background, cx.theme().foreground, amount)
+    };
+    v_flex()
+        .id(label)
+        .flex_1()
+        .min_w_0()
+        .gap_2()
+        .child(
+            h_flex()
+                .justify_between()
+                .child(
+                    settings_controls::text(label)
+                        .text_sm()
+                        .font_weight(FontWeight::MEDIUM),
+                )
+                .when_some(premium, |heading, premium| {
+                    heading.child(
+                        h_flex()
+                            .id("premium")
+                            .gap_1()
+                            .text_xs()
+                            .child(
+                                settings_controls::text("Premium")
+                                    .text_color(cx.theme().muted_foreground),
+                            )
+                            .child(settings_controls::text(data::usd(premium))),
+                    )
+                }),
+        )
+        .child(
+            h_flex()
+                .id("bar")
+                .role(accesskit::Role::Image)
+                .aria_label(format!(
+                    "{label}: {}",
+                    values
+                        .iter()
+                        .map(|(label, value, _)| format!("{label} {}", format(*value)))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+                .h(px(8.))
+                .gap(px(2.))
+                .children(
+                    values
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (label, value, ink))| {
+                            let tooltip = format!(
+                                "{label} · {} · {}",
+                                format(*value),
+                                data::percent(*value / total)
+                            );
+                            div()
+                                .id(("segment", index))
+                                .h_full()
+                                .min_w(px(4.))
+                                .flex_grow((*value / total) as f32)
+                                .flex_basis(px(0.))
+                                .rounded(px(2.))
+                                .bg(color(*ink))
+                                .tooltip(move |window, cx| {
+                                    gpui_kit::component::tooltip::Tooltip::new(tooltip.clone())
+                                        .build(window, cx)
+                                })
+                        }),
+                ),
+        )
+        .child(
+            h_flex()
+                .flex_wrap()
+                .gap_4()
+                .children(
+                    values
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (label, value, ink))| {
+                            h_flex()
+                                .id(("legend", index))
+                                .gap_1()
+                                .text_xs()
+                                .child(div().size(px(8.)).rounded(px(2.)).bg(color(*ink)))
+                                .child(
+                                    settings_controls::text(*label)
+                                        .text_color(cx.theme().muted_foreground),
+                                )
+                                .child(settings_controls::text(format(*value)))
+                        }),
+                ),
+        )
+        .into_any_element()
+}
+
+fn render_share_bars(total: &Totals, tokens: bool, cx: &App) -> AnyElement {
+    let mut row = h_flex().id("usage-share-bars").items_start().gap_12();
+    let categories = ["Input", "Cache read", "Cache write", "Output", "Other"];
+    let colors = [0.6, 0.3, 0.72, 1., 0.44];
+    let mut costs = total.category_cost.to_vec();
+    let unsplit = (total.cost - total.category_cost.iter().sum::<f64>()).max(0.);
+    costs.push(if unsplit >= 0.005 { unsplit } else { 0. });
+    let values = categories
+        .into_iter()
+        .zip(if tokens {
+            total.tokens[..4].to_vec()
+        } else {
+            costs
+        })
+        .zip(colors)
+        .map(|((label, value), color)| (label, value, color))
+        .collect();
+    row = row.child(share_bar(
+        if tokens {
+            "Tokens by type"
+        } else {
+            "Cost by type"
+        },
+        values,
+        if tokens { data::tokens } else { data::usd },
+        None,
+        cx,
+    ));
+    if !tokens && total.speed_cost[0] + total.speed_cost[1] > 0. {
+        row = row.child(share_bar(
+            "Cost by speed",
+            vec![
+                (
+                    "Standard",
+                    (total.cost - total.speed_cost[0] - total.speed_cost[1]).max(0.),
+                    0.34,
+                ),
+                ("Fast", total.speed_cost[0], 0.66),
+                ("Ultrafast", total.speed_cost[1], 1.),
+            ],
+            data::usd,
+            Some(total.speed_cost[2]),
+            cx,
+        ));
+    } else {
+        row = row.child(div().flex_1());
+    }
+    row.into_any_element()
+}
+
+impl UsagePage {
+    fn render_models(&self, cx: &Context<Self>) -> AnyElement {
+        let theme = cx.theme().colors;
+        let tokens = self.metric == "tokens";
+        let metric = |total: &Totals| {
+            if tokens {
+                total.total_tokens()
+            } else {
+                total.cost
+            }
+        };
+        let mut models = self.merged.models.iter().collect::<Vec<_>>();
+        models.sort_by(|(_, a), (_, b)| {
+            metric(b)
+                .total_cmp(&metric(a))
+                .then_with(|| b.cost.total_cmp(&a.cost))
+        });
+        let peak = models
+            .iter()
+            .map(|(_, total)| metric(total))
+            .fold(0., f64::max);
+        let denominator = metric(&self.merged.totals);
+        let mut table = v_flex()
+            .id("usage-model-table")
+            .role(accesskit::Role::Table)
+            .w_full()
+            .child(
+                h_flex()
+                    .id("header")
+                    .role(accesskit::Role::Row)
+                    .gap_4()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(theme.border)
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .children(
+                        [
+                            ("#", 32.),
+                            ("Model", 0.),
+                            ("Cost", 100.),
+                            ("Share", 72.),
+                            ("Tokens", 80.),
+                        ]
+                        .into_iter()
+                        .map(|(label, width)| {
+                            div()
+                                .id(label)
+                                .role(accesskit::Role::ColumnHeader)
+                                .aria_label(label)
+                                .when(width == 0., |cell| cell.flex_1())
+                                .when(width > 0., |cell| cell.w(px(width)))
+                                .when(width > 32., |cell| cell.text_right())
+                                .child(settings_controls::text(label))
+                        }),
+                    ),
+            );
+        if models.is_empty() {
+            table = table.child(
+                div()
+                    .id("empty")
+                    .py_6()
+                    .text_center()
+                    .child(settings_controls::text("No activity in this window.")),
+            );
+        }
+        for (index, (key, total)) in models.into_iter().enumerate() {
+            let value = metric(total);
+            let unknown = total.records > 0. && total.unpriced >= total.records;
+            let share = if !tokens && unknown {
+                String::new()
+            } else {
+                data::percent(if denominator > 0. {
+                    value / denominator
+                } else {
+                    0.
+                })
+            };
+            let color = if key.0 == "codex" {
+                theme.foreground
+            } else {
+                rgb(PROVIDERS
+                    .iter()
+                    .find(|(provider, _, _)| *provider == key.0)
+                    .expect("usage provider")
+                    .2)
+                .into()
+            };
+            let target = key.clone();
+            let row_target = target.clone();
+            let driver = if key.0 == "claude" {
+                "claudeAgent"
+            } else {
+                &key.0
+            };
+            let icon = SharedString::from(format!(
+                "icons/providers/{driver}-{}.svg",
+                if cx.theme().mode.is_dark() {
+                    "dark"
+                } else {
+                    "light"
+                }
+            ));
+            table = table.child(
+                h_flex()
+                    .id(("model-row", index))
+                    .role(accesskit::Role::Row)
+                    .gap_4()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(theme.border.opacity(0.5))
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme.muted.opacity(0.5)))
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        view.open_model(&row_target, window, cx)
+                    }))
+                    .child(
+                        div()
+                            .id("rank")
+                            .role(accesskit::Role::Cell)
+                            .w(px(32.))
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(settings_controls::text((index + 1).to_string())),
+                    )
+                    .child(
+                        v_flex()
+                            .id("model")
+                            .role(accesskit::Role::Cell)
+                            .flex_1()
+                            .min_w_0()
+                            .gap_1()
+                            .child(
+                                Button::new("open-model")
+                                    .accessibility_label(key.1.clone())
+                                    .ghost()
+                                    .w_full()
+                                    .h(px(20.))
+                                    .p_0()
+                                    .child(
+                                        h_flex()
+                                            .w_full()
+                                            .gap_2()
+                                            .child(img(icon).size(px(14.)))
+                                            .child(
+                                                settings_controls::text(key.1.clone()).text_sm(),
+                                            ),
+                                    )
+                                    .on_click(cx.listener(move |view, _, window, cx| {
+                                        view.open_model(&target, window, cx);
+                                        cx.stop_propagation();
+                                    })),
+                            )
+                            .when(value > 0. && peak > 0., |cell| {
+                                cell.child(
+                                    div().max_w(px(192.)).w_full().h(px(2.)).child(
+                                        div()
+                                            .w(relative((value / peak) as f32))
+                                            .min_w(px(8.))
+                                            .h_full()
+                                            .rounded_full()
+                                            .bg(color),
+                                    ),
+                                )
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("cost")
+                            .role(accesskit::Role::Cell)
+                            .w(px(100.))
+                            .text_right()
+                            .child(settings_controls::text(if unknown {
+                                "Unpriced".into()
+                            } else {
+                                data::usd(total.cost)
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("share")
+                            .role(accesskit::Role::Cell)
+                            .w(px(72.))
+                            .text_right()
+                            .text_color(theme.muted_foreground)
+                            .child(settings_controls::text(share)),
+                    )
+                    .child(
+                        div()
+                            .id("tokens")
+                            .role(accesskit::Role::Cell)
+                            .w(px(80.))
+                            .text_right()
+                            .text_color(theme.muted_foreground)
+                            .child(settings_controls::text(data::tokens(total.total_tokens()))),
+                    ),
+            );
+        }
+        table.into_any_element()
     }
 }

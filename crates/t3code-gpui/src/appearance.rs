@@ -38,13 +38,41 @@ pub fn apply_typography(settings: &crate::client_settings::ClientSettings, cx: &
     });
 }
 
-pub fn apply(light: bool, cx: &mut App) {
+pub fn preset_color(id: &str, role: &str, light: bool) -> Hsla {
+    crate::appearance_presets::palette(id, light).color(role)
+}
+
+pub fn apply(settings: &crate::client_settings::ClientSettings, cx: &mut App) {
+    let light = match settings.values["gpuiAppearance"].as_str() {
+        Some("system") => matches!(
+            cx.window_appearance(),
+            WindowAppearance::Light | WindowAppearance::VibrantLight
+        ),
+        _ => settings.light_theme,
+    };
+    let id = settings.values[if light {
+        "gpuiThemeLight"
+    } else {
+        "gpuiThemeDark"
+    }]
+    .as_str()
+    .unwrap_or("t3-code");
+    let mut palette = crate::appearance_presets::palette(id, light);
+    palette.contrast = settings.values["appearanceContrast"]
+        .as_f64()
+        .unwrap_or(100.) as f32;
+    palette.glass = settings.values["glassOpacity"].as_f64().unwrap_or(80.) as f32;
+    let initialized = cx.has_global::<crate::appearance_presets::Palette>();
+    cx.set_global(palette);
+    let color = move |role: &str, _: bool| palette.color(role);
     cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
-    cx.text_system()
-        .add_fonts(vec![std::borrow::Cow::Borrowed(include_bytes!(
-            "../assets/InterVariable.ttf"
-        ))])
-        .expect("load bundled Inter font");
+    if !initialized {
+        cx.text_system()
+            .add_fonts(vec![std::borrow::Cow::Borrowed(include_bytes!(
+                "../assets/InterVariable.ttf"
+            ))])
+            .expect("load bundled Inter font");
+    }
     Theme::change(
         if light {
             ThemeMode::Light
@@ -125,7 +153,7 @@ pub fn apply(light: bool, cx: &mut App) {
         c.list_hover = color("text", light).opacity(0.09);
         c.muted = color("muted", light);
         c.muted_foreground = color("textMuted", light);
-        c.popover = color("surface", light);
+        c.popover = color("surface", light).opacity(palette.glass / 100.);
         c.popover_foreground = color("text", light);
         c.primary = color("accent", light);
         c.primary_active = color("accent", light);
@@ -276,12 +304,16 @@ pub(crate) fn color(role: &str, light: bool) -> Hsla {
 }
 
 pub fn composer(cx: &App) -> Hsla {
-    use gpui_kit::component::ActiveTheme as _;
-    color("surface", !cx.theme().mode.is_dark()).opacity(0.8)
+    themed_color("surface", cx)
+        .opacity(cx.global::<crate::appearance_presets::Palette>().glass / 100.)
 }
 
 pub fn message(cx: &App) -> Hsla {
     use gpui_kit::component::ActiveTheme as _;
+    let palette = cx.global::<crate::appearance_presets::Palette>();
+    if palette.colors.is_some() {
+        return palette.color("messageSurface");
+    }
     rgb(if cx.theme().mode.is_dark() {
         MESSAGE
     } else {
@@ -312,8 +344,8 @@ pub fn code_background(cx: &App) -> Hsla {
 }
 
 fn themed_color(role: &str, cx: &App) -> Hsla {
-    use gpui_kit::component::ActiveTheme as _;
-    color(role, !cx.theme().mode.is_dark())
+    cx.global::<crate::appearance_presets::Palette>()
+        .color(role)
 }
 
 const EDITOR_ASSETS: &[(&str, &[u8])] = &[
@@ -405,6 +437,9 @@ mod providers {
 }
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> anyhow::Result<Option<std::borrow::Cow<'static, [u8]>>> {
+        if let Some(data) = crate::appearance_presets::preview(path) {
+            return Ok(Some(std::borrow::Cow::Owned(data)));
+        }
         if let Some((_, data)) = EDITOR_ASSETS.iter().find(|(name, _)| *name == path) {
             return Ok(Some(std::borrow::Cow::Borrowed(*data)));
         }

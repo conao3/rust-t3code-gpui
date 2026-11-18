@@ -4,6 +4,7 @@ use gpui_kit::component::{
     IndexPath,
     input::{NumberInput, NumberInputEvent, StepAction},
     select::{SearchableVec, Select, SelectEvent, SelectItem, SelectState},
+    slider::{SliderEvent, SliderState},
     switch::Switch,
 };
 
@@ -62,6 +63,22 @@ fn select_search(
     })
 }
 
+fn select_value(key: &str, value: &Value) -> String {
+    match key {
+        "pullRequestMergeMethod" if value.is_null() => "last".to_string(),
+        "diffFilesCollapsed" => if value == true {
+            "collapsed"
+        } else {
+            "expanded"
+        }
+        .to_string(),
+        _ => value
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| value.to_string()),
+    }
+}
+
 pub(super) struct SettingRow {
     root: WeakEntity<Root>,
     environment: String,
@@ -71,7 +88,10 @@ pub(super) struct SettingRow {
     input: Entity<InputState>,
     select: Option<Entity<choice_select::State>>,
     font_family: Option<Entity<Choices>>,
+    font_family_value: String,
     font_size: Option<Entity<Choices>>,
+    slider: Option<Entity<SliderState>>,
+    slider_focus: FocusHandle,
     subscriptions: Vec<Subscription>,
     validation_error: Option<String>,
 }
@@ -102,18 +122,7 @@ impl SettingRow {
         let select = match definition.control {
             Control::Select(options) => Some(choice_select::state(
                 options,
-                &match definition.key {
-                    "diffFilesCollapsed" => if value == true {
-                        "collapsed"
-                    } else {
-                        "expanded"
-                    }
-                    .to_string(),
-                    _ => value
-                        .as_str()
-                        .map(str::to_string)
-                        .unwrap_or_else(|| value.to_string()),
-                },
+                &select_value(definition.key, &value),
                 window,
                 cx,
             )),
@@ -149,6 +158,17 @@ impl SettingRow {
         } else {
             None
         };
+        let slider = if let Control::Range(min, max, step) = definition.control {
+            Some(cx.new(|_| {
+                SliderState::new()
+                    .min(min)
+                    .max(max)
+                    .step(step)
+                    .default_value(value.as_f64().expect("range value") as f32)
+            }))
+        } else {
+            None
+        };
         let mut view = Self {
             root,
             environment,
@@ -158,10 +178,23 @@ impl SettingRow {
             input,
             select,
             font_family,
+            font_family_value,
             font_size,
+            slider,
+            slider_focus: cx.focus_handle(),
             subscriptions: vec![],
             validation_error: None,
         };
+        if let Some(slider) = &view.slider {
+            view.subscriptions
+                .push(cx.subscribe(slider, |view, _, event: &SliderEvent, cx| {
+                    if let SliderEvent::Change(value) = event {
+                        view.value = json!(value.start().round() as i64);
+                        view.save(view.value.clone(), cx);
+                        cx.notify();
+                    }
+                }));
+        }
         view.subscriptions.push(
             cx.subscribe_in(&view.input, window, |view, _, event, _, cx| {
                 if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
@@ -229,6 +262,7 @@ impl SettingRow {
                 |view, _, event: &SelectEvent<_>, _, cx| {
                     if let SelectEvent::Confirm(Some(value)) = event {
                         let value = match view.definition.key {
+                            "pullRequestMergeMethod" if *value == "last" => Value::Null,
                             "diffFilesCollapsed" => json!(*value == "collapsed"),
                             "browserRecordingFrameRate" => {
                                 json!(value.parse::<u32>().expect("frame rate option"))
@@ -241,6 +275,111 @@ impl SettingRow {
             ));
         }
         view
+    }
+
+    fn range_slider(
+        &self,
+        label: &'static str,
+        cx: &Context<Self>,
+    ) -> gpui_kit::base::slider::Slider {
+        use gpui_kit::base::slider::{Slider, SliderIndicator, SliderThumb, SliderTrack};
+        let state = self.slider.as_ref().expect("range state");
+        let value = state.read(cx);
+        let position =
+            (value.value().end() - value.min_value()) / (value.max_value() - value.min_value());
+        Slider::new(state)
+            .track_focus(&self.slider_focus)
+            .accessibility_label(label)
+            .flex()
+            .flex_1()
+            .items_center()
+            .child(
+                SliderTrack::new(state)
+                    .h_6()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .child(
+                        SliderIndicator::new(state)
+                            .relative()
+                            .w_full()
+                            .h(px(4.))
+                            .rounded_full()
+                            .bg(cx.theme().border)
+                            .child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .top_0()
+                                    .h_full()
+                                    .w(relative(position))
+                                    .rounded_full()
+                                    .bg(cx.theme().primary),
+                            )
+                            .child(
+                                SliderThumb::new(state)
+                                    .absolute()
+                                    .left(relative(position))
+                                    .top(px(-4.))
+                                    .ml(px(-6.))
+                                    .size(px(12.))
+                                    .rounded_full()
+                                    .border_2()
+                                    .border_color(cx.theme().primary)
+                                    .bg(cx.theme().background),
+                            ),
+                    ),
+            )
+    }
+
+    pub(super) fn sync(
+        &mut self,
+        value: Value,
+        family: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.value != value {
+            self.value = value.clone();
+            self.validation_error = None;
+            if let Some(slider) = &self.slider {
+                slider.update(cx, |slider, cx| {
+                    slider.set_value(value.as_f64().expect("range value") as f32, window, cx)
+                });
+            }
+            if let Some(select) = &self.select
+                && let Control::Select(options) = self.definition.control
+                && let Some((selected, _)) = options
+                    .iter()
+                    .find(|(option, _)| *option == select_value(self.definition.key, &value))
+            {
+                select.update(cx, |select, cx| {
+                    select.set_selected_value(selected, window, cx)
+                });
+            }
+            if matches!(self.definition.control, Control::Text | Control::Number(..)) {
+                let text = value
+                    .as_str()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| value.to_string());
+                self.input
+                    .update(cx, |input, cx| input.set_value(text, window, cx));
+            }
+            if let Some(size) = &self.font_size {
+                size.update(cx, |size, cx| {
+                    size.set_selected_value(&value.to_string(), window, cx)
+                });
+            }
+            cx.notify();
+        }
+        if let Some(font) = &self.font_family
+            && self.font_family_value != family
+        {
+            self.font_family_value = family.to_string();
+            font.update(cx, |font, cx| {
+                font.set_selected_value(&family.to_string(), window, cx)
+            });
+        }
     }
 
     fn commit(&mut self, cx: &mut Context<Self>) {
@@ -299,6 +438,9 @@ impl Render for SettingRow {
         let accessible_label = match self.definition.key {
             "wordWrap" => "Wrap code, diffs, and file previews by default",
             "timestampFormat" => "Timestamp format",
+            "defaultAutoPull" => "Default automatic pull",
+            "pullRequestMergeMethod" => "Default pull request merge method",
+            "simlockDeviceHostsEnabled" => "Simlock device hosts",
             "confirmThreadUnpin" => "Confirm thread unpinning",
             "confirmThreadArchive" => "Confirm thread archiving",
             "confirmThreadDelete" => "Confirm thread deletion",
@@ -317,7 +459,18 @@ impl Render for SettingRow {
         };
         let value = self.value.clone();
         let key = self.definition.key;
-        let description = if key == "followUpBehavior" {
+        let denial = (key == "guestSharingEnabled" && value != true)
+            .then(|| {
+                self.root.upgrade().and_then(|root| {
+                    settings_labs::guest_links_denial(root.read(cx), &self.environment)
+                })
+            })
+            .flatten();
+        let description = if key == "defaultAutoPull" && self.project.is_some() {
+            "Keeps this project's default branch current when the checkout has no local changes or commits.".to_string()
+        } else if key == "pullRequestMergeMethod" && self.project.is_some() {
+            "Pull requests in this project start with this method.".to_string()
+        } else if key == "followUpBehavior" {
             let shortcut = self
                 .root
                 .upgrade()
@@ -347,6 +500,7 @@ impl Render for SettingRow {
         let control = match self.definition.control {
             Control::Switch => Switch::new(key)
                 .accessibility_label(accessible_label)
+                .disabled(denial.is_some())
                 .checked(if key == "sidebarAutoSettleAfterDays" {
                     !value.is_null()
                 } else if key == "sidebarProjectGroupingMode" {
@@ -376,6 +530,48 @@ impl Render for SettingRow {
                     _ => 160.,
                 }))
                 .h(px(28.))
+                .into_any_element(),
+            Control::Range(..) => h_flex()
+                .id("range-keyboard")
+                .capture_any_mouse_down(cx.listener(|view, event: &MouseDownEvent, window, cx| {
+                    if event.button == MouseButton::Left {
+                        view.slider_focus.focus(window, cx);
+                    }
+                }))
+                .on_key_down(cx.listener(|view, event: &KeyDownEvent, window, cx| {
+                    let Control::Range(min, max, step) = view.definition.control else {
+                        return;
+                    };
+                    let delta = match event.keystroke.key.as_str() {
+                        "left" | "down" => -step,
+                        "right" | "up" => step,
+                        "home" => min - max,
+                        "end" => max - min,
+                        "pageup" => step * 10.,
+                        "pagedown" => -step * 10.,
+                        _ => return,
+                    };
+                    view.slider
+                        .as_ref()
+                        .expect("range state")
+                        .update(cx, |slider, cx| slider.step_thumb(false, delta, window, cx));
+                    cx.stop_propagation();
+                }))
+                .w(px(208.))
+                .gap_3()
+                .child(
+                    h_flex()
+                        .gap_0()
+                        .w(px(48.))
+                        .justify_center()
+                        .text_xs()
+                        .children(
+                            [self.value.to_string(), "%".to_string()]
+                                .into_iter()
+                                .map(text),
+                        ),
+                )
+                .child(self.range_slider(accessible_label, cx))
                 .into_any_element(),
             Control::Number(_, _) => NumberInput::new(&self.input)
                 .accessibility_label(accessible_label)
@@ -419,10 +615,20 @@ impl Render for SettingRow {
                     .gap(px(2.))
                     .child(text(label).text_sm())
                     .child(
-                        text(description)
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground),
-                    ),
+                        settings_labs::description(key, &self.root, cx).unwrap_or_else(|| {
+                            text(description)
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .into_any_element()
+                        }),
+                    )
+                    .when_some(denial, |view, denial| {
+                        view.child(
+                            text(denial)
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground),
+                        )
+                    }),
             )
             .when(
                 self.project.is_some()
@@ -438,10 +644,12 @@ impl Render for SettingRow {
                             .icon(gpui_kit::assets::IconName::Undo2)
                             .accessibility_label(format!(
                                 "Reset {} to default",
-                                if key == "showSkillsInSlashMenu" {
-                                    "skills in slash menu".to_string()
-                                } else {
-                                    label.to_lowercase()
+                                match key {
+                                    "showSkillsInSlashMenu" => "skills in slash menu".to_string(),
+                                    "defaultAutoPull" => "default automatic pull".to_string(),
+                                    "removeAgentCreditsOnMerge" =>
+                                        "agent credit removal".to_string(),
+                                    _ => label.to_lowercase(),
                                 }
                             ))
                             .ghost()

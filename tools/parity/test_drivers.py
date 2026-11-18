@@ -69,12 +69,18 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
                     "role": "push button",
                     "name": "Settled 1",
                     "bounds": {"x": 10, "y": 20, "width": 100, "height": 32},
-                }
+                    "ancestors": [],
+                },
+                {
+                    "role": "panel",
+                    "name": "Application content",
+                    "bounds": {"x": 0, "y": 0, "width": 800, "height": 600},
+                },
             ]
 
         app.tree = bounds
         app.click("push button", "Settled 1")
-        self.assertEqual(events, ["bounds", "scroll", "bounds"])
+        self.assertEqual(events, ["bounds", "scroll", "bounds", "bounds"])
         self.assertIn(unittest.mock.call("mousemove", 60, 36), app.xdo.call_args_list)
 
     async def test_focus_uses_the_selected_control_and_rejects_disabled_targets(self):
@@ -122,7 +128,20 @@ class KeyInputTests(unittest.IsolatedAsyncioTestCase):
         app.nodes = Mock(return_value=[node])
         app.snapshot_controls = {("entry", "Message"): [node]}
         app.tree = Mock(
-            return_value=[{"role": "entry", "name": "Message", "focused": True}]
+            return_value=[
+                {
+                    "role": "entry",
+                    "name": "Message",
+                    "focused": True,
+                    "bounds": {"x": 10, "y": 20, "width": 100, "height": 32},
+                    "ancestors": [],
+                },
+                {
+                    "role": "panel",
+                    "name": "Application content",
+                    "bounds": {"x": 0, "y": 0, "width": 800, "height": 600},
+                },
+            ]
         )
         with self.assertRaisesRegex(RuntimeError, "cannot take focus"):
             app.focus_control("entry", "Message")
