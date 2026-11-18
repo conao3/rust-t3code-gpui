@@ -35,8 +35,7 @@
         "role": "StaticText"
       },
       "native": {
-        "role": "document frame",
-        "name": "Assistant message"
+        "role": "document frame"
       },
       "text_contains": "Fixture output 199:"
     },

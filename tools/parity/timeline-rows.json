@@ -1,0 +1,10 @@
+{
+  "name": "timeline-row-fixture",
+  "viewport": [1400, 900],
+  "theme": "dark",
+  "settle_ms": 800,
+  "steps": [
+    {"action": "click", "selector": {"role": "button", "name": "Timeline fixture, Done, UI parity"}},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Message Timeline fixture"}, "count": 1}
+  ]
+}

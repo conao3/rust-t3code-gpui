@@ -68,6 +68,48 @@ pub fn extensions(math: bool) -> MarkdownExtensions {
     .clone()
 }
 
+pub fn user_source(source: &str, math: bool) -> String {
+    fn visit(node: &Node, source: &str, changes: &mut Vec<(std::ops::Range<usize>, String)>) {
+        if let Some(position) = node.position()
+            && matches!(node, Node::Text(_) | Node::Html(_))
+        {
+            let range = position.start.offset..position.end.offset;
+            let text = &source[range.clone()];
+            let mut replacement = String::new();
+            let mut previous = None;
+            for character in text.chars() {
+                if character == '\r' || character == '\n' && previous != Some('\r') {
+                    replacement.push('\\');
+                }
+                if matches!(node, Node::Html(_)) && matches!(character, '<' | '>') {
+                    replacement.push('\\');
+                }
+                replacement.push(character);
+                previous = Some(character);
+            }
+            if replacement != text {
+                changes.push((range, replacement));
+            }
+        }
+        if let Some(children) = node.children() {
+            for child in children {
+                visit(child, source, changes);
+            }
+        }
+    }
+    let mut options = markdown::ParseOptions::gfm();
+    options.constructs.math_text = math;
+    options.constructs.math_flow = math;
+    let tree = markdown::to_mdast(source, &options).expect("valid user message markdown");
+    let mut changes = Vec::new();
+    visit(&tree, source, &mut changes);
+    let mut rendered = source.to_string();
+    for (range, replacement) in changes.into_iter().rev() {
+        rendered.replace_range(range, &replacement);
+    }
+    rendered
+}
+
 fn equation(source: &str, block: bool) -> Result<Graphic, String> {
     use ratex_types::{color::Color, math_style::MathStyle};
     let nodes = ratex_parser::parse(source).map_err(|error| error.to_string())?;
@@ -691,5 +733,26 @@ mod tests {
         let graphic = equation(r"\frac{x^2}{\sqrt{y}}", true).unwrap();
         assert!(graphic.width > 0. && graphic.height > 0. && graphic.baseline > 0.);
         assert!(equation(r"\definitelyUnknownCommand", false).is_err());
+    }
+
+    #[test]
+    fn user_messages_keep_breaks_without_rewriting_code_or_links() {
+        let source = "**First**\nSecond\r\nThird\n\n```rust\nlet a = 1;\nlet b = 2;\n```\n\n[Link](https://example.com)\n<mark>literal</mark>";
+        let rendered = super::user_source(source, false);
+        assert!(rendered.starts_with("**First**\\\nSecond\\\r\nThird"));
+        assert!(rendered.contains("```rust\nlet a = 1;\nlet b = 2;\n```"));
+        assert!(rendered.contains("[Link](https://example.com)"));
+        assert!(rendered.ends_with("\\<mark\\>literal\\</mark\\>"));
+        let tree = markdown::to_mdast(&rendered, &markdown::ParseOptions::gfm()).unwrap();
+        let paragraph = &tree.children().unwrap()[0];
+        assert_eq!(
+            paragraph
+                .children()
+                .unwrap()
+                .iter()
+                .filter(|node| matches!(node, markdown::mdast::Node::Break(_)))
+                .count(),
+            2
+        );
     }
 }

@@ -49,6 +49,9 @@ pub enum Pending {
     Approval {
         request_id: String,
         subject: String,
+        prompt: String,
+        kind: String,
+        can_respond: bool,
         options: Vec<ApprovalOption>,
     },
     Question {
@@ -165,9 +168,28 @@ fn pending_of(state: &ThreadState, item: &Value, prompt: &str) -> Option<Pending
             request_id: request_id.to_string(),
             subject: state
                 .request_subject(request_id)
-                .map(|item| first_line(&tool_detail(item), 160))
-                .filter(|subject| prompt.is_empty() || !subject.contains(prompt))
-                .unwrap_or_default(),
+                .map(|subject| {
+                    if text(subject, "type") == "command_execution" {
+                        subject
+                            .pointer("/input/command")
+                            .and_then(Value::as_str)
+                            .or_else(|| subject.get("input").and_then(Value::as_str))
+                            .expect("command input")
+                            .to_string()
+                    } else {
+                        tool_detail(subject)
+                    }
+                })
+                .unwrap_or_else(|| prompt.to_string()),
+            prompt: prompt.to_string(),
+            kind: text(item, "requestKind").to_string(),
+            can_respond: state.pending_requests().iter().any(|request| {
+                text(request, "id") == request_id
+                    && request
+                        .pointer("/responseCapability/type")
+                        .and_then(Value::as_str)
+                        == Some("live")
+            }),
             options: approval_options(item),
         }),
         "user_input_request" => Some(Pending::Question {
@@ -298,7 +320,7 @@ fn fold_completed_turns(rows: Vec<Row>, state: &ThreadState) -> Vec<Row> {
     for (index, row) in rows.iter().enumerate() {
         if !matches!(
             row.kind,
-            RowKind::Assistant | RowKind::Reasoning | RowKind::Tool
+            RowKind::Assistant | RowKind::Reasoning | RowKind::Tool | RowKind::Subagent
         ) {
             continue;
         }
@@ -308,6 +330,9 @@ fn fold_completed_turns(rows: Vec<Row>, state: &ThreadState) -> Vec<Row> {
                 .and_then(|(key, _)| by_id.get(key).copied())
         });
         if let Some(item) = source {
+            if text(item, "type") == "proposed_plan" {
+                continue;
+            }
             by_run
                 .entry(text(item, "runId"))
                 .or_default()
@@ -399,6 +424,15 @@ pub fn format_duration(duration: std::time::Duration) -> String {
         }
     }
     parts.join(" ")
+}
+
+pub fn format_working_duration(duration: std::time::Duration) -> String {
+    let seconds = duration.as_secs();
+    if seconds < 60 {
+        format!("{seconds}s")
+    } else {
+        format_duration(std::time::Duration::from_secs(seconds))
+    }
 }
 
 fn compact_history(rows: Vec<Row>) -> Vec<Row> {
@@ -599,6 +633,25 @@ fn user_text(item: &Value) -> String {
     out
 }
 
+pub fn prompt_link(text: &str) -> Option<String> {
+    use std::fmt::Write as _;
+    let text = text.trim();
+    if text.is_empty() || text.encode_utf16().count() > 8000 {
+        return None;
+    }
+    let mut link = "https://app.t3.codes/new?prompt=".to_string();
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'*' | b'-' | b'.' | b'_' => {
+                link.push(byte as char)
+            }
+            b' ' => link.push('+'),
+            _ => write!(link, "%{byte:02X}").expect("string output"),
+        }
+    }
+    Some(link)
+}
+
 fn subagent_summary(item: &Value) -> String {
     let status = text(item, "status");
     let prompt = first_line(text(item, "prompt"), 160);
@@ -723,7 +776,19 @@ pub fn rows(state: &ThreadState) -> Vec<Row> {
         }
         match text(item, "type") {
             "user_message" => rows.push(Row {
-                message_part: None,
+                message_part: Some(MessagePart {
+                    first: true,
+                    last: true,
+                    metadata: Some(AssistantMetadata {
+                        message_id: id.to_string(),
+                        source_thread_id: text(item, "threadId").to_string(),
+                        run_id: None,
+                        updated_at: text(item, "createdAt").to_string(),
+                        status: text(item, "status").to_string(),
+                        can_fork: false,
+                        can_copy: !text(item, "text").trim().is_empty(),
+                    }),
+                }),
                 key: id.to_string(),
                 kind: RowKind::User,
                 text: user_text(item),
@@ -1144,6 +1209,17 @@ mod tests {
     }
 
     #[test]
+    fn prompt_links_use_url_search_params_encoding_and_utf16_limits() {
+        assert_eq!(
+            prompt_link(" a b+~🌱\n ").as_deref(),
+            Some("https://app.t3.codes/new?prompt=a+b%2B%7E%F0%9F%8C%B1")
+        );
+        assert!(prompt_link(&"🌱".repeat(4000)).is_some());
+        assert!(prompt_link(&"🌱".repeat(4001)).is_none());
+        assert!(prompt_link("  ").is_none());
+    }
+
+    #[test]
     fn thought_labels_flatten_markdown_without_damaging_code_or_link_text() {
         assert_eq!(
             thought_preview("**Researching current Lean formatter**\nMore"),
@@ -1522,8 +1598,8 @@ mod tests {
                 other => panic!("{other:?}"),
             }
         };
-        assert_eq!(card("touch approved.txt"), "");
-        assert_eq!(card("Allow Bash?"), "$ touch approved.txt");
+        assert_eq!(card("touch approved.txt"), "touch approved.txt");
+        assert_eq!(card("Allow Bash?"), "touch approved.txt");
     }
 
     #[test]
@@ -1575,6 +1651,23 @@ mod tests {
             json!({"id": "u2", "ordinal": 3, "type": "user_message", "text": "go"}),
         ]);
         assert!(rows(&answered).iter().all(|r| r.kind != RowKind::Plan));
+    }
+
+    #[test]
+    fn a_completed_turn_keeps_the_proposed_plan_visible() {
+        let mut state = state(vec![
+            json!({"id":"p", "runId":"run", "ordinal":1, "type":"proposed_plan", "planId":"plan", "markdown":"## Plan\n\n1. Inspect the timeline."}),
+            json!({"id":"a", "runId":"run", "ordinal":2, "type":"assistant_message", "text":"Ready."}),
+        ]);
+        state
+            .projection
+            .insert("runs".into(), json!([{"id":"run", "status":"completed"}]));
+        let rows = rows(&state);
+        assert!(!rows.iter().any(|row| row.kind == RowKind::Worked));
+        assert!(
+            rows.iter()
+                .any(|row| row.text.contains("Inspect the timeline."))
+        );
     }
 
     #[test]
@@ -1651,6 +1744,21 @@ mod tests {
             user_text(&json!({"type": "user_message", "text": "plain"})),
             "plain"
         );
+    }
+
+    #[test]
+    fn working_timer_floors_seconds_and_keeps_hours() {
+        for (milliseconds, expected) in [
+            (999, "0s"),
+            (59_999, "59s"),
+            (60_999, "1m"),
+            (86_400_000, "24h"),
+        ] {
+            assert_eq!(
+                format_working_duration(std::time::Duration::from_millis(milliseconds)),
+                expected
+            );
+        }
     }
 
     #[test]

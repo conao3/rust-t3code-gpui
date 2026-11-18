@@ -69,6 +69,7 @@ old_thread = responses["thread/start"]["thread"]["id"]
 old_turn = responses["turn/start"]["turn"]["id"]
 lock = threading.Lock()
 active_turns = {}
+active_requests = {}
 
 
 def write(value):
@@ -136,6 +137,16 @@ def stream(thread_id, turn_id, cwd, interrupted):
     for frame in notifications:
         frame = replace(copy.deepcopy(frame), mapping)
         method, params = frame["method"], frame["params"]
+        if "id" in frame:
+            request_id = "fixture-request-" + uuid.uuid4().hex
+            resolved = threading.Event()
+            active_requests[request_id] = resolved
+            frame["id"] = request_id
+            write(frame)
+            while not resolved.wait(0.05) and not interrupted.is_set():
+                pass
+            del active_requests[request_id]
+            continue
         if method == "item/agentMessage/delta":
             continue
         if method == "item/started" and params["item"]["type"] == "agentMessage":
@@ -187,6 +198,9 @@ for line in sys.stdin:
     params = message.get("params") or {}
     request = message.get("id")
     result = None
+    if method is None and request in active_requests:
+        active_requests[request].set()
+        continue
     if method == "initialize":
         result = {
             "userAgent": "t3-parity-fixture/0.167.2",
