@@ -70,6 +70,8 @@ mod settings_catalog;
 mod settings_controls;
 mod settings_keybindings;
 mod settings_providers;
+mod settings_source_control;
+mod settings_source_credentials;
 mod settings_tasks;
 mod sidebar_branding;
 mod sidebar_controls;

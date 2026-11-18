@@ -786,13 +786,51 @@ pub(super) fn settings() -> Vec<Setting> {
         true,
         Text,
     );
+    add(
+        "source-control",
+        "Repositories",
+        "defaultAutoPull",
+        "Automatically pull",
+        "Keeps the default branch current when the checkout has no local changes or commits. Projects can override it.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "source-control",
+        "Repositories",
+        "removeAgentCreditsOnMerge",
+        "Remove agent credits when merging",
+        "Remove recognized agent credit lines from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits.",
+        json!(false),
+        true,
+        Switch,
+    );
+    add(
+        "source-control",
+        "Repositories",
+        "pullRequestMergeMethod",
+        "Default merge method",
+        "Pull requests start with this method. Last selected reuses whatever you chose most recently on this device.",
+        Value::Null,
+        true,
+        Select(&[
+            ("last", "Last selected"),
+            ("merge", "Merge"),
+            ("squash", "Squash and merge"),
+            ("rebase", "Rebase and merge"),
+        ]),
+    );
     values
 }
 
 pub(super) fn project_scoped(key: &str) -> bool {
     matches!(
         key,
-        "threadTitleInstructions"
+        "defaultAutoPull"
+            | "removeAgentCreditsOnMerge"
+            | "pullRequestMergeMethod"
+            | "threadTitleInstructions"
             | "newWorktreesStartFromOrigin"
             | "branchNamingMode"
             | "branchNamePrefix"

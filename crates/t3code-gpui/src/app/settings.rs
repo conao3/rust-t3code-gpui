@@ -622,21 +622,8 @@ impl Root {
             };
             let control = window.use_keyed_state(
                 SharedString::from(format!(
-                    "setting:{}:{}:{}:{:?}:{}:{}",
-                    definition.key,
-                    definition.label,
-                    environment,
-                    self.settings_project,
-                    if matches!(definition.control, settings_catalog::Control::Range(..)) {
-                        Value::Null
-                    } else {
-                        value.clone()
-                    },
-                    match definition.control {
-                        settings_catalog::Control::Font(key, _, _) =>
-                            self.settings.values[key].clone(),
-                        _ => Value::Null,
-                    }
+                    "setting:{}:{}:{}:{:?}",
+                    definition.key, definition.label, environment, self.settings_project,
                 )),
                 cx,
                 |window, cx| {
@@ -645,13 +632,15 @@ impl Root {
                         environment,
                         self.settings_project.clone(),
                         definition,
-                        (value.clone(), font_family),
+                        (value.clone(), font_family.clone()),
                         window,
                         cx,
                     )
                 },
             );
-            control.update(cx, |control, cx| control.sync_range(value, window, cx));
+            control.update(cx, |control, cx| {
+                control.sync(value, &font_family, window, cx)
+            });
             section_rows = section_rows.child(control);
         }
         if !section.is_empty() {
@@ -665,6 +654,16 @@ impl Root {
                     )
                     .child(section_rows),
             );
+        }
+        if page == "source-control" {
+            let root = cx.entity().downgrade();
+            let environment = environment.clone();
+            let panel = window.use_keyed_state(
+                SharedString::from(format!("source-control-discovery:{environment}")),
+                cx,
+                |_, cx| settings_source_control::Discovery::new(root, environment, cx),
+            );
+            content = content.child(panel);
         }
         if page == "snap-shot" {
             let unavailable =

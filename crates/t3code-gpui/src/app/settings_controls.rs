@@ -63,6 +63,22 @@ fn select_search(
     })
 }
 
+fn select_value(key: &str, value: &Value) -> String {
+    match key {
+        "pullRequestMergeMethod" if value.is_null() => "last".to_string(),
+        "diffFilesCollapsed" => if value == true {
+            "collapsed"
+        } else {
+            "expanded"
+        }
+        .to_string(),
+        _ => value
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| value.to_string()),
+    }
+}
+
 pub(super) struct SettingRow {
     root: WeakEntity<Root>,
     environment: String,
@@ -72,6 +88,7 @@ pub(super) struct SettingRow {
     input: Entity<InputState>,
     select: Option<Entity<choice_select::State>>,
     font_family: Option<Entity<Choices>>,
+    font_family_value: String,
     font_size: Option<Entity<Choices>>,
     slider: Option<Entity<SliderState>>,
     slider_focus: FocusHandle,
@@ -105,18 +122,7 @@ impl SettingRow {
         let select = match definition.control {
             Control::Select(options) => Some(choice_select::state(
                 options,
-                &match definition.key {
-                    "diffFilesCollapsed" => if value == true {
-                        "collapsed"
-                    } else {
-                        "expanded"
-                    }
-                    .to_string(),
-                    _ => value
-                        .as_str()
-                        .map(str::to_string)
-                        .unwrap_or_else(|| value.to_string()),
-                },
+                &select_value(definition.key, &value),
                 window,
                 cx,
             )),
@@ -172,6 +178,7 @@ impl SettingRow {
             input,
             select,
             font_family,
+            font_family_value,
             font_size,
             slider,
             slider_focus: cx.focus_handle(),
@@ -255,6 +262,7 @@ impl SettingRow {
                 |view, _, event: &SelectEvent<_>, _, cx| {
                     if let SelectEvent::Confirm(Some(value)) = event {
                         let value = match view.definition.key {
+                            "pullRequestMergeMethod" if *value == "last" => Value::Null,
                             "diffFilesCollapsed" => json!(*value == "collapsed"),
                             "browserRecordingFrameRate" => {
                                 json!(value.parse::<u32>().expect("frame rate option"))
@@ -324,15 +332,53 @@ impl SettingRow {
             )
     }
 
-    pub(super) fn sync_range(&mut self, value: Value, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(slider) = &self.slider
-            && self.value != value
-        {
-            slider.update(cx, |slider, cx| {
-                slider.set_value(value.as_f64().expect("range value") as f32, window, cx)
-            });
-            self.value = value;
+    pub(super) fn sync(
+        &mut self,
+        value: Value,
+        family: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.value != value {
+            self.value = value.clone();
+            self.validation_error = None;
+            if let Some(slider) = &self.slider {
+                slider.update(cx, |slider, cx| {
+                    slider.set_value(value.as_f64().expect("range value") as f32, window, cx)
+                });
+            }
+            if let Some(select) = &self.select
+                && let Control::Select(options) = self.definition.control
+                && let Some((selected, _)) = options
+                    .iter()
+                    .find(|(option, _)| *option == select_value(self.definition.key, &value))
+            {
+                select.update(cx, |select, cx| {
+                    select.set_selected_value(selected, window, cx)
+                });
+            }
+            if matches!(self.definition.control, Control::Text | Control::Number(..)) {
+                let text = value
+                    .as_str()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| value.to_string());
+                self.input
+                    .update(cx, |input, cx| input.set_value(text, window, cx));
+            }
+            if let Some(size) = &self.font_size {
+                size.update(cx, |size, cx| {
+                    size.set_selected_value(&value.to_string(), window, cx)
+                });
+            }
             cx.notify();
+        }
+        if let Some(font) = &self.font_family
+            && self.font_family_value != family
+        {
+            self.font_family_value = family.to_string();
+            font.update(cx, |font, cx| {
+                font.set_selected_value(&family.to_string(), window, cx)
+            });
         }
     }
 
@@ -392,6 +438,8 @@ impl Render for SettingRow {
         let accessible_label = match self.definition.key {
             "wordWrap" => "Wrap code, diffs, and file previews by default",
             "timestampFormat" => "Timestamp format",
+            "defaultAutoPull" => "Default automatic pull",
+            "pullRequestMergeMethod" => "Default pull request merge method",
             "confirmThreadUnpin" => "Confirm thread unpinning",
             "confirmThreadArchive" => "Confirm thread archiving",
             "confirmThreadDelete" => "Confirm thread deletion",
@@ -410,7 +458,11 @@ impl Render for SettingRow {
         };
         let value = self.value.clone();
         let key = self.definition.key;
-        let description = if key == "followUpBehavior" {
+        let description = if key == "defaultAutoPull" && self.project.is_some() {
+            "Keeps this project's default branch current when the checkout has no local changes or commits.".to_string()
+        } else if key == "pullRequestMergeMethod" && self.project.is_some() {
+            "Pull requests in this project start with this method.".to_string()
+        } else if key == "followUpBehavior" {
             let shortcut = self
                 .root
                 .upgrade()
@@ -573,10 +625,12 @@ impl Render for SettingRow {
                             .icon(gpui_kit::assets::IconName::Undo2)
                             .accessibility_label(format!(
                                 "Reset {} to default",
-                                if key == "showSkillsInSlashMenu" {
-                                    "skills in slash menu".to_string()
-                                } else {
-                                    label.to_lowercase()
+                                match key {
+                                    "showSkillsInSlashMenu" => "skills in slash menu".to_string(),
+                                    "defaultAutoPull" => "default automatic pull".to_string(),
+                                    "removeAgentCreditsOnMerge" =>
+                                        "agent credit removal".to_string(),
+                                    _ => label.to_lowercase(),
                                 }
                             ))
                             .ghost()
