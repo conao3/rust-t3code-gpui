@@ -442,20 +442,6 @@ impl RowView {
         cx.notify();
     }
 
-    fn disclosure_key(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.meta_focus.is_focused(window)
-            && matches!(event.keystroke.key.as_str(), "enter" | "space" | " ")
-        {
-            self.toggle_details(cx);
-            cx.stop_propagation();
-        }
-    }
-
     fn sync_children(&mut self, cx: &mut Context<Self>) {
         for (index, row) in self.row.children.iter().enumerate() {
             if let Some(child) = self.children.get(index) {
@@ -622,7 +608,9 @@ impl RowView {
                         .child(Icon::new(icon).size(px(16.)).text_color(muted))
                         .child(div().id("approval-detail").role(accesskit::Role::Code)
                             .aria_label(detail_label).aria_value(subject.clone())
-                            .max_h(px(160.)).overflow_y_scroll().font_family(mono).text_xs().child(subject.clone())))
+                            .max_h(px(160.)).overflow_y_scroll().font_family(mono).text_xs()
+                            .child(div().id("approval-command-text").role(accesskit::Role::Label)
+                                .aria_value(subject.clone()).child(subject.clone()))))
                     .when(!prompt.is_empty() && prompt != subject, |card| card.child(
                         div().id("approval-reason").role(accesskit::Role::Label).aria_value(prompt.clone())
                             .ml(px(30.)).text_xs().text_color(muted).child(prompt.clone())))
@@ -742,7 +730,6 @@ impl Render for RowView {
                         .aria_label(self.row.text.clone())
                         .aria_expanded(self.expanded)
                         .track_focus(&self.meta_focus)
-                        .on_key_down(cx.listener(Self::disclosure_key))
                         .gap_1()
                         .px_1()
                         .cursor_pointer()
@@ -1038,7 +1025,6 @@ impl Render for RowView {
                                     .aria_label(summary.clone())
                                     .aria_expanded(self.expanded)
                                     .track_focus(&self.meta_focus)
-                                    .on_key_down(cx.listener(Self::disclosure_key))
                                     .cursor_pointer()
                                     .on_click(cx.listener(|view, _, _, cx| view.toggle_details(cx)))
                             })
@@ -1211,6 +1197,10 @@ impl Render for RowView {
                 .into_any_element(),
             RowKind::Request | RowKind::Plan => match self.row.pending.clone() {
                 Some(pending) => base
+                    .id("request-activity")
+                    .when(matches!(&pending, Pending::Approval { .. }), |row| {
+                        row.role(accesskit::Role::Region).aria_label("Activity")
+                    })
                     .py_1()
                     .child(self.render_pending(&pending, cx))
                     .into_any_element(),
@@ -1234,6 +1224,7 @@ impl Render for RowView {
                 .child(
                     h_flex()
                         .gap_2()
+                        .text_color(theme.danger)
                         .child(Icon::new(IconName::CircleAlert).size(px(16.)))
                         .child(
                             div()
