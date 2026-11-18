@@ -49,6 +49,30 @@ impl Status {
         *self != previous
     }
 
+    pub fn changes(&self) -> (u64, u64, String) {
+        let branch = &self.local["branchChanges"];
+        let tree = &self.local["workingTree"];
+        let changed = |value: &Value| {
+            value["insertions"].as_u64().unwrap_or_default() > 0
+                || value["deletions"].as_u64().unwrap_or_default() > 0
+        };
+        let use_branch = changed(branch) || !changed(tree) && !branch.is_null();
+        let selected = if use_branch { branch } else { tree };
+        let label = if use_branch {
+            selected["baseRef"]
+                .as_str()
+                .map(|base| format!("vs {base}"))
+        } else {
+            None
+        }
+        .unwrap_or_else(|| "Uncommitted".into());
+        (
+            selected["insertions"].as_u64().unwrap_or_default(),
+            selected["deletions"].as_u64().unwrap_or_default(),
+            label,
+        )
+    }
+
     pub fn branch(&self) -> Option<&str> {
         self.local.get("refName").and_then(Value::as_str)
     }
@@ -81,6 +105,9 @@ impl Watch {
                             json!({"cwd": watched.cwd, "includeRemote": watched.include_remote}),
                             StreamLimits::new(64, 8 << 20).expect("nonzero stream limits"),
                         )
+                        .await?;
+                    connection
+                        .request("vcs.refreshStatus", json!({"cwd": watched.cwd}))
                         .await?;
                     while let Some(chunk) = stream.next().await {
                         let chunk = chunk?;
@@ -270,6 +297,20 @@ pub fn branch_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn changes_select_branch_totals_before_uncommitted_totals() {
+        let mut status = Status {
+            local: json!({"workingTree":{"insertions":2,"deletions":0},"branchChanges":{"insertions":5,"deletions":1,"baseRef":"main"}}),
+            ..Status::default()
+        };
+        assert_eq!(status.changes(), (5, 1, "vs main".into()));
+        status.local["branchChanges"]["insertions"] = json!(0);
+        status.local["branchChanges"]["deletions"] = json!(0);
+        assert_eq!(status.changes(), (2, 0, "Uncommitted".into()));
+        status.local["workingTree"]["insertions"] = json!(0);
+        assert_eq!(status.changes(), (0, 0, "vs main".into()));
+    }
 
     #[test]
     fn the_saved_editor_wins_and_discovery_order_does_not_change_the_default() {

@@ -6,7 +6,13 @@ pub(super) struct DetailsPane {
 }
 impl Render for DetailsPane {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let target = self.root.upgrade().and_then(|root| root.read(cx).current());
+        let target = self
+            .root
+            .update(cx, |root, _| {
+                root.with_main_conversation(|root| root.current())
+            })
+            .ok()
+            .flatten();
         if self.services.as_ref().map(|(key, _)| key) != target.as_ref() {
             self.services = target.and_then(|key| {
                 let root = self.root.upgrade()?;
@@ -186,7 +192,7 @@ impl Root {
             .get(&environment)
             .map(|(config, _)| config)
             .unwrap_or(&Value::Null);
-        let label = environment.clone();
+        let label = self.host_label(&environment);
         let workspace_label = if self
             .conversation
             .draft
@@ -194,8 +200,6 @@ impl Root {
             .is_some_and(|draft| draft.workspace_strategy["type"] == "worktree")
         {
             "New worktree"
-        } else if self.conversation.draft.is_none() {
-            "Local checkout"
         } else {
             "Current checkout"
         };
@@ -391,7 +395,8 @@ impl Root {
                     .child(self.render_project_scripts(cx)),
             )
             .when(self.conversation.workspace_status.is_repo(), |card| {
-                let changes = &self.conversation.workspace_status.local["workingTree"];
+                let (insertions, deletions, changes_label) =
+                    self.conversation.workspace_status.changes();
                 card.child(
                     v_flex()
                         .id("details-git-section")
@@ -420,7 +425,7 @@ impl Root {
                                                 .flex_1()
                                                 .text_xs()
                                                 .text_color(theme.muted_foreground)
-                                                .child(text!("Uncommitted")),
+                                                .child(text!(changes_label.clone())),
                                         )
                                         .child(
                                             h_flex()
@@ -429,10 +434,7 @@ impl Root {
                                                 .child(text!("+"))
                                                 .child(text!(
                                                     id = "changes-insertions",
-                                                    changes["insertions"]
-                                                        .as_u64()
-                                                        .unwrap_or(0)
-                                                        .to_string()
+                                                    insertions.to_string()
                                                 )),
                                         )
                                         .child(
@@ -442,10 +444,7 @@ impl Root {
                                                 .child(text!("-"))
                                                 .child(text!(
                                                     id = "changes-deletions",
-                                                    changes["deletions"]
-                                                        .as_u64()
-                                                        .unwrap_or(0)
-                                                        .to_string()
+                                                    deletions.to_string()
                                                 )),
                                         ),
                                 )
@@ -455,9 +454,7 @@ impl Root {
                                 .px_2p5()
                                 .rounded(px(8.))
                                 .accessibility_label(format!(
-                                    "Changes Uncommitted +{} -{}",
-                                    changes["insertions"].as_u64().unwrap_or(0),
-                                    changes["deletions"].as_u64().unwrap_or(0)
+                                    "Changes {changes_label} +{insertions} -{deletions}"
                                 ))
                                 .on_click(
                                     self.pane_listener(cx, |root, _, _, cx| root.toggle_diff(cx)),
@@ -581,7 +578,11 @@ impl Root {
                         .text_color(cx.theme().muted_foreground)
                 })
                 .rounded(px(8.))
-                .accessibility_label(accessible_label)
+                .accessibility_label(if id == "details-branch" {
+                    String::new()
+                } else {
+                    accessible_label
+                })
                 .role(accesskit::Role::ComboBox)
                 .on_click(self.pane_listener(cx, move |root, _, window, cx| {
                     root.open_branch_picker(id, window, cx)

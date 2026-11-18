@@ -82,6 +82,7 @@ async def prepare(manifest, kind):
                     "terminal.write",
                     {"threadId": THREAD, "terminalId": terminal, "data": command},
                 )
+                await wait_server(rpc, port)
         workspace = Path(manifest["workspaces"][side])
         for filename, content in {
             "panel-fixture.txt": "An uncommitted fixture for the diff panel.\n",
@@ -95,6 +96,37 @@ async def prepare(manifest, kind):
                 for side, path in manifest["configurations"].items()
             )
         )
+
+
+async def wait_server(rpc, port):
+    request = "fixture-server"
+    await rpc.socket.send(
+        json.dumps(
+            {
+                "_tag": "Request",
+                "id": request,
+                "tag": "subscribeDiscoveredLocalServers",
+                "headers": [],
+                "payload": {},
+            }
+        )
+    )
+    async with asyncio.timeout(60):
+        while True:
+            reply = json.loads(await rpc.socket.recv())
+            if reply.get("_tag") == "Chunk" and reply.get("requestId") == request:
+                await rpc.socket.send(json.dumps({"_tag": "Ack", "requestId": request}))
+                if any(
+                    server["port"] == port
+                    and (server.get("terminal") or {}).get("threadId") == THREAD
+                    for value in reply["values"]
+                    for server in value["servers"]
+                ):
+                    return
+            elif reply.get("_tag") == "Exit" and reply.get("requestId") == request:
+                raise RuntimeError(
+                    "Fixture server discovery stopped before finding its terminal"
+                )
 
 
 async def prepare_turn(manifest, side, path):
