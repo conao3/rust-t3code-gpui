@@ -9,6 +9,8 @@ pub(super) struct Tasks {
     saving: bool,
     root: WeakEntity<Root>,
     environment: String,
+    environment_label: String,
+    project_filter: Option<String>,
     tasks: Vec<Value>,
     error: Option<String>,
     worker: Option<tokio::task::JoinHandle<()>>,
@@ -55,7 +57,7 @@ impl Tasks {
                     ))
                 })
                 .collect(),
-            "",
+            owner.settings_project.as_deref().unwrap_or(""),
             window,
             cx,
         );
@@ -97,6 +99,11 @@ impl Tasks {
             saving: false,
             root,
             environment,
+            environment_label: config["environment"]["label"]
+                .as_str()
+                .unwrap_or(&owner.settings_environment())
+                .to_string(),
+            project_filter: owner.settings_project.clone(),
             tasks: vec![],
             error: None,
             worker: None,
@@ -154,8 +161,17 @@ impl Tasks {
                         .update(cx, |view, cx| {
                             match value {
                                 Ok(value) => {
-                                    view.tasks =
-                                        value["tasks"].as_array().cloned().unwrap_or_default();
+                                    view.tasks = value["tasks"]
+                                        .as_array()
+                                        .into_iter()
+                                        .flatten()
+                                        .filter(|task| {
+                                            view.project_filter
+                                                .as_ref()
+                                                .is_none_or(|project| task["projectId"] == *project)
+                                        })
+                                        .cloned()
+                                        .collect();
                                     view.error = None;
                                 }
                                 Err(error) => view.error = Some(error),
@@ -335,12 +351,29 @@ impl Render for Tasks {
             .copied()
             .unwrap_or("fixed_time");
         v_flex()
+            .id("scheduled-tasks")
+            .role(accesskit::Role::Region)
+            .aria_label(self.environment_label.clone())
             .gap_3()
             .child(
-                Button::new("add-task")
-                    .label("New task")
-                    .outline()
-                    .on_click(cx.listener(|view, _, window, cx| view.edit(json!({}), window, cx))),
+                h_flex()
+                    .px_4()
+                    .justify_between()
+                    .child(
+                        settings_controls::text("Scheduled tasks")
+                            .font_weight(FontWeight::SEMIBOLD),
+                    )
+                    .child(
+                        Button::new("add-task")
+                            .label("New task")
+                            .icon(gpui_kit::assets::IconName::Plus)
+                            .ghost()
+                            .h(px(24.))
+                            .text_xs()
+                            .on_click(
+                                cx.listener(|view, _, window, cx| view.edit(json!({}), window, cx)),
+                            ),
+                    ),
             )
             .when_some(self.error.clone(), |view, error| {
                 view.child(
@@ -433,7 +466,24 @@ impl Render for Tasks {
                 )
             })
             .when(self.tasks.is_empty() && self.editing.is_none(), |view| {
-                view.child(div().py_6().child("No scheduled tasks"))
+                view.child(
+                    v_flex()
+                        .id("empty-tasks")
+                        .p_4()
+                        .gap_1()
+                        .rounded_lg()
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .bg(cx.theme().muted.opacity(0.25))
+                        .child(settings_controls::text("No scheduled tasks").text_sm())
+                        .child(
+                            settings_controls::text(
+                                "No tasks match this environment and project selection.",
+                            )
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground),
+                        ),
+                )
             })
             .children(self.tasks.iter().cloned().enumerate().map(|(index, task)| {
                 let edit = task.clone();

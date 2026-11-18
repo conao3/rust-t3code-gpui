@@ -756,7 +756,10 @@ impl Root {
             let root = cx.entity().downgrade();
             let environment = environment.clone();
             let panel = window.use_keyed_state(
-                SharedString::from(format!("settings-tasks:{environment}")),
+                SharedString::from(format!(
+                    "settings-tasks:{environment}:{:?}",
+                    self.settings_project
+                )),
                 cx,
                 |window, cx| settings_tasks::Tasks::new(root, environment, self, window, cx),
             );
