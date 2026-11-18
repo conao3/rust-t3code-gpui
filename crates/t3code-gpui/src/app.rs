@@ -428,7 +428,7 @@ struct ComposerControlsStamp {
     draft: bool,
     status: Option<ThreadStatus>,
     delivery: Delivery,
-    dictation: (bool, bool),
+    dictation: (String, String),
     effort_cursor: Option<Value>,
     queue_edit: Option<(String, bool)>,
     question: bool,

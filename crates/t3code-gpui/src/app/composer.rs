@@ -2451,28 +2451,7 @@ impl Root {
             .w_full()
             .child(
                 toolbar
-                    .child(
-                        Button::new("dictation")
-                            .icon(IconName::Mic)
-                            .ghost()
-                            .size(px(28.))
-                            .accessibility_label(
-                                if self.conversation.dictation.recording.is_some() {
-                                    "Stop dictation"
-                                } else {
-                                    "Start voice input"
-                                },
-                            )
-                            .tooltip(if self.conversation.dictation.recording.is_some() {
-                                "Stop dictation"
-                            } else {
-                                "Start voice input"
-                            })
-                            .disabled(self.conversation.dictation.busy)
-                            .on_click(self.pane_listener(cx, |root, _, window, cx| {
-                                root.toggle_dictation(window, cx)
-                            })),
-                    )
+                    .child(self.render_dictation(cx))
                     .child(self.composer_button(cx)),
             )
             .children(picker)

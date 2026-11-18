@@ -634,10 +634,7 @@ impl Root {
                     draft: root.conversation.draft.is_some(),
                     status: root.open_entry().map(|entry| entry.status),
                     delivery: root.composer_delivery(false),
-                    dictation: (
-                        root.conversation.dictation.busy,
-                        root.conversation.dictation.recording.is_some(),
-                    ),
+                    dictation: root.conversation.dictation.stamp(),
                     effort_cursor: root.conversation.composer_choices.effort_cursor.clone(),
                     queue_edit: root
                         .conversation
