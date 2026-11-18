@@ -1893,7 +1893,7 @@ impl Root {
                             .map(|option| {
                                 let value = option.get("id").cloned().unwrap_or(Value::Null);
                                 let checked = Some(&value) == selected.as_ref();
-                                let is_default = descriptor["defaultValue"] == value;
+                                let is_default = option["isDefault"].as_bool() == Some(true);
                                 let label =
                                     option["label"].as_str().unwrap_or_default().to_string();
                                 let tracked = Some(&value) == focused;
@@ -1974,9 +1974,10 @@ impl Root {
                                     .text_sm()
                                     .cursor_pointer()
                                     .hover(|row| row.bg(theme.list_hover))
+                                    .when(checked, |row| row.bg(theme.list_hover))
                                     .child(text!(label))
                                     .child(div().flex_1())
-                                    .when(is_default, |row| {
+                                    .when(is_default && !checked, |row| {
                                         row.child(
                                             div()
                                                 .text_xs()
