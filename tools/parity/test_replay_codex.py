@@ -28,10 +28,34 @@ class ReplayTests(unittest.TestCase):
             },
             {
                 "frame": {
+                    "method": "item/completed",
+                    "params": {
+                        "threadId": "old-thread",
+                        "turnId": "old-turn",
+                        "item": {
+                            "id": "old-item",
+                            "type": "agentMessage",
+                            "text": "old",
+                        },
+                    },
+                }
+            },
+            {
+                "frame": {
                     "method": "turn/completed",
                     "params": {
                         "threadId": "old-thread",
-                        "turn": {"id": "old-turn", "status": "completed", "items": []},
+                        "turn": {
+                            "id": "old-turn",
+                            "status": "completed",
+                            "items": [
+                                {
+                                    "id": "old-item",
+                                    "type": "agentMessage",
+                                    "text": "old",
+                                }
+                            ],
+                        },
                     },
                 }
             },
@@ -124,6 +148,23 @@ class ReplayTests(unittest.TestCase):
                         if frame.get("method") == "item/agentMessage/delta"
                     ]
                     self.assertGreater(deltas.count(first), deltas.count(second))
+                    for thread in [first, second]:
+                        emitted = "".join(
+                            frame["params"]["delta"]
+                            for frame in observed
+                            if frame.get("method") == "item/agentMessage/delta"
+                            and frame["params"]["threadId"] == thread
+                        )
+                        for frame in observed:
+                            params = frame.get("params", {})
+                            if params.get("threadId") != thread:
+                                continue
+                            if frame.get("method") == "item/completed":
+                                self.assertEqual(params["item"]["text"], emitted)
+                            if frame.get("method") == "turn/completed":
+                                self.assertEqual(
+                                    params["turn"]["items"][0]["text"], emitted
+                                )
                 finally:
                     process.terminate()
                     process.wait(timeout=5)

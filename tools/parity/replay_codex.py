@@ -131,6 +131,7 @@ def stream(thread_id, turn_id, cwd, interrupted):
         if item:
             mapping[item["id"]] = "fixture-item-" + uuid.uuid4().hex
     text = settings["text"]
+    emitted = ""
     agent_item = None
     for frame in notifications:
         frame = replace(copy.deepcopy(frame), mapping)
@@ -155,6 +156,7 @@ def stream(thread_id, turn_id, cwd, interrupted):
                         },
                     }
                 )
+                emitted += chunk
                 delay = (
                     started
                     + (index + 1)
@@ -167,11 +169,11 @@ def stream(thread_id, turn_id, cwd, interrupted):
                     interrupted.wait(delay)
             continue
         if method == "item/completed" and params["item"]["type"] == "agentMessage":
-            params["item"]["text"] = text
+            params["item"]["text"] = emitted
         if method == "turn/completed":
             for item in params["turn"]["items"]:
                 if item["type"] == "agentMessage":
-                    item["text"] = text
+                    item["text"] = emitted
             params["turn"]["durationMs"] = stream_ms
             if interrupted.is_set():
                 params["turn"]["status"] = "interrupted"
