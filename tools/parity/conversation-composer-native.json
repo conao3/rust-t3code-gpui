@@ -86,16 +86,7 @@
         "role": "textbox",
         "name": "Message Side chat"
       },
-      "reference": {
-        "role": "textbox",
-        "name": "Message Side chat",
-        "value": "\n"
-      },
-      "native": {
-        "role": "textbox",
-        "name": "Message Side chat",
-        "value": ""
-      }
+      "value": "Stash Beta"
     },
     {
       "action": "focus",

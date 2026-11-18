@@ -926,6 +926,9 @@ impl Root {
         })
         .map(str::to_string)
         {
+            if command == "composer.stash" && self.side_chat_parent.is_some() {
+                return true;
+            }
             if command == "thread.undo" {
                 if self.palette_open || self.picker_open || self.thread_undos.is_empty() {
                     return false;
