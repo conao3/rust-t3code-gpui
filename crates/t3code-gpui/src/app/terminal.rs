@@ -153,8 +153,8 @@ impl Root {
                     crate::terminal::DrawerEvent::Focus => {
                         if root.jump_hints {
                             root.jump_hints = false;
-                            cx.notify();
                         }
+                        cx.notify();
                     }
                 },
             );

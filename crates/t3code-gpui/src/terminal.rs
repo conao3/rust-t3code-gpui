@@ -562,8 +562,10 @@ impl Drawer {
             let confirm = answer.clone();
             let cancel = answer.clone();
             dialog
-                .title(format!("Close terminal \"{terminal_label}\"?"))
-                .description("This stops the running process and clears its history.")
+                .title(text!(format!("Close terminal \"{terminal_label}\"?")))
+                .description(text!(
+                    "This stops the running process and clears its history."
+                ))
                 .centered()
                 .confirm()
                 .button_props(
@@ -580,13 +582,18 @@ impl Drawer {
                 })
         });
         self.closing = true;
+        cx.emit(DrawerEvent::Focus);
         let runtime = self.runtime.clone();
         let connection = self.connection.clone();
         let mut target = self.target.clone();
         target.terminal_id = id.clone();
         cx.spawn_in(window, async move |this, cx| {
             if prompt.recv().await != Ok(true) {
-                let _ = this.update(cx, |drawer, _| drawer.closing = false);
+                let _ = this.update(cx, |drawer, cx| {
+                    drawer.closing = false;
+                    cx.emit(DrawerEvent::Focus);
+                    cx.notify();
+                });
                 return;
             }
             let result = runtime
