@@ -6,6 +6,7 @@ use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon,
     button::{Button, ButtonVariants as _},
     h_flex,
+    menu::{DropdownMenu as _, PopupMenuItem},
     text::{RenderedText, TextView, TextViewState, TextViewStyle},
     v_flex,
 };
@@ -20,26 +21,24 @@ mod images;
 const DETAIL_LINES: usize = 400;
 
 #[derive(Clone)]
-enum BodySource {
-    Markdown(RenderedText),
-    Plain(SharedString),
-}
-
-#[derive(Clone)]
 struct AccessibleBody {
-    source: BodySource,
+    source: RenderedText,
     character_lengths: Arc<OnceLock<Vec<u8>>>,
 }
 
 impl AccessibleBody {
     fn text(&self) -> &str {
-        match &self.source {
-            BodySource::Markdown(snapshot) => snapshot.as_str(),
-            BodySource::Plain(text) => text.as_ref(),
-        }
+        self.source.as_str()
     }
 
-    fn append(&self, builder: &mut A11ySubtreeBuilder) {
+    fn append(&self, author: Option<&str>, builder: &mut A11ySubtreeBuilder) {
+        if let Some(author) = author {
+            let mut heading = accesskit::Node::new(accesskit::Role::Heading);
+            heading.set_label(author);
+            heading.set_level(3);
+            let id = builder.synthetic_node_id("author");
+            builder.push_child(id, heading);
+        }
         let mut run = accesskit::Node::new(accesskit::Role::TextRun);
         run.set_value(self.text());
         run.set_character_lengths(
@@ -112,6 +111,12 @@ impl RowView {
     pub fn set_math_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
         if self.math_enabled != enabled {
             self.math_enabled = enabled;
+            if self.row.kind == RowKind::User
+                && let Some(markdown) = &self.markdown
+            {
+                let source = crate::rich_markdown::user_source(&self.row.text, enabled);
+                markdown.update(cx, |state, cx| state.set_text(&source, cx));
+            }
             for child in &self.children {
                 child.update(cx, |child, cx| child.set_math_enabled(enabled, cx));
             }
@@ -142,8 +147,13 @@ impl RowView {
                 }
             })
         });
-        let markdown = (row.kind == RowKind::Assistant)
-            .then(|| cx.new(|cx| TextViewState::markdown(&row.text, cx)));
+        let markdown = match row.kind {
+            RowKind::Assistant => Some(cx.new(|cx| TextViewState::markdown(&row.text, cx))),
+            RowKind::User => Some(cx.new(|cx| {
+                TextViewState::markdown(&crate::rich_markdown::user_source(&row.text, false), cx)
+            })),
+            _ => None,
+        };
         let summary = if row.kind == RowKind::Reasoning {
             crate::timeline::thought_preview(&row.text)
         } else {
@@ -181,25 +191,19 @@ impl RowView {
 
     fn refresh_accessible_body(&mut self, cx: &Context<Self>) -> bool {
         let source = match self.row.kind {
-            RowKind::Assistant => {
+            RowKind::Assistant | RowKind::User | RowKind::Reasoning => {
                 let Some(markdown) = &self.markdown else {
                     return false;
                 };
                 let snapshot = markdown.read(cx).rendered_text();
-                if self.accessible_body.as_ref().is_some_and(|body| {
-                    matches!(&body.source, BodySource::Markdown(previous) if previous == &snapshot)
-                }) {
+                if self
+                    .accessible_body
+                    .as_ref()
+                    .is_some_and(|body| body.source == snapshot)
+                {
                     return false;
                 }
-                BodySource::Markdown(snapshot)
-            }
-            RowKind::User => {
-                if self.accessible_body.as_ref().is_some_and(|body| {
-                    matches!(&body.source, BodySource::Plain(previous) if previous.as_ref() == self.row.text)
-                }) {
-                    return false;
-                }
-                BodySource::Plain(self.row.text.clone().into())
+                snapshot
             }
             _ => return self.accessible_body.take().is_some(),
         };
@@ -274,7 +278,11 @@ impl RowView {
             .relative()
             .track_focus(&self.meta_focus)
             .tab_index(-1)
-            .mt(px(6.))
+            .mt(px(if self.row.kind == RowKind::User {
+                0.
+            } else {
+                6.
+            }))
             .gap_2()
             .text_size(px(12.))
             .line_height(px(16.))
@@ -303,6 +311,27 @@ impl RowView {
                 },
             )
             .when(metadata.can_copy, |row| row.child(copy))
+            .when_some(
+                (self.row.kind == RowKind::User)
+                    .then(|| crate::timeline::prompt_link(&self.row.text))
+                    .flatten(),
+                |row, link| {
+                    row.child(
+                        Button::new("copy-prompt-link")
+                            .accessibility_label("Copy prompt link")
+                            .icon(Icon::new(IconName::Link).size(px(12.)))
+                            .ghost()
+                            .h(px(24.))
+                            .w(px(28.))
+                            .p_0()
+                            .tooltip("Copy prompt link")
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(link.clone()));
+                                view.copied(cx);
+                            })),
+                    )
+                },
+            )
             .when(metadata.can_fork, |row| {
                 let source = metadata.source_thread_id.clone();
                 let run = metadata
@@ -333,6 +362,8 @@ impl RowView {
             .child(
                 div()
                     .id("message-timestamp")
+                    .role(accesskit::Role::Label)
+                    .aria_value(timestamp.clone())
                     .tooltip(move |window, cx| {
                         gpui_kit::component::tooltip::Tooltip::new(tooltip.clone())
                             .build(window, cx)
@@ -369,12 +400,12 @@ impl RowView {
             };
         }
         if let Some(markdown) = &self.markdown {
-            let body = if row.kind == RowKind::Reasoning {
-                &row.detail
-            } else {
-                &row.text
+            let body = match row.kind {
+                RowKind::Reasoning => row.detail.clone(),
+                RowKind::User => crate::rich_markdown::user_source(&row.text, self.math_enabled),
+                _ => row.text.clone(),
             };
-            markdown.update(cx, |state, cx| state.set_text(body, cx));
+            markdown.update(cx, |state, cx| state.set_text(&body, cx));
         }
         if row.pending != self.row.pending {
             self.responding = false;
@@ -388,6 +419,41 @@ impl RowView {
             self.sync_children(cx);
         }
         cx.notify();
+    }
+
+    fn toggle_details(&mut self, cx: &mut Context<Self>) {
+        self.expanded = !self.expanded;
+        if self.expanded {
+            self.sync_children(cx);
+            if self.row.kind == RowKind::Reasoning
+                && self.markdown.is_none()
+                && self.row.children.is_empty()
+            {
+                self.markdown = Some(cx.new(|cx| TextViewState::markdown(&self.row.detail, cx)));
+                self._markdown_observer = self.markdown.as_ref().map(|markdown| {
+                    cx.observe(markdown, |view, _, cx| {
+                        if view.refresh_accessible_body(cx) {
+                            cx.notify();
+                        }
+                    })
+                });
+            }
+        }
+        cx.notify();
+    }
+
+    fn disclosure_key(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.meta_focus.is_focused(window)
+            && matches!(event.keystroke.key.as_str(), "enter" | "space" | " ")
+        {
+            self.toggle_details(cx);
+            cx.stop_propagation();
+        }
     }
 
     fn sync_children(&mut self, cx: &mut Context<Self>) {
@@ -495,39 +561,98 @@ impl RowView {
             Pending::Approval {
                 request_id,
                 subject,
+                prompt,
+                kind,
+                can_respond,
                 options,
             } => {
-                let buttons = options.iter().enumerate().map(|(i, option)| {
-                    let event = RowEvent::Respond {
-                        request_id: request_id.clone(),
-                        decision: option.decision.clone(),
-                    };
-                    let button = Button::new(("decision", i))
-                        .label(option.label.clone())
-                        .compact()
-                        .disabled(self.responding)
-                        .on_click(cx.listener(move |view, _, _, cx| {
-                            view.responding = true;
-                            cx.emit(event.clone());
-                            cx.notify();
-                        }));
-                    if option.decision == "accept" {
-                        button.primary()
-                    } else {
-                        button.outline()
-                    }
-                });
-                card.when(!subject.is_empty(), |card| {
-                    card.child(
-                        div()
-                            .text_sm()
-                            .font_family(mono)
-                            .text_color(muted)
-                            .child(subject.clone()),
-                    )
-                })
-                .child(h_flex().gap_2().flex_wrap().children(buttons))
-                .into_any_element()
+                let (label, detail_label, icon) = match kind.as_str() {
+                    "command" => ("Command approval", "Command", IconName::Terminal),
+                    "file-change" => ("File change approval", "File change", IconName::SquarePen),
+                    "file-read" => ("File read approval", "File to read", IconName::Eye),
+                    "permission" => (
+                        "App permission approval",
+                        "Permission request",
+                        IconName::Wrench,
+                    ),
+                    "mcp-elicitation" => (
+                        "App access approval",
+                        "App access request",
+                        IconName::Hammer,
+                    ),
+                    _ => unreachable!("unsupported approval kind: {kind}"),
+                };
+                let disabled = self.responding || !can_respond;
+                let buttons = options
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, option)| matches!(option.decision.as_str(), "accept" | "decline"))
+                    .map(|(index, option)| {
+                        let event = RowEvent::Respond {
+                            request_id: request_id.clone(),
+                            decision: option.decision.clone(),
+                        };
+                        Button::new(("decision", index))
+                            .label(option.label.clone())
+                            .ghost()
+                            .compact()
+                            .h(px(18.))
+                            .px_0()
+                            .text_xs()
+                            .disabled(disabled)
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.responding = true;
+                                cx.emit(event.clone());
+                                cx.notify();
+                            }))
+                    });
+                let more: Vec<_> = options
+                    .iter()
+                    .filter(|option| !matches!(option.decision.as_str(), "accept" | "decline"))
+                    .cloned()
+                    .collect();
+                let weak = cx.entity().downgrade();
+                let request = request_id.clone();
+                v_flex()
+                    .id("approval-card")
+                    .role(accesskit::Role::Group)
+                    .aria_label(label)
+                    .gap_1()
+                    .child(h_flex().gap(px(6.)).items_start()
+                        .child(Icon::new(icon).size(px(16.)).text_color(muted))
+                        .child(div().id("approval-detail").role(accesskit::Role::Code)
+                            .aria_label(detail_label).aria_value(subject.clone())
+                            .max_h(px(160.)).overflow_y_scroll().font_family(mono).text_xs().child(subject.clone())))
+                    .when(!prompt.is_empty() && prompt != subject, |card| card.child(
+                        div().id("approval-reason").role(accesskit::Role::Label).aria_value(prompt.clone())
+                            .ml(px(30.)).text_xs().text_color(muted).child(prompt.clone())))
+                    .child(h_flex().ml(px(30.)).gap_2().flex_wrap()
+                        .child(div().id("approval-status").role(accesskit::Role::Label)
+                            .aria_value(if *can_respond { "Waiting for approval" } else { "Provider process is gone. Interrupt or restart the run to respond." })
+                            .text_xs().text_color(warning)
+                            .child(if *can_respond { "Waiting for approval" } else { "Provider process is gone. Interrupt or restart the run to respond." }))
+                        .when(*can_respond, |row| row.children(buttons)
+                            .when(!more.is_empty(), |row| row.child(
+                                Button::new("more-approval-options").label("More")
+                                    .accessibility_label("More approval options").ghost().compact().h(px(18.)).px_0().text_xs()
+                                    .disabled(disabled)
+                                    .dropdown_menu(move |mut menu, _, _| {
+                                        for option in &more {
+                                            let weak = weak.clone();
+                                            let event = RowEvent::Respond { request_id: request.clone(), decision: option.decision.clone() };
+                                            menu = menu.item(PopupMenuItem::new(option.label.clone()).disabled(disabled)
+                                                .on_click(move |_, _, cx| {
+                                                    let _ = weak.update(cx, |view, cx| {
+                                                        view.responding = true;
+                                                        cx.emit(event.clone());
+                                                        cx.notify();
+                                                    });
+                                                }));
+                                        }
+                                        menu
+                                    })
+                            ))))
+                    .into_any_element()
             }
             Pending::Plan { plan_id, markdown } => {
                 let event = RowEvent::Implement {
@@ -613,6 +738,11 @@ impl Render for RowView {
                 .child(
                     h_flex()
                         .id("worked-toggle")
+                        .role(accesskit::Role::Button)
+                        .aria_label(self.row.text.clone())
+                        .aria_expanded(self.expanded)
+                        .track_focus(&self.meta_focus)
+                        .on_key_down(cx.listener(Self::disclosure_key))
                         .gap_1()
                         .px_1()
                         .cursor_pointer()
@@ -626,11 +756,7 @@ impl Render for RowView {
                             .size(px(14.)),
                         )
                         .on_click(cx.listener(|view, _, _, cx| {
-                            view.expanded = !view.expanded;
-                            if view.expanded {
-                                view.sync_children(cx);
-                            }
-                            cx.notify();
+                            view.toggle_details(cx);
                         })),
                 )
                 .when(self.expanded, |row| {
@@ -645,13 +771,14 @@ impl Render for RowView {
                     .map(|elapsed| {
                         format!(
                             "Working for {}",
-                            humantime::format_duration(std::time::Duration::from_secs(
-                                elapsed.as_secs()
-                            ))
+                            crate::timeline::format_working_duration(elapsed)
                         )
                     })
                     .unwrap_or_else(|| "Working...".into());
-                base.mt_6()
+                base.id("working-label")
+                    .role(accesskit::Role::Label)
+                    .aria_value(label.clone())
+                    .mt_6()
                     .px_1()
                     .pt_1()
                     .pb_2()
@@ -666,13 +793,13 @@ impl Render for RowView {
                 Some(state) => base
                     .id("assistant-message")
                     .role(accesskit::Role::Document)
-                    .aria_label("Assistant message")
                     .accessibility_id(self.row.key.clone())
                     .a11y_synthetic_children({
                         let body = self.accessible_body.clone();
+                        let first = self.row.message_part.as_ref().is_none_or(|part| part.first);
                         move |builder| {
                             if let Some(body) = body {
-                                body.append(builder);
+                                body.append(first.then_some("T3 Code"), builder);
                             }
                         }
                     })
@@ -767,7 +894,14 @@ impl Render for RowView {
                 None => base.into_any_element(),
             },
             RowKind::User => base
+                .id("user-message")
                 .py_2()
+                .on_hover(cx.listener(|view, hovered, _, cx| {
+                    cx.emit(RowEvent::MessageHover {
+                        message_id: view.row.key.clone(),
+                        hovered: *hovered,
+                    });
+                }))
                 .flex()
                 .flex_col()
                 .items_end()
@@ -777,13 +911,17 @@ impl Render for RowView {
                     div()
                         .id("user-bubble")
                         .role(accesskit::Role::Document)
-                        .aria_label("User message")
                         .accessibility_id(self.row.key.clone())
                         .a11y_synthetic_children({
                             let body = self.accessible_body.clone();
+                            let author = if self.row.detail == "agent" {
+                                "Agent"
+                            } else {
+                                "You"
+                            };
                             move |builder| {
                                 if let Some(body) = body {
-                                    body.append(builder);
+                                    body.append(Some(author), builder);
                                 }
                             }
                         })
@@ -817,13 +955,33 @@ impl Render for RowView {
                                         .child(Icon::new(IconName::ChevronDown).size(px(12.))),
                                 )
                             } else {
-                                bubble.child(self.row.text.clone())
+                                bubble.child(
+                                    TextView::new(
+                                        self.markdown.as_ref().expect("user markdown state"),
+                                    )
+                                    .markdown_extensions(crate::rich_markdown::extensions(
+                                        self.math_enabled,
+                                    ))
+                                    .selectable(true)
+                                    .style(TextViewStyle::default().paragraph_gap(rems(0.65))),
+                                )
                             }
                         }),
                 )
+                .when_some(
+                    self.row
+                        .message_part
+                        .as_ref()
+                        .and_then(|part| part.metadata.as_ref()),
+                    |row, metadata| row.child(self.render_assistant_meta(metadata, cx)),
+                )
                 .into_any_element(),
             RowKind::Reasoning | RowKind::Tool | RowKind::Subagent => {
-                let summary = self.summary.clone();
+                let summary = if self.row.kind == RowKind::Reasoning && self.expanded {
+                    if self.row.live { "Thinking" } else { "Thought" }.to_string()
+                } else {
+                    self.summary.clone()
+                };
                 let openable = !self.row.detail.is_empty() || !self.row.children.is_empty();
                 let detail = (self.expanded && self.row.children.is_empty()).then(|| {
                     let lines: Vec<&str> = self.row.detail.lines().collect();
@@ -834,6 +992,18 @@ impl Render for RowView {
                     }
                     div()
                         .id("activity-detail")
+                        .role(accesskit::Role::Label)
+                        .aria_value(if self.row.kind == RowKind::Reasoning {
+                            self.markdown
+                                .as_ref()
+                                .expect("expanded reasoning markdown")
+                                .read(cx)
+                                .rendered_text()
+                                .as_str()
+                                .to_owned()
+                        } else {
+                            text.clone()
+                        })
                         .max_h(px(384.))
                         .overflow_y_scroll()
                         .mt_1()
@@ -860,26 +1030,18 @@ impl Render for RowView {
                     .py_0p5()
                     .text_sm()
                     .text_color(theme.muted_foreground)
-                    .when(openable, |row| {
-                        row.cursor_pointer().on_click(cx.listener(|view, _, _, cx| {
-                            view.expanded = !view.expanded;
-                            if view.expanded {
-                                view.sync_children(cx);
-                                if view.row.kind == RowKind::Reasoning
-                                    && view.markdown.is_none()
-                                    && view.row.children.is_empty()
-                                {
-                                    view.markdown =
-                                        Some(cx.new(|cx| {
-                                            TextViewState::markdown(&view.row.detail, cx)
-                                        }));
-                                }
-                            }
-                            cx.notify();
-                        }))
-                    })
                     .child(
                         h_flex()
+                            .id("activity-toggle")
+                            .when(openable, |row| {
+                                row.role(accesskit::Role::Button)
+                                    .aria_label(summary.clone())
+                                    .aria_expanded(self.expanded)
+                                    .track_focus(&self.meta_focus)
+                                    .on_key_down(cx.listener(Self::disclosure_key))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|view, _, _, cx| view.toggle_details(cx)))
+                            })
                             .gap(px(6.))
                             .min_h(px(24.))
                             .child(
@@ -908,6 +1070,7 @@ impl Render for RowView {
                                 line.child(
                                     Button::new("open-child")
                                         .label("Open")
+                                        .accessibility_label("Open Subagent")
                                         .compact()
                                         .outline()
                                         .on_click(cx.listener(move |_, _, _, cx| {
@@ -1064,9 +1227,32 @@ impl Render for RowView {
                     .into_any_element(),
             },
             RowKind::Error => base
+                .id("provider-error")
+                .role(accesskit::Role::Region)
+                .aria_label("Activity")
                 .py_1()
-                .text_color(theme.danger)
-                .child(self.row.text.clone())
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(Icon::new(IconName::CircleAlert).size(px(16.)))
+                        .child(
+                            div()
+                                .id("provider-error-title")
+                                .role(accesskit::Role::Label)
+                                .aria_value("Provider error")
+                                .text_xs()
+                                .child("Provider error"),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("provider-error-message")
+                        .role(accesskit::Role::Label)
+                        .aria_value(self.row.text.clone())
+                        .ml(px(30.))
+                        .mt_1()
+                        .child(self.row.text.clone()),
+                )
                 .into_any_element(),
         };
         div().w_full().flex().justify_center().child(content)

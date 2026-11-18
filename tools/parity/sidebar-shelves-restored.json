@@ -6,7 +6,7 @@
   "steps": [
     {"action": "click", "selector": {"role": "button", "name": "Fixture response, UI parity", "index": 0}},
     {"action": "checkpoint", "selector": {"name": "Message Fixture response"}, "count": 1},
-    {"action": "checkpoint", "selector": {"role": "StaticText"}, "reference": {"role": "StaticText"}, "native": {"role": "document frame", "name": "Assistant message"}, "text_contains": "Fixture output 199"},
+    {"action": "checkpoint", "selector": {"role": "StaticText"}, "reference": {"role": "StaticText"}, "native": {"role": "document frame"}, "text_contains": "Fixture output 199"},
     {"action": "checkpoint", "selector": {"role": "button", "name": "Working 1", "expanded": true}, "count": 1},
     {"action": "checkpoint", "selector": {"role": "button", "name": "Shelf working fixture, Working, UI parity"}, "count": 1},
     {"action": "checkpoint", "selector": {"role": "button", "name": "Snoozed 1", "expanded": true}, "count": 1},
