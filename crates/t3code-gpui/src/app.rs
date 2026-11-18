@@ -1715,10 +1715,6 @@ pub fn run(
         .with_assets(crate::appearance::Assets)
         .run(move |cx| {
             gpui_kit::init(cx);
-            cx.bind_keys([
-                KeyBinding::new("enter", gpui_kit::NoAction, Some("DiagramImage")),
-                KeyBinding::new("space", gpui_kit::NoAction, Some("DiagramImage")),
-            ]);
             crate::timestamp::initialize(settings.timestamp_format, cx)
                 .expect("initialize timestamp formatting");
             crate::appearance::apply(settings.light_theme, cx);

@@ -445,15 +445,7 @@ impl Render for DiagramView {
                             let Some(graphic) = graphic.clone() else {
                                 return;
                             };
-                            let viewer = cx.new(|cx| DiagramImage {
-                                graphic,
-                                zoom: 1.,
-                                scroll: ScrollHandle::new(),
-                                drag: None,
-                                dragged: false,
-                                focus: cx.focus_handle(),
-                                viewport: None,
-                            });
+                            let viewer = cx.new(|cx| DiagramImage::new(graphic, cx));
                             window.open_dialog(cx, move |dialog, window, _| {
                                 dialog
                                     .accessibility_label("Expanded image preview")
@@ -510,9 +502,44 @@ struct DiagramImage {
     dragged: bool,
     focus: FocusHandle,
     viewport: Option<Size<Pixels>>,
+    _keys: Subscription,
 }
 
 impl DiagramImage {
+    fn new(graphic: Graphic, cx: &mut Context<Self>) -> Self {
+        let weak = cx.entity().downgrade();
+        let keys = cx.intercept_keystrokes(move |event, window, cx| {
+            let handled = weak.update(cx, |view, cx| {
+                let key = &event.keystroke;
+                if !view.focus.is_focused(window)
+                    || key.modifiers.control
+                    || key.modifiers.platform
+                    || key.modifiers.alt
+                    || !matches!(key.key.as_str(), "enter" | "space")
+                {
+                    return false;
+                }
+                if !event.is_held {
+                    view.zoom(if view.zoom > 1. { 1. } else { 2. }, cx);
+                }
+                true
+            });
+            if handled.is_ok_and(|handled| handled) {
+                cx.stop_propagation();
+            }
+        });
+        Self {
+            graphic,
+            zoom: 1.,
+            scroll: ScrollHandle::new(),
+            drag: None,
+            dragged: false,
+            focus: cx.focus_handle(),
+            viewport: None,
+            _keys: keys,
+        }
+    }
+
     fn zoom(&mut self, value: f32, cx: &mut Context<Self>) {
         self.zoom_at(value, None, cx);
     }
@@ -548,7 +575,6 @@ impl Render for DiagramImage {
         let fit = (width / self.graphic.width).min(height / self.graphic.height);
         div()
             .id("diagram-zoom")
-            .key_context("DiagramImage")
             .bg(black())
             .border_1()
             .border_color(white().opacity(0.08))
@@ -576,9 +602,6 @@ impl Render for DiagramImage {
                     return;
                 }
                 match event.keystroke.key.as_str() {
-                    "enter" | "space" if !event.is_held => {
-                        view.zoom(if view.zoom > 1. { 1. } else { 2. }, cx)
-                    }
                     "+" | "=" => view.zoom(view.zoom * 1.5, cx),
                     "-" => view.zoom(view.zoom / 1.5, cx),
                     "0" => view.zoom(1., cx),
