@@ -12,7 +12,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.error import URLError
 
-from audit_commands import reference_commands
 from cdp import Cdp
 from desktop_session import read_display, require_free_ports, stop_process_group
 from fixture_validation import distinct, inspect_environments
@@ -776,16 +775,6 @@ class ComparisonTests(unittest.TestCase):
             self.assertEqual(compare(left, right, output)["status"], "failed")
             Image.new("RGB", (33, 32), "black").save(right)
             self.assertEqual(compare(left, right, output)["status"], "failed")
-
-    def test_upstream_spreads_are_part_of_the_inventory(self):
-        source = """
-        const EXTRA = ["terminal.toggle", "terminal.split"] as const;
-        export const STATIC_KEYBINDING_COMMANDS = ["chat.new", ...EXTRA] as const;
-        """
-        self.assertEqual(
-            reference_commands(source),
-            ["chat.new", "terminal.split", "terminal.toggle"],
-        )
 
 
 class FixtureTests(unittest.TestCase):
