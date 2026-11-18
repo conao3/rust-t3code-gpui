@@ -16,7 +16,11 @@ pub(super) struct State {
     #[serde(skip)]
     tab_scroll: ScrollHandle,
     #[serde(skip)]
-    terminals: HashMap<String, Entity<crate::terminal_view::TerminalView>>,
+    terminals: HashMap<String, Entity<crate::terminal::Drawer>>,
+    #[serde(default)]
+    terminal_layouts: HashMap<String, Value>,
+    #[serde(skip)]
+    terminal_subscriptions: HashMap<String, Subscription>,
     #[serde(skip)]
     diff: diff_controls::State,
     #[serde(skip)]
@@ -65,7 +69,16 @@ pub(super) struct TabAction {
 }
 
 impl Root {
-    pub(super) fn panel_tab_action(&mut self, action: &TabAction, cx: &mut Context<Self>) {
+    pub(super) fn panel_tab_action(
+        &mut self,
+        action: &TabAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if action.kind == "close" {
+            self.request_close_panel_tab(&action.id, window, cx);
+            return;
+        }
         let Some(index) = self.right_panel.tabs.iter().position(|id| id == &action.id) else {
             return;
         };
@@ -242,6 +255,74 @@ impl Root {
         cx.notify();
     }
 
+    pub(super) fn request_close_panel_tab(
+        &mut self,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !id.starts_with("terminal:") {
+            self.close_panel_tab(id, cx);
+            return;
+        }
+        let labels = self
+            .right_panel
+            .terminals
+            .get(id)
+            .map(|drawer| drawer.read(cx).close_labels(cx))
+            .unwrap_or_else(|| {
+                self.right_panel
+                    .terminal_layouts
+                    .get(id)
+                    .map(|value| {
+                        crate::terminal::Layout::from_value(value)
+                            .ids()
+                            .iter()
+                            .map(|id| crate::terminal::label(id, ""))
+                            .collect()
+                    })
+                    .unwrap_or_else(|| vec![panel_title(id)])
+            });
+        let (title, description) = if labels.len() == 1 {
+            (
+                format!("Close terminal \"{}\"?", labels[0]),
+                "This stops the running process and clears its history.".to_string(),
+            )
+        } else {
+            (
+                format!("Close {} terminals?", labels.len()),
+                format!(
+                    "This stops their running processes and clears their histories: {}.",
+                    labels
+                        .iter()
+                        .map(|label| format!("\"{label}\""))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )
+        };
+        let owner = cx.entity().downgrade();
+        let id = id.to_string();
+        window.open_alert_dialog(cx, move |dialog, _, _| {
+            let owner = owner.clone();
+            let id = id.clone();
+            dialog
+                .title(title.clone())
+                .description(description.clone())
+                .centered()
+                .confirm()
+                .button_props(
+                    gpui_kit::component::dialog::DialogButtonProps::default()
+                        .ok_text("Confirm")
+                        .ok_variant(gpui_kit::component::button::ButtonVariant::Danger),
+                )
+                .on_ok(move |_, _, cx| {
+                    let _ = owner.update(cx, |root, cx| root.close_panel_tab(&id, cx));
+                    true
+                })
+        });
+    }
+
     pub(super) fn close_panel_tab(&mut self, id: &str, cx: &mut Context<Self>) {
         let Some(index) = self.right_panel.tabs.iter().position(|tab| tab == id) else {
             return;
@@ -254,13 +335,28 @@ impl Root {
         }
         if let Some(terminal) = id.strip_prefix("terminal:") {
             self.right_panel.terminals.remove(id);
-            if let Some((environment, thread)) = self.current()
+            self.right_panel.terminal_subscriptions.remove(id);
+            let terminals = self
+                .right_panel
+                .terminal_layouts
+                .remove(id)
+                .map(|layout| crate::terminal::Layout::from_value(&layout).ids())
+                .unwrap_or_else(|| vec![terminal.to_string()]);
+            if let Some((environment, thread)) = self.right_panel_target.clone()
                 && let Some(connection) = self.connection(&environment)
             {
-                let terminal = terminal.to_string();
                 let runtime = self.runtime.clone();
                 cx.spawn(async move |this, cx| {
-                    let result = on_runtime(&runtime, async move { connection.request("terminal.close", json!({"threadId":thread,"terminalId":terminal,"deleteHistory":true})).await }).await;
+                    let result = on_runtime(&runtime, async move {
+                        let mut errors = Vec::new();
+                        for terminal in terminals {
+                            if let Err(error) = connection.request("terminal.close", json!({"threadId":thread,"terminalId":terminal,"deleteHistory":true})).await {
+                                errors.push(format!("{error:#}"));
+                            }
+                        }
+                        anyhow::ensure!(errors.is_empty(), "{}", errors.join("; "));
+                        Ok::<_, anyhow::Error>(())
+                    }).await;
                     let _ = this.update(cx, |root, cx| { if let Err(error) = result { root.message = Some(format!("Could not close terminal: {error:#}")); cx.notify(); } });
                 }).detach();
             }
@@ -269,12 +365,7 @@ impl Root {
         if self.right_panel.active.as_deref() == Some(id) {
             self.file_panel = None;
             self.right_panel.active = None;
-            if let Some(next) = self
-                .right_panel
-                .tabs
-                .get(index.min(self.right_panel.tabs.len().saturating_sub(1)))
-                .cloned()
-            {
+            if let Some(next) = self.right_panel.tabs.last().cloned() {
                 self.activate_panel(next, cx);
                 self.load_active_surface(cx);
             } else {
@@ -339,6 +430,23 @@ impl Root {
                 }));
             self.panel_revision += 1;
         }
+        let configuration = crate::terminal::DrawerConfig {
+            panel: true,
+            light: self.settings.light_theme,
+            font_size: self.settings.font_size_code,
+            shortcuts: [
+                "terminal.split",
+                "terminal.splitVertical",
+                "terminal.new",
+                "terminal.close",
+            ]
+            .map(|command| {
+                keymap::command_label(&self.key_rules, command, &|name| {
+                    matches!(name, "terminalFocus" | "terminalOpen")
+                        || self.key_context(name, window, cx)
+                })
+            }),
+        };
         if let Some(id) = self
             .right_panel
             .active
@@ -359,33 +467,84 @@ impl Root {
                 read_only: false,
                 restart_if_not_running: false,
             };
+            let layout = self
+                .right_panel
+                .terminal_layouts
+                .get(&id)
+                .map(crate::terminal::Layout::from_value)
+                .unwrap_or_else(|| {
+                    let mut layout = crate::terminal::Layout {
+                        open: true,
+                        ..Default::default()
+                    };
+                    layout.add(id[9..].into(), None);
+                    layout
+                });
+            self.right_panel
+                .terminal_layouts
+                .insert(id.clone(), layout.value());
             let terminal = cx.new(|cx| {
-                crate::terminal_view::TerminalView::new(
-                    connection,
+                crate::terminal::Drawer::new(
+                    layout,
                     target,
-                    self.settings.light_theme,
-                    self.settings.font_size_code,
-                    &self.runtime,
+                    connection,
+                    self.runtime.clone(),
+                    configuration.clone(),
                     window,
                     cx,
                 )
             });
-            terminal.read(cx).focus.clone().focus(window, cx);
+            terminal.update(cx, |terminal, cx| terminal.focus(window, cx));
+            let key = id.clone();
+            let owner = self.right_panel_target.clone();
+            let subscription =
+                cx.subscribe_in(&terminal, window, move |root, _, event, window, cx| {
+                    if root.right_panel_target != owner {
+                        if let crate::terminal::DrawerEvent::Changed(layout) = event
+                            && let Some(state) = owner
+                                .as_ref()
+                                .and_then(|owner| root.right_panel_threads.get_mut(owner))
+                        {
+                            state.terminal_layouts.insert(key.clone(), layout.value());
+                            root.save_right_panel();
+                        }
+                        return;
+                    }
+                    match event {
+                        crate::terminal::DrawerEvent::Changed(layout) => {
+                            root.right_panel
+                                .terminal_layouts
+                                .insert(key.clone(), layout.value());
+                            if layout.ids().is_empty() {
+                                root.close_panel_tab(&key, cx);
+                            }
+                            root.panel_revision += 1;
+                            root.save_right_panel();
+                            cx.notify();
+                        }
+                        crate::terminal::DrawerEvent::Focus => {
+                            root.jump_hints = false;
+                            cx.notify();
+                        }
+                        crate::terminal::DrawerEvent::AddTerminal(split) => {
+                            root.add_panel_terminal(*split, window, cx)
+                        }
+                    }
+                });
+            self.right_panel
+                .terminal_subscriptions
+                .insert(id.clone(), subscription);
             self.right_panel.terminals.insert(id, terminal);
             self.panel_revision += 1;
         }
         for (id, terminal) in &self.right_panel.terminals {
             terminal.update(cx, |view, cx| {
-                view.set_visible(
-                    self.right_panel.open && self.right_panel.active.as_ref() == Some(id),
-                    cx,
-                );
                 view.configure(
-                    self.settings.light_theme,
-                    self.settings.font_size_code,
+                    self.right_panel.open && self.right_panel.active.as_ref() == Some(id),
+                    configuration.clone(),
                     window,
                     cx,
-                );
+                )
             });
         }
         let file = self.file_panel.as_ref().map(|p| {
@@ -441,7 +600,7 @@ impl Root {
                     .overflow_x_scroll()
                     .track_scroll(&self.right_panel.tab_scroll)
                     .children(self.right_panel.tabs.iter().map(|id| {
-                        let label = self.side_chat_title(id).unwrap_or_else(|| panel_title(id));
+                        let label = self.surface_title(id, cx);
                         let select = id.clone();
                         let close = id.clone();
                         let menu_id = id.clone();
@@ -473,8 +632,8 @@ impl Root {
                             }))
                             .on_mouse_up(
                                 MouseButton::Middle,
-                                cx.listener(move |root, _, _, cx| {
-                                    root.close_panel_tab(&middle_id, cx)
+                                cx.listener(move |root, _, window, cx| {
+                                    root.request_close_panel_tab(&middle_id, window, cx)
                                 }),
                             )
                             .min_w_0()
@@ -512,8 +671,8 @@ impl Root {
                                     .size(px(20.))
                                     .p_0()
                                     .accessibility_label(format!("Close {label}"))
-                                    .on_click(cx.listener(move |root, _, _, cx| {
-                                        root.close_panel_tab(&close, cx)
+                                    .on_click(cx.listener(move |root, _, window, cx| {
+                                        root.request_close_panel_tab(&close, window, cx)
                                     })),
                             )
                             .child(
@@ -712,7 +871,7 @@ impl Root {
                 self.right_panel
                     .active
                     .as_deref()
-                    .map(|id| format!("Workspace panel: {}", panel_title(id)))
+                    .map(|id| format!("Workspace panel: {}", self.surface_title(id, cx)))
                     .unwrap_or_else(|| "Workspace panel".into()),
             )
             .track_focus(&self.panel_focus)
@@ -851,33 +1010,104 @@ impl Root {
             .into_any_element()
     }
 
-    fn open_panel_surface(&mut self, label: &str, window: &mut Window, cx: &mut Context<Self>) {
+    fn surface_title(&self, id: &str, cx: &App) -> String {
+        self.right_panel
+            .terminals
+            .get(id)
+            .map(|view| view.read(cx).active_label(cx))
+            .or_else(|| self.side_chat_title(id))
+            .unwrap_or_else(|| panel_title(id))
+    }
+
+    pub(super) fn next_terminal_id(&self, reusable: bool) -> String {
+        let mut ids = self
+            .terminal_key()
+            .map(|key| self.terminal_store.get(&key).ids())
+            .unwrap_or_default();
+        for layout in self.right_panel.terminal_layouts.values() {
+            ids.extend(crate::terminal::Layout::from_value(layout).ids());
+        }
+        ids.extend(
+            self.right_panel
+                .tabs
+                .iter()
+                .filter(|id| !self.right_panel.terminal_layouts.contains_key(*id))
+                .filter_map(|id| id.strip_prefix("terminal:").map(str::to_owned)),
+        );
+        crate::terminal::next_id(ids, reusable)
+    }
+
+    pub(super) fn panel_terminal_focused(&self, window: &Window, cx: &App) -> bool {
+        self.right_panel.open
+            && self
+                .right_panel
+                .terminals
+                .values()
+                .any(|view| view.read(cx).is_focused(window, cx))
+    }
+
+    pub(super) fn add_panel_terminal(
+        &mut self,
+        split: Option<bool>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.with_main_conversation(|root| root.add_main_panel_terminal(split, window, cx));
+    }
+
+    fn add_main_panel_terminal(
+        &mut self,
+        split: Option<bool>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if split.is_none() {
+            self.open_panel_surface("Terminal", window, cx);
+            return;
+        }
+        let id = self.next_terminal_id(false);
+        if let Some(view) = self
+            .right_panel
+            .active
+            .as_ref()
+            .and_then(|id| self.right_panel.terminals.get(id))
+            .cloned()
+        {
+            view.update(cx, |view, cx| view.insert(id, split, window, cx));
+        }
+    }
+
+    pub(super) fn close_focused_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let terminal = if self.panel_terminal_focused(window, cx) {
+            self.right_panel
+                .active
+                .as_ref()
+                .and_then(|id| self.right_panel.terminals.get(id))
+                .cloned()
+        } else {
+            self.terminal_key()
+                .and_then(|key| self.terminal_drawers.get(&key))
+                .cloned()
+        };
+        if let Some(terminal) = terminal {
+            terminal.update(cx, |view, cx| view.close_active(window, cx));
+        }
+    }
+
+    pub(super) fn open_panel_surface(
+        &mut self,
+        label: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if label == "Side chat" {
             self.with_main_conversation(|root| root.open_side_chat(window, cx));
             return;
         }
         self.right_panel.launcher = false;
         if label == "Terminal" {
-            let mut number = 1;
-            let existing = self
-                .terminal_key()
-                .map(|key| self.terminal_store.get(&key).ids())
-                .unwrap_or_default();
-            while existing
-                .iter()
-                .any(|id| id.starts_with(&format!("term-{number}")))
-                || self
-                    .right_panel
-                    .tabs
-                    .iter()
-                    .any(|id| id.starts_with(&format!("terminal:term-{number}")))
-            {
-                number += 1;
-            }
-            self.activate_panel(
-                format!("terminal:term-{number}-{}", uuid::Uuid::new_v4()),
-                cx,
-            );
+            let terminal = self.next_terminal_id(false);
+            self.activate_panel(format!("terminal:{terminal}"), cx);
         } else {
             let id = match label {
                 "Browser" => "browser",

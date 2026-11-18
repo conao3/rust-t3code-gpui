@@ -754,6 +754,10 @@ impl Root {
 
     pub(super) fn close_file_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(id) = self.right_panel.active.clone() {
+            if id.starts_with("terminal:") {
+                self.request_close_panel_tab(&id, window, cx);
+                return;
+            }
             self.close_panel_tab(&id, cx);
         }
         self.file_find_open = false;

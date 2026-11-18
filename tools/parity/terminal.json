@@ -10,13 +10,13 @@
     {"action": "checkpoint", "selector": {"role": "button", "name": "Split Terminal Horizontally (Ctrl+D)"}},
     {"action": "checkpoint", "selector": {"role": "StaticText"}, "native": {"role": "document frame", "name": "Assistant message"}, "text_contains": "Fixture output 199"},
     {"action": "press", "value": "ctrl+d"},
-    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Terminal input"}, "native": {"role": "terminal"}, "count": 2},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Terminal input"}, "native": {"role": "textbox", "name": "Terminal input"}, "count": 2},
     {"action": "press", "value": "ctrl+shift+d"},
-    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Terminal input"}, "native": {"role": "terminal"}, "count": 3},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Terminal input"}, "native": {"role": "textbox", "name": "Terminal input"}, "count": 3},
     {"action": "press", "value": "ctrl+j"},
     {"action": "checkpoint", "selector": {"role": "button", "name": "Split Terminal Horizontally (Ctrl+D)"}, "count": 0},
     {"action": "press", "value": "ctrl+j"},
-    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Terminal input"}, "native": {"role": "terminal"}, "count": 3},
+    {"action": "checkpoint", "selector": {"role": "textbox", "name": "Terminal input"}, "native": {"role": "textbox", "name": "Terminal input"}, "count": 3},
     {"action": "checkpoint", "selector": {"role": "StaticText"}, "native": {"role": "document frame", "name": "Assistant message"}, "text_contains": "Fixture output 199"}
   ]
 }

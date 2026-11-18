@@ -1020,10 +1020,13 @@ impl Root {
             "terminalOpen" => self
                 .terminal_key()
                 .is_some_and(|key| self.terminal_store.get(&key).open),
-            "terminalFocus" => self
-                .terminal_key()
-                .and_then(|key| self.terminal_drawers.get(&key))
-                .is_some_and(|drawer| drawer.read(cx).is_focused(window, cx)),
+            "terminalFocus" => {
+                self.panel_terminal_focused(window, cx)
+                    || self
+                        .terminal_key()
+                        .and_then(|key| self.terminal_drawers.get(&key))
+                        .is_some_and(|drawer| drawer.read(cx).is_focused(window, cx))
+            }
             "isDesktop" => true,
             "modelPickerOpen" => self.conversation.picker_open,
             "usagePageOpen" => {
@@ -1457,7 +1460,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &CopyPullRequestNumber, _, cx| root.copy_pull_request_number(cx)))
             .on_action(cx.listener(|root, action: &git_controls::GitAction, window, cx| root.git_action(action, window, cx)))
             .on_action(cx.listener(|root, action: &diff_controls::SelectDiff, _, cx| root.select_diff(action, cx)))
-            .on_action(cx.listener(|root, action: &right_panel::TabAction, _, cx| root.panel_tab_action(action, cx)))
+            .on_action(cx.listener(|root, action: &right_panel::TabAction, window, cx| root.panel_tab_action(action, window, cx)))
             .on_action(cx.listener(|root, _: &ToggleRightPanel, window, cx| root.toggle_right_panel(window, cx)))
             .on_action(cx.listener(|root, _: &NewRightPanel, window, cx| root.new_panel(window, cx)))
             .on_action(cx.listener(|root, _: &MaximizeRightPanel, window, cx| {
@@ -1490,9 +1493,7 @@ impl Render for Root {
             .on_action(cx.listener(|root, _: &SplitTerminalVertical, window, cx| root.add_terminal(Some(true), window, cx)))
             .on_action(cx.listener(|root, _: &NewTerminal, window, cx| root.add_terminal(None, window, cx)))
             .on_action(cx.listener(|root, _: &CloseTerminal, window, cx| {
-                if let Some(drawer) = root.terminal_key().and_then(|key| root.terminal_drawers.get(&key)).cloned() {
-                    drawer.update(cx, |drawer, cx| drawer.close_active(window, cx));
-                }
+                root.close_focused_terminal(window, cx);
             }))
             .on_action(
                 cx.listener(|root, _: &ManageHosts, window, cx| root.toggle_hosts(window, cx)),
