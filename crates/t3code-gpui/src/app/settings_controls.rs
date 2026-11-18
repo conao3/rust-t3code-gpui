@@ -65,6 +65,10 @@ fn select_search(
 
 fn select_value(key: &str, value: &Value) -> String {
     match key {
+        "sourceControlWritingStyle" => value["mode"]
+            .as_str()
+            .expect("writing style mode")
+            .to_string(),
         "pullRequestMergeMethod" if value.is_null() => "last".to_string(),
         "diffFilesCollapsed" => if value == true {
             "collapsed"
@@ -86,6 +90,7 @@ pub(super) struct SettingRow {
     definition: Setting,
     value: Value,
     input: Entity<InputState>,
+    writing_input: Entity<TextareaState>,
     select: Option<Entity<choice_select::State>>,
     font_family: Option<Entity<Choices>>,
     font_family_value: String,
@@ -94,6 +99,7 @@ pub(super) struct SettingRow {
     slider_focus: FocusHandle,
     subscriptions: Vec<Subscription>,
     validation_error: Option<String>,
+    previews: Option<Entity<settings_font_previews::FontPreviews>>,
 }
 
 impl SettingRow {
@@ -115,9 +121,20 @@ impl SettingRow {
             let input = InputState::new(window, cx).default_value(text);
             if let Control::Number(min, max) | Control::Font(_, min, max) = definition.control {
                 input.min(min).max(max).step(1.)
+            } else if let Control::Retention(min) = definition.control {
+                input
+                    .default_value(value.as_i64().unwrap_or(8).to_string())
+                    .min(min)
+                    .max(3650.)
             } else {
                 input
             }
+        });
+        let writing_input = cx.new(|cx| {
+            let mut input = TextareaState::new(window, cx).placeholder("Keep commit subjects under 60 characters. Keep pull request descriptions short and plain.");
+            input.set_auto_grow(4, 10, cx);
+            input.set_value(value["customInstructions"].as_str().unwrap_or_default(), window, cx);
+            input
         });
         let select = match definition.control {
             Control::Select(options) => Some(choice_select::state(
@@ -169,6 +186,11 @@ impl SettingRow {
         } else {
             None
         };
+        let previews = matches!(definition.control, Control::Font(..)).then(|| {
+            cx.new(|cx| {
+                settings_font_previews::FontPreviews::new(root.clone(), definition.key, window, cx)
+            })
+        });
         let mut view = Self {
             root,
             environment,
@@ -176,6 +198,7 @@ impl SettingRow {
             definition,
             value,
             input,
+            writing_input,
             select,
             font_family,
             font_family_value,
@@ -184,7 +207,27 @@ impl SettingRow {
             slider_focus: cx.focus_handle(),
             subscriptions: vec![],
             validation_error: None,
+            previews,
         };
+        view.subscriptions.push(cx.subscribe(
+            &view.writing_input,
+            |view, input, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Blur) {
+                    let mut value = view.value.clone();
+                    value["customInstructions"] = json!(input.read(cx).value().trim());
+                    if value != view.value {
+                        view.save(
+                            if view.project.is_some() {
+                                value
+                            } else {
+                                json!({"customInstructions":value["customInstructions"]})
+                            },
+                            cx,
+                        );
+                    }
+                }
+            },
+        ));
         if let Some(slider) = &view.slider {
             view.subscriptions
                 .push(cx.subscribe(slider, |view, _, event: &SliderEvent, cx| {
@@ -207,9 +250,12 @@ impl SettingRow {
             window,
             |view, input, event: &NumberInputEvent, window, cx| {
                 let NumberInputEvent::Step(action) = event;
-                if let Control::Number(min, max) | Control::Font(_, min, max) =
-                    view.definition.control
-                {
+                let limits = match view.definition.control {
+                    Control::Number(min, max) | Control::Font(_, min, max) => Some((min, max)),
+                    Control::Retention(min) => Some((min, 3650.)),
+                    _ => None,
+                };
+                if let Some((min, max)) = limits {
                     let current = input
                         .read(cx)
                         .value()
@@ -262,6 +308,15 @@ impl SettingRow {
                 |view, _, event: &SelectEvent<_>, _, cx| {
                     if let SelectEvent::Confirm(Some(value)) = event {
                         let value = match view.definition.key {
+                            "sourceControlWritingStyle" => {
+                                if view.project.is_none() {
+                                    view.save(json!({"mode":*value}), cx);
+                                    return;
+                                }
+                                let mut style = view.value.clone();
+                                style["mode"] = json!(*value);
+                                style
+                            }
                             "pullRequestMergeMethod" if *value == "last" => Value::Null,
                             "diffFilesCollapsed" => json!(*value == "collapsed"),
                             "browserRecordingFrameRate" => {
@@ -341,6 +396,15 @@ impl SettingRow {
     ) {
         if self.value != value {
             self.value = value.clone();
+            if self.definition.key == "sourceControlWritingStyle" {
+                self.writing_input.update(cx, |input, cx| {
+                    input.set_value(
+                        value["customInstructions"].as_str().unwrap_or_default(),
+                        window,
+                        cx,
+                    )
+                });
+            }
             self.validation_error = None;
             if let Some(slider) = &self.slider {
                 slider.update(cx, |slider, cx| {
@@ -357,7 +421,10 @@ impl SettingRow {
                     select.set_selected_value(selected, window, cx)
                 });
             }
-            if matches!(self.definition.control, Control::Text | Control::Number(..)) {
+            if matches!(
+                self.definition.control,
+                Control::Text | Control::Number(..) | Control::Retention(..)
+            ) {
                 let text = value
                     .as_str()
                     .map(str::to_string)
@@ -385,6 +452,10 @@ impl SettingRow {
     fn commit(&mut self, cx: &mut Context<Self>) {
         let text = self.input.read(cx).value().to_string();
         let value = match self.definition.control {
+            Control::Retention(min) => match text.parse::<f64>() {
+                Ok(number) if number.is_finite() => json!(number.round().clamp(min, 3650.) as i64),
+                _ => return,
+            },
             Control::Number(min, max) | Control::Font(_, min, max) => match text.parse::<f64>() {
                 Ok(number) if number.is_finite() && (min..=max).contains(&number) => {
                     json!(number.round() as i64)
@@ -436,6 +507,7 @@ impl Render for SettingRow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let label = self.definition.label;
         let accessible_label = match self.definition.key {
+            "reviewGuidesEnabled" => "Review guides",
             "wordWrap" => "Wrap code, diffs, and file previews by default",
             "timestampFormat" => "Timestamp format",
             "defaultAutoPull" => "Default automatic pull",
@@ -470,6 +542,21 @@ impl Render for SettingRow {
             "Keeps this project's default branch current when the checkout has no local changes or commits.".to_string()
         } else if key == "pullRequestMergeMethod" && self.project.is_some() {
             "Pull requests in this project start with this method.".to_string()
+        } else if key == "storageCleanup.worktreeKeepWhen" {
+            match value.as_str() {
+                Some("tracked-changes") => "Deletes untracked and ignored files, including .env.",
+                Some("uncommitted-changes") => {
+                    "Keeps edits and untracked files. Deletes ignored files, including .env."
+                }
+                _ => self.definition.description,
+            }
+            .to_string()
+        } else if key == "sourceControlWritingStyle" {
+            match value["mode"].as_str() {
+                Some("conventional_commits") => "Conventional Commit prefixes, with short pull request titles and descriptions.",
+                Some("custom") => "Your instructions shape commit messages and pull request titles and descriptions.",
+                _ => self.definition.description,
+            }.to_string()
         } else if key == "followUpBehavior" {
             let shortcut = self
                 .root
@@ -573,6 +660,26 @@ impl Render for SettingRow {
                 )
                 .child(self.range_slider(accessible_label, cx))
                 .into_any_element(),
+            Control::Retention(_) => h_flex()
+                .gap_3()
+                .when(value.is_null(), |row| row.child(text("Off").text_xs()))
+                .when(!value.is_null(), |row| {
+                    row.child(
+                        NumberInput::new(&self.input)
+                            .accessibility_label(format!("{label} in days"))
+                            .step_labels(format!("Decrease {label}"), format!("Increase {label}"))
+                            .w(px(130.)),
+                    )
+                })
+                .child(
+                    Switch::new("retention-enabled")
+                        .accessibility_label(label)
+                        .checked(!value.is_null())
+                        .on_change(cx.listener(|view, enabled, _, cx| {
+                            view.save(if *enabled { json!(8) } else { Value::Null }, cx)
+                        })),
+                )
+                .into_any_element(),
             Control::Number(_, _) => NumberInput::new(&self.input)
                 .accessibility_label(accessible_label)
                 .step_labels("Decrease", "Increase")
@@ -599,78 +706,164 @@ impl Render for SettingRow {
                 )
                 .into_any_element(),
         };
-        h_flex()
-            .id(key)
-            .role(accesskit::Role::Group)
-            .aria_label(label)
-            .gap_4()
-            .px_4()
-            .py_3()
-            .border_b_1()
-            .border_color(cx.theme().border)
+        v_flex()
             .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap(px(2.))
-                    .child(text(label).text_sm())
+                h_flex()
+                    .id(key)
+                    .role(accesskit::Role::Group)
+                    .aria_label(label)
+                    .gap_4()
+                    .px_4()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
                     .child(
-                        settings_labs::description(key, &self.root, cx).unwrap_or_else(|| {
-                            text(description)
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .into_any_element()
-                        }),
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap(px(2.))
+                            .child(h_flex().gap_1().child(text(label).text_sm()).when(
+                                self.definition.server,
+                                |row| {
+                                    let value = self.value.clone();
+                                    let default = self.definition.default.clone();
+                                    let config = self
+                                        .root
+                                        .upgrade()
+                                        .and_then(|root| root.read(cx).config_of(&self.environment))
+                                        .unwrap_or(Value::Null);
+                                    let environment = config["environment"]["label"]
+                                        .as_str()
+                                        .unwrap_or(&self.environment)
+                                        .to_string();
+                                    let project_override = self
+                                        .project
+                                        .as_deref()
+                                        .and_then(|project| {
+                                            config["settings"]["projectSettingsOverrides"][project]
+                                                .get(key)
+                                        })
+                                        .is_some();
+                                    let summary = if project_override {
+                                        "Set on the project"
+                                    } else if self.value == self.definition.default {
+                                        "Built-in default"
+                                    } else {
+                                        "Set on the environment"
+                                    };
+                                    row.child(
+                                        gpui_kit::component::popover::Popover::new(
+                                            "setting-inheritance",
+                                        )
+                                        .anchor(Anchor::BottomRight)
+                                        .trigger(
+                                            Button::new("setting-inheritance-trigger")
+                                                .icon(gpui_kit::assets::IconName::Layers)
+                                                .accessibility_label(format!(
+                                                    "{summary}. Show where this value comes from"
+                                                ))
+                                                .ghost()
+                                                .compact(),
+                                        )
+                                        .content(
+                                            move |_, _, _| {
+                                                v_flex()
+                                                    .gap_2()
+                                                    .max_w(px(360.))
+                                                    .child(
+                                                        text(label)
+                                                            .font_weight(FontWeight::SEMIBOLD),
+                                                    )
+                                                    .child(text(environment.clone()))
+                                                    .child(text(format!(
+                                                        "{summary}: {}",
+                                                        setting_display(&value)
+                                                    )))
+                                                    .child(text(format!(
+                                                        "Default: {}",
+                                                        setting_display(&default)
+                                                    )))
+                                            },
+                                        ),
+                                    )
+                                },
+                            ))
+                            .child(
+                                settings_labs::description(key, &self.root, cx).unwrap_or_else(
+                                    || {
+                                        text(description)
+                                            .text_xs()
+                                            .text_color(cx.theme().muted_foreground)
+                                            .into_any_element()
+                                    },
+                                ),
+                            )
+                            .when_some(denial, |view, denial| {
+                                view.child(
+                                    text(denial)
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground),
+                                )
+                            }),
                     )
-                    .when_some(denial, |view, denial| {
-                        view.child(
-                            text(denial)
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground),
-                        )
-                    }),
+                    .when(
+                        self.project.is_some()
+                            || self.value != self.definition.default
+                            || self.font_family.as_ref().is_some_and(|font| {
+                                font.read(cx)
+                                    .selected_value()
+                                    .is_some_and(|value| !value.is_empty())
+                            }),
+                        |row| {
+                            row.child(
+                                Button::new("reset")
+                                    .icon(gpui_kit::assets::IconName::Undo2)
+                                    .accessibility_label(format!(
+                                        "Reset {} to default",
+                                        match key {
+                                            "showSkillsInSlashMenu" =>
+                                                "skills in slash menu".to_string(),
+                                            "defaultAutoPull" =>
+                                                "default automatic pull".to_string(),
+                                            "removeAgentCreditsOnMerge" =>
+                                                "agent credit removal".to_string(),
+                                            _ => label.to_lowercase(),
+                                        }
+                                    ))
+                                    .ghost()
+                                    .compact()
+                                    .on_click(cx.listener(|view, _, _, cx| view.reset(cx))),
+                            )
+                        },
+                    )
+                    .child(v_flex().gap_1().child(control).when_some(
+                        self.validation_error.clone(),
+                        |view, error| {
+                            view.child(
+                                div()
+                                    .id("invalid-setting")
+                                    .role(accesskit::Role::Alert)
+                                    .text_xs()
+                                    .text_color(cx.theme().danger)
+                                    .child(error),
+                            )
+                        },
+                    )),
             )
             .when(
-                self.project.is_some()
-                    || self.value != self.definition.default
-                    || self.font_family.as_ref().is_some_and(|font| {
-                        font.read(cx)
-                            .selected_value()
-                            .is_some_and(|value| !value.is_empty())
-                    }),
-                |row| {
-                    row.child(
-                        Button::new("reset")
-                            .icon(gpui_kit::assets::IconName::Undo2)
-                            .accessibility_label(format!(
-                                "Reset {} to default",
-                                match key {
-                                    "showSkillsInSlashMenu" => "skills in slash menu".to_string(),
-                                    "defaultAutoPull" => "default automatic pull".to_string(),
-                                    "removeAgentCreditsOnMerge" =>
-                                        "agent credit removal".to_string(),
-                                    _ => label.to_lowercase(),
-                                }
-                            ))
-                            .ghost()
-                            .compact()
-                            .on_click(cx.listener(|view, _, _, cx| view.reset(cx))),
+                self.definition.key == "sourceControlWritingStyle"
+                    && matches!(self.definition.control, Control::Select(_))
+                    && self.value["mode"] == "custom",
+                |view| {
+                    view.child(
+                        div().px_4().pb_4().child(
+                            Textarea::new(&self.writing_input)
+                                .aria_label("Custom commit and pull request instructions"),
+                        ),
                     )
                 },
             )
-            .child(v_flex().gap_1().child(control).when_some(
-                self.validation_error.clone(),
-                |view, error| {
-                    view.child(
-                        div()
-                            .id("invalid-setting")
-                            .role(accesskit::Role::Alert)
-                            .text_xs()
-                            .text_color(cx.theme().danger)
-                            .child(error),
-                    )
-                },
-            ))
+            .when_some(self.previews.clone(), |view, previews| view.child(previews))
     }
 }
 
@@ -769,4 +962,13 @@ fn monospace_family(family: &str, cx: &App) -> bool {
                     .all(|advance| (*advance - advances[0]).abs() < 0.01)
         })
     })
+}
+
+fn setting_display(value: &Value) -> String {
+    match value {
+        Value::Bool(value) => if *value { "On" } else { "Off" }.to_string(),
+        Value::Null => "Not set".to_string(),
+        Value::String(value) => value.clone(),
+        _ => value.to_string(),
+    }
 }

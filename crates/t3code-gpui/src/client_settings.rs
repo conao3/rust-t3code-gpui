@@ -74,7 +74,7 @@ impl ClientSettings {
                     .and_then(Value::as_bool)
                     == Some(true)
             }),
-            light_theme: text("gpuiAppearance") == Some("light"),
+            light_theme: text("t3code:theme-appearance-mode") == Some("light"),
             preferred_editor: text("gpuiPreferredEditor").map(str::to_string),
             timestamp_format: crate::timestamp::Format::from_setting(text("timestampFormat")),
         }
@@ -107,6 +107,16 @@ impl ClientSettings {
 /// Sets keys in the settings file, keeping every other key the file holds (the official app's
 /// settings this app does not use), and returns the settings as they now read.
 pub fn update(path: &Path, changes: &[(&str, Value)]) -> Result<ClientSettings> {
+    update_entries(
+        path,
+        &changes
+            .iter()
+            .map(|(key, value)| (*key, Some(value.clone())))
+            .collect::<Vec<_>>(),
+    )
+}
+
+pub fn update_entries(path: &Path, changes: &[(&str, Option<Value>)]) -> Result<ClientSettings> {
     let mut value = match std::fs::read_to_string(path) {
         Ok(text) => serde_json::from_str::<Value>(&text)
             .with_context(|| format!("{} is not valid JSON", path.display()))?,
@@ -119,7 +129,11 @@ pub fn update(path: &Path, changes: &[(&str, Value)]) -> Result<ClientSettings> 
         .as_object_mut()
         .with_context(|| format!("{} does not hold an object", path.display()))?;
     for (key, change) in changes {
-        object.insert(key.to_string(), change.clone());
+        if let Some(change) = change {
+            object.insert(key.to_string(), change.clone());
+        } else {
+            object.remove(*key);
+        }
     }
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
@@ -194,6 +208,54 @@ mod tests {
         let broken = dir.path().join("broken.json");
         std::fs::write(&broken, "{").unwrap();
         assert!(ClientSettings::load(&broken).is_err());
+    }
+
+    #[test]
+    fn theme_preferences_preserve_client_settings_and_clear_individual_halves() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("client-settings.json");
+        update(
+            &path,
+            &[
+                ("sendShortcut", json!("mod-enter")),
+                (
+                    "t3code:theme-halves:v1",
+                    json!(r#"{"light":"grove","dark":"ocean"}"#),
+                ),
+            ],
+        )
+        .unwrap();
+        let saved = update_entries(
+            &path,
+            &[
+                ("t3code:theme", Some(json!("ember"))),
+                ("t3code:theme-appearance-mode", Some(json!("light"))),
+                ("t3code:theme-halves:v1", None),
+            ],
+        )
+        .unwrap();
+        assert_eq!(saved.send_shortcut, SendShortcut::ModEnter);
+        assert!(saved.light_theme);
+        assert!(saved.values.get("t3code:theme-halves:v1").is_none());
+        assert_eq!(ClientSettings::load(&path).unwrap(), saved);
+        assert_eq!(
+            crate::appearance::theme_half(&saved.values, "light"),
+            "ember"
+        );
+        assert_eq!(
+            crate::appearance::theme_half(&saved.values, "dark"),
+            "ember"
+        );
+        let saved = update(
+            &path,
+            &[("t3code:theme-halves:v1", json!(r#"{"dark":"iris"}"#))],
+        )
+        .unwrap();
+        assert_eq!(
+            crate::appearance::theme_half(&saved.values, "light"),
+            "ember"
+        );
+        assert_eq!(crate::appearance::theme_half(&saved.values, "dark"), "iris");
     }
 
     #[test]

@@ -22,9 +22,9 @@ impl Root {
                 }
                 if matches!(
                     key,
-                    "gpuiAppearance"
-                        | "gpuiThemeLight"
-                        | "gpuiThemeDark"
+                    "t3code:theme-appearance-mode"
+                        | "t3code:theme"
+                        | "t3code:theme-halves:v1"
                         | "appearanceContrast"
                         | "glassOpacity"
                 ) {
@@ -127,6 +127,8 @@ impl Root {
                 overrides.remove(definition.key);
             }
             json!({"projectSettingsOverrides":{project:overrides}})
+        } else if let Some((group, key)) = definition.key.split_once('.') {
+            json!({group:{key:value.unwrap_or_else(||definition.default.clone())}})
         } else {
             json!({definition.key:value.unwrap_or_else(||definition.default.clone())})
         };
@@ -495,7 +497,7 @@ impl Root {
         let mut advanced_started = false;
         let mut definitions = settings_catalog::settings()
             .into_iter()
-            .filter(|setting| setting.page == page && setting.key != "gpuiAppearance")
+            .filter(|setting| setting.page == page && setting.key != "t3code:theme-appearance-mode")
             .collect::<Vec<_>>();
         if page == "appearance" {
             definitions.sort_by_key(|setting| if setting.section == "Interface" { 0 } else { 1 });
@@ -537,6 +539,9 @@ impl Root {
                 && self.settings.values["boringSidebarEnabled"] != true
             {
                 continue;
+            }
+            if definition.key == "effortDisplay" {
+                section_rows = section_rows.child(self.render_thread_details_setting(cx));
             }
             if definition.advanced {
                 let expanded = window.use_keyed_state(
@@ -599,7 +604,13 @@ impl Root {
                     .and_then(|project| {
                         server["settings"]["projectSettingsOverrides"][project].get(definition.key)
                     })
-                    .or_else(|| server["settings"].get(definition.key))
+                    .or_else(|| {
+                        if let Some((group, key)) = definition.key.split_once('.') {
+                            server["settings"][group].get(key)
+                        } else {
+                            server["settings"].get(definition.key)
+                        }
+                    })
             } else {
                 self.settings.values.get(definition.key)
             }
@@ -1036,6 +1047,7 @@ impl Root {
                 )
             });
         div()
+            .on_action(cx.listener(Self::set_thread_details))
             .track_focus(&self.settings_focus)
             .capture_key_down(cx.listener(move |root, event: &KeyDownEvent, window, cx| {
                 if search.read(cx).focus_handle(cx).is_focused(window) && !query.is_empty() {

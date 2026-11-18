@@ -307,9 +307,41 @@ impl Render for Providers {
                         })),
                 );
             }
+            let variables = window.use_keyed_state(
+                SharedString::from(format!("provider-environment:{}:{id}", self.environment)),
+                cx,
+                |window, cx| {
+                    ProviderEnvironment::new(
+                        self.root.clone(),
+                        self.environment.clone(),
+                        id.clone(),
+                        instance["environment"]
+                            .as_array()
+                            .cloned()
+                            .unwrap_or_default(),
+                        window,
+                        cx,
+                    )
+                },
+            );
+            details = details.child(variables);
+            let models = window.use_keyed_state(
+                SharedString::from(format!("provider-models:{}:{id}", self.environment)),
+                cx,
+                |window, cx| {
+                    ProviderModels::new(
+                        self.root.clone(),
+                        self.environment.clone(),
+                        id.clone(),
+                        window,
+                        cx,
+                    )
+                },
+            );
+            details = details.child(models);
         }
         v_flex().gap_3().when_some(self.error.clone(),|view,error|view.child(div().id("provider-save-error").role(accesskit::Role::Alert).text_color(cx.theme().danger).child(error)))
-            .child(h_flex().gap_2().child(Button::new("add-provider").label("Add provider").outline().on_click(cx.listener(|view,_,window,cx|view.edit(String::new(),json!({"driver":"codex"}),window,cx)))).child(Button::new("refresh-providers").label("Refresh provider status").ghost().on_click(cx.listener(|view,_,_,cx|view.request("server.refreshProviders",json!({}),cx)))))
+            .child(h_flex().gap_2().child(Button::new("add-provider").label("Add provider").outline().on_click(cx.listener(|view,_,window,cx|view.edit(String::new(),json!({"driver":"codex"}),window,cx)))).child(Button::new("refresh-providers").label("Refresh provider status").ghost().on_click(cx.listener(|view,_,_,cx|view.request("server.refreshProviders",json!({"refreshModels":true,"reloadSecrets":true}),cx)))))
             .when(self.editing.is_some(),|view|view.child(v_flex().gap_2().p_3().border_1().border_color(cx.theme().border)
                 .child(Select::new(&self.driver).accessibility_label("Provider").disabled(!self.creating))
                 .children(self.inputs.iter().zip(["Instance ID","Display name","Binary path","Home path"]).map(|(input,label)|Input::new(input).aria_label(label).disabled(label=="Instance ID"&&!self.creating)))
@@ -484,6 +516,635 @@ impl Render for ProviderField {
                     .w(px(224.))
                     .flex_none(),
             )
+    }
+}
+
+struct ProviderModels {
+    root: WeakEntity<Root>,
+    environment: String,
+    instance: String,
+    adding: bool,
+    input: Entity<InputState>,
+    filter: Entity<InputState>,
+    error: Option<String>,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl ProviderModels {
+    fn new(
+        root: WeakEntity<Root>,
+        environment: String,
+        instance: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder("model-slug"));
+        let filter = cx.new(|cx| InputState::new(window, cx).placeholder("Filter models"));
+        let subscriptions = vec![
+            cx.subscribe(&filter, |_, _, _: &InputEvent, cx| cx.notify()),
+            cx.subscribe_in(&input, window, |view, _, event, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    view.add(window, cx);
+                }
+            }),
+        ];
+        Self {
+            root,
+            environment,
+            instance,
+            adding: false,
+            input,
+            filter,
+            error: None,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    fn config(&self, cx: &App) -> Value {
+        self.root
+            .upgrade()
+            .and_then(|root| root.read(cx).config_of(&self.environment))
+            .unwrap_or(Value::Null)
+    }
+
+    fn save(&mut self, payload: Value, cx: &mut Context<Self>) {
+        settings_controls::request(
+            &self.root,
+            &self.environment,
+            "server.updateSettings",
+            payload,
+            cx,
+            |view, result, _| {
+                view.error = result
+                    .err()
+                    .map(|error| format!("Model preferences not saved: {error:#}"));
+            },
+        );
+    }
+
+    fn preferences(&mut self, mut patch: Value, cx: &mut Context<Self>) {
+        let config = self.config(cx);
+        if config["settings"]["favorites"].is_null()
+            || config["settings"]["providerModelPreferences"].is_null()
+        {
+            let root = self.root.upgrade().expect("settings owner");
+            let settings = &root.read(cx).settings.values;
+            patch["migrateModelPreferences"] = json!({"favorites":settings["favorites"].as_array().cloned().unwrap_or_default(),"providerModelPreferences":settings["providerModelPreferences"].as_object().cloned().unwrap_or_default()});
+        }
+        self.save(json!({"patch":patch}), cx);
+    }
+
+    fn save_custom(&mut self, models: Vec<Value>, cx: &mut Context<Self>) {
+        let config = self.config(cx);
+        let mut instance = config["settings"]["providerInstances"][&self.instance].clone();
+        if !instance.is_object() {
+            self.error = Some("Provider instance is no longer available".to_string());
+            cx.notify();
+            return;
+        }
+        if !instance["config"].is_object() {
+            instance["config"] = json!({});
+        }
+        instance["config"]["customModels"] = json!(models);
+        self.save(json!({"patch":{},"providerInstanceMutation":{"operation":"upsert","instanceId":self.instance,"instance":instance}}), cx);
+    }
+
+    fn remove_custom(&mut self, slug: &str, cx: &mut Context<Self>) {
+        let config = self.config(cx);
+        let custom =
+            config["settings"]["providerInstances"][&self.instance]["config"]["customModels"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|model| model["slug"] != slug && **model != slug)
+                .cloned()
+                .collect::<Vec<_>>();
+        let mut instance = config["settings"]["providerInstances"][&self.instance].clone();
+        instance["config"]["customModels"] = json!(custom);
+        let root = self.root.upgrade().expect("settings owner");
+        let local = &root.read(cx).settings.values;
+        let preferences = if config["settings"]["providerModelPreferences"].is_null() {
+            &local["providerModelPreferences"][&self.instance]
+        } else {
+            &config["settings"]["providerModelPreferences"][&self.instance]
+        };
+        let order = preferences["modelOrder"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|model| **model != slug)
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut patch = json!({"setModelFavorites":[{"provider":self.instance,"model":slug,"favorite":false}],"setProviderModelOrder":{"provider":self.instance,"modelOrder":order}});
+        if config["settings"]["favorites"].is_null()
+            || config["settings"]["providerModelPreferences"].is_null()
+        {
+            patch["migrateModelPreferences"] = json!({"favorites":local["favorites"].as_array().cloned().unwrap_or_default(),"providerModelPreferences":local["providerModelPreferences"].as_object().cloned().unwrap_or_default()});
+        }
+        self.save(json!({"patch":patch,"providerInstanceMutation":{"operation":"upsert","instanceId":self.instance,"instance":instance}}), cx);
+    }
+
+    fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let slug = self.input.read(cx).value().trim().to_string();
+        let config = self.config(cx);
+        let mut custom =
+            config["settings"]["providerInstances"][&self.instance]["config"]["customModels"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+        let built_in = config["providers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|provider| provider["instanceId"] == self.instance)
+            .flat_map(|provider| provider["models"].as_array().into_iter().flatten())
+            .any(|model| model["isCustom"] != true && model["slug"] == slug);
+        self.error = if slug.is_empty() {
+            Some("Enter a model slug.".into())
+        } else if built_in {
+            Some("That model is already built in.".into())
+        } else if slug.encode_utf16().count() > 256 {
+            Some("Model slugs must be 256 characters or less.".into())
+        } else if custom
+            .iter()
+            .any(|model| model["slug"] == slug || *model == slug)
+        {
+            Some("That custom model is already saved.".into())
+        } else {
+            None
+        };
+        if self.error.is_none() {
+            custom.push(json!(slug));
+            self.save_custom(custom, cx);
+            self.adding = false;
+            self.input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            self.filter
+                .update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        cx.notify();
+    }
+}
+
+impl Render for ProviderModels {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let config = self.config(cx);
+        let instance = &config["settings"]["providerInstances"][&self.instance];
+        let mut models = config["providers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|provider| provider["instanceId"] == self.instance)
+            .and_then(|provider| provider["models"].as_array())
+            .into_iter()
+            .flatten()
+            .filter(|model| model["isCustom"] != true)
+            .cloned()
+            .collect::<Vec<_>>();
+        for model in instance["config"]["customModels"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let slug = model
+                .as_str()
+                .or_else(|| model["slug"].as_str())
+                .unwrap_or_default();
+            if models.iter().any(|existing| existing["slug"] == slug) {
+                continue;
+            }
+            models.push(
+                json!({"slug":slug,"name":model["name"].as_str().unwrap_or(slug),"isCustom":true}),
+            );
+        }
+        let root = self.root.upgrade().expect("settings owner");
+        let local = &root.read(cx).settings.values;
+        let preferences = if config["settings"]["providerModelPreferences"].is_null() {
+            &local["providerModelPreferences"][&self.instance]
+        } else {
+            &config["settings"]["providerModelPreferences"][&self.instance]
+        };
+        let hidden = preferences["hiddenModels"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let order = preferences["modelOrder"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let favorites = if config["settings"]["favorites"].is_null() {
+            &local["favorites"]
+        } else {
+            &config["settings"]["favorites"]
+        };
+        let favorite =
+            |model: &Value| {
+                favorites.as_array().into_iter().flatten().any(|entry| {
+                    entry["provider"] == self.instance && entry["model"] == model["slug"]
+                })
+            };
+        let group = |model: &Value| {
+            if favorite(model) {
+                0
+            } else if model["isCustom"] != true && hidden.contains(&model["slug"]) {
+                2
+            } else {
+                1
+            }
+        };
+        models.sort_by_key(|model| {
+            (
+                group(model),
+                order
+                    .iter()
+                    .position(|slug| *slug == model["slug"])
+                    .unwrap_or(usize::MAX),
+            )
+        });
+        let built_in = models
+            .iter()
+            .filter(|model| model["isCustom"] != true)
+            .map(|model| model["slug"].clone())
+            .collect::<Vec<_>>();
+        let all_hidden = !built_in.is_empty() && built_in.iter().all(|slug| hidden.contains(slug));
+        let query = self.filter.read(cx).value().trim().to_lowercase();
+        let filtering = models.len() > 8 && !query.is_empty();
+        let favorite_count = models.iter().filter(|model| favorite(model)).count();
+        let hidden_count = built_in.iter().filter(|slug| hidden.contains(slug)).count();
+        let rows = models.iter().enumerate().filter(|(_, model)| !filtering || format!("{} {}", model["name"], model["slug"]).to_lowercase().contains(&query)).map(|(index, model)| {
+            let slug = model["slug"].as_str().unwrap_or_default().to_string();
+            let name = model["name"].as_str().unwrap_or(&slug).to_string();
+            let is_favorite = favorite(model);
+            let is_hidden = model["isCustom"] != true && hidden.contains(&model["slug"]);
+            let favorite_slug = slug.clone();
+            let toggle_slug = slug.clone();
+            let mut row = h_flex().id(SharedString::from(format!("provider-model:{slug}"))).h(px(28.)).gap_2().px_2()
+                .child(Button::new("favorite").icon(gpui_kit::assets::IconName::Star).accessibility_label(format!("{} {name} {} favorites", if is_favorite { "Remove" } else { "Add" }, if is_favorite { "from" } else { "to" })).ghost().compact().selected(is_favorite).on_click(cx.listener(move |view, _, _, cx| view.preferences(json!({"setModelFavorites":[{"provider":view.instance,"model":favorite_slug,"favorite":!is_favorite}]}),cx))))
+                .child(settings_controls::text(name.clone()).text_xs())
+                .when(name != slug, |row| row.child(settings_controls::text(slug.clone()).text_xs().text_color(cx.theme().muted_foreground)))
+                .child(div().flex_1());
+            if !is_hidden && !filtering {
+                for (up, target) in [(true, index.checked_sub(1)), (false, (index+1 < models.len()).then_some(index+1))] {
+                    let can_move = target.is_some_and(|target| group(&models[target]) == group(model));
+                    let mut next = models.iter().map(|model| model["slug"].clone()).collect::<Vec<_>>();
+                    if let Some(target) = target { next.swap(index, target); }
+                    row = row.child(Button::new(if up {"move-up"} else {"move-down"}).icon(if up {IconName::ArrowUp} else {IconName::ArrowDown}).accessibility_label(format!("Move {name} {}", if up {"up"} else {"down"})).ghost().compact().disabled(!can_move).on_click(cx.listener(move |view, _, _, cx| view.preferences(json!({"setProviderModelOrder":{"provider":view.instance,"modelOrder":next}}),cx))));
+                }
+            }
+            if model["isCustom"] != true {
+                row = row.child(Switch::new("visible").accessibility_label(format!("Show {name} in the model picker")).checked(!is_hidden).on_change(cx.listener(move |view, checked: &bool, _, cx| view.preferences(json!({"setModelsHidden":[{"provider":view.instance,"model":toggle_slug,"hidden":!*checked}]}),cx))));
+            } else {
+                row = row.child(settings_controls::text("custom").text_xs())
+                    .child(Button::new("remove-custom-model").icon(gpui_kit::assets::IconName::X).accessibility_label(format!("Remove {slug}")).ghost().compact().on_click(cx.listener(move |view, _, _, cx| view.remove_custom(&slug, cx))))
+                    .child(Switch::new("visible").accessibility_label(format!("Show {name} in the model picker")).checked(true).disabled(true));
+            }
+            let starts_group = index == 0 || group(&models[index-1]) != group(model);
+            v_flex().when(starts_group && (favorite_count > 0 || is_hidden), |view| view.child(settings_controls::text(match group(model) {0=>"Favorites",2=>"Hidden from picker",_=>"All"}).text_xs().px_2().pt_3())).child(row)
+        }).collect::<Vec<_>>();
+        v_flex().gap_3().px_4()
+            .child(settings_controls::text("Models").font_weight(FontWeight::SEMIBOLD))
+            .child(settings_controls::text("Model preferences and custom models are saved on the selected environment and shared across connected devices.").text_xs().text_color(cx.theme().muted_foreground))
+            .when(models.len()>8, |view| view.child(Input::new(&self.filter).aria_label("Filter models")))
+            .child(h_flex().gap_2()
+                .when(!built_in.is_empty(), |row| row.child(Button::new("bulk-models").label(if all_hidden {"Enable all"} else {"Disable all"}).ghost().compact().on_click(cx.listener(move |view, _, _, cx| view.preferences(json!({"setModelsHidden":built_in.iter().map(|slug| json!({"provider":view.instance,"model":slug,"hidden":!all_hidden})).collect::<Vec<_>>()}),cx)))))
+                .child(settings_controls::text(models.len().to_string()).text_xs())
+                .child(settings_controls::text(if models.len()==1 {"model"} else {"models"}).text_xs())
+                .when(favorite_count>0, |row| row.child(settings_controls::text(format!("· {favorite_count} favorite{}",if favorite_count==1 {""} else {"s"})).text_xs()))
+                .when(hidden_count>0, |row| row.child(settings_controls::text(format!("· {hidden_count} hidden")).text_xs()))
+                .child(div().flex_1())
+                .when(!self.adding && instance["driver"]!="antigravity", |row| row.child(Button::new("add-custom-model").label("Add custom model").ghost().compact().on_click(cx.listener(|view, _, window, cx| {view.adding=true;view.input.update(cx,|input,cx|input.focus(window,cx));cx.notify();})))))
+            .when(rows.is_empty(), |view| view.child(settings_controls::text(if filtering {"No models match."} else {"No models reported for this provider yet."}).text_xs()))
+            .children(rows)
+            .when(self.adding, |view| view.child(h_flex().gap_2().child(Input::new(&self.input).aria_label("Custom model").flex_1()).child(Button::new("save-custom-model").label("Add").outline().on_click(cx.listener(|view,_,window,cx|view.add(window,cx)))).child(Button::new("cancel-custom-model").label("Cancel").ghost().on_click(cx.listener(|view,_,_,cx|{view.adding=false;view.error=None;cx.notify();})))))
+            .when_some(self.error.clone(), |view,error| view.child(settings_controls::text(error).text_color(cx.theme().danger)))
+    }
+}
+
+struct EnvironmentVariable {
+    id: usize,
+    value: Value,
+    name_input: Entity<InputState>,
+    value_input: Entity<InputState>,
+    acknowledged: bool,
+}
+
+struct ProviderEnvironment {
+    root: WeakEntity<Root>,
+    environment: String,
+    instance: String,
+    rows: Vec<EnvironmentVariable>,
+    next_id: usize,
+    subscriptions: Vec<Subscription>,
+    error: Option<String>,
+}
+
+impl ProviderEnvironment {
+    fn new(
+        root: WeakEntity<Root>,
+        environment: String,
+        instance: String,
+        values: Vec<Value>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut view = Self {
+            root,
+            environment,
+            instance,
+            rows: vec![],
+            next_id: 0,
+            subscriptions: vec![],
+            error: None,
+        };
+        for value in values {
+            view.add(value, window, cx);
+        }
+        view
+    }
+
+    fn add(&mut self, value: Value, window: &mut Window, cx: &mut Context<Self>) {
+        let id = self.next_id;
+        self.next_id += 1;
+        let name_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("VARIABLE_NAME")
+                .default_value(value["name"].as_str().unwrap_or_default())
+        });
+        let value_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(if value["valueRedacted"] == true {
+                    "Configured"
+                } else {
+                    "value"
+                })
+                .default_value(value["value"].as_str().unwrap_or_default())
+                .masked(value["sensitive"] == true)
+        });
+        for (input, key) in [(&name_input, "name"), (&value_input, "value")] {
+            self.subscriptions
+                .push(cx.subscribe(input, move |view, input, event, cx| {
+                    if !matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
+                        return;
+                    }
+                    let Some(row) = view.rows.iter_mut().find(|row| row.id == id) else {
+                        return;
+                    };
+                    let text = input.read(cx).unmask_value().to_string();
+                    if key == "value" && row.value["valueRedacted"] == true && text.is_empty() {
+                        return;
+                    }
+                    row.value[key] = json!(if key == "name" {
+                        text.trim().to_string()
+                    } else {
+                        text
+                    });
+                    if key == "value" {
+                        row.value["valueRedacted"] = json!(false);
+                    }
+                    view.publish(cx);
+                }));
+        }
+        self.rows.push(EnvironmentVariable {
+            id,
+            value,
+            name_input,
+            value_input,
+            acknowledged: false,
+        });
+        cx.notify();
+    }
+
+    fn publish(&mut self, cx: &mut Context<Self>) {
+        let mut variables = vec![];
+        for row in &self.rows {
+            let name = row.value["name"].as_str().unwrap_or_default();
+            let valid = !name.is_empty()
+                && name.chars().enumerate().all(|(index, ch)| {
+                    ch == '_' || ch.is_ascii_alphabetic() || index > 0 && ch.is_ascii_digit()
+                });
+            if !valid {
+                if name.is_empty() && row.value["value"] == "" && row.value["sensitive"] == true {
+                    continue;
+                }
+                self.error = Some("Enter a valid environment variable name.".into());
+                cx.notify();
+                return;
+            }
+            variables.push(row.value.clone());
+        }
+        let config = self
+            .root
+            .upgrade()
+            .and_then(|root| root.read(cx).config_of(&self.environment))
+            .unwrap_or(Value::Null);
+        let mut instance = config["settings"]["providerInstances"][&self.instance].clone();
+        if !instance.is_object() {
+            self.error = Some("Provider instance is no longer available".into());
+            cx.notify();
+            return;
+        }
+        instance["environment"] = json!(variables);
+        settings_controls::request(
+            &self.root,
+            &self.environment,
+            "server.updateSettings",
+            json!({"patch":{},"providerInstanceMutation":{"operation":"upsert","instanceId":self.instance,"instance":instance}}),
+            cx,
+            move |view, result, _| match result {
+                Ok(settings) => {
+                    view.error = None;
+                    for row in &mut view.rows {
+                        if !variables.contains(&row.value) {
+                            continue;
+                        }
+                        if let Some(saved) =
+                            settings["providerInstances"][&view.instance]["environment"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .find(|saved| saved["name"] == row.value["name"])
+                        {
+                            row.value = saved.clone();
+                            row.acknowledged = true;
+                        }
+                    }
+                }
+                Err(error) => view.error = Some(format!("Unable to save provider: {error:#}")),
+            },
+        );
+    }
+}
+
+impl Render for ProviderEnvironment {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        for row in &mut self.rows {
+            if row.acknowledged {
+                row.acknowledged = false;
+                row.name_input.update(cx, |input, cx| {
+                    if !input.focus_handle(cx).is_focused(window) {
+                        input.set_value(row.value["name"].as_str().unwrap_or_default(), window, cx)
+                    }
+                });
+                row.value_input.update(cx, |input, cx| {
+                    if !input.focus_handle(cx).is_focused(window) {
+                        input.set_value(
+                            row.value["value"].as_str().unwrap_or_default(),
+                            window,
+                            cx,
+                        );
+                    }
+                    input.set_masked(row.value["sensitive"] == true, window, cx);
+                });
+            }
+        }
+        let rows = self
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(index, row)| {
+                let id = row.id;
+                let name = row.value["name"]
+                    .as_str()
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| (index + 1).to_string());
+                let redacted = row.value["valueRedacted"] == true;
+                let sensitive = row.value["sensitive"] == true;
+                v_flex()
+                    .id(("variable", id))
+                    .gap_2()
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded_lg()
+                    .p_2()
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Input::new(&row.name_input)
+                                    .aria_label(format!("Environment variable name {}", index + 1))
+                                    .disabled(redacted)
+                                    .flex_1(),
+                            )
+                            .child(
+                                Button::new("remove")
+                                    .icon(gpui_kit::assets::IconName::X)
+                                    .accessibility_label(format!(
+                                        "Remove environment variable {name}"
+                                    ))
+                                    .ghost()
+                                    .compact()
+                                    .on_click(cx.listener(move |view, _, _, cx| {
+                                        view.rows.retain(|row| row.id != id);
+                                        view.publish(cx);
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .when(row.value["secret"].is_null(), |view| {
+                                view.child(
+                                    Input::new(&row.value_input)
+                                        .aria_label(format!(
+                                            "Environment variable value {}",
+                                            index + 1
+                                        ))
+                                        .flex_1(),
+                                )
+                            })
+                            .when(row.value["secret"].is_object(), |view| {
+                                view.child(
+                                    settings_controls::text(format!(
+                                        "External secret reference (editing not implemented): {}",
+                                        row.value["secret"]
+                                    ))
+                                    .text_xs(),
+                                )
+                            })
+                            .child(
+                                Button::new("sensitive")
+                                    .icon(gpui_kit::assets::IconName::Lock)
+                                    .accessibility_label(format!(
+                                        "Mark environment variable {name} as sensitive"
+                                    ))
+                                    .selected(sensitive)
+                                    .toggled(sensitive)
+                                    .disabled(redacted || row.value["secret"].is_object())
+                                    .ghost()
+                                    .compact()
+                                    .on_click(cx.listener(move |view, _, window, cx| {
+                                        if let Some(row) =
+                                            view.rows.iter_mut().find(|row| row.id == id)
+                                        {
+                                            row.value["sensitive"] = json!(!sensitive);
+                                            row.value_input.update(cx, |input, cx| {
+                                                input.set_masked(!sensitive, window, cx)
+                                            });
+                                        }
+                                        view.publish(cx);
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+            })
+            .collect::<Vec<_>>();
+        v_flex()
+            .gap_3()
+            .px_4()
+            .child(settings_controls::text("Environment").font_weight(FontWeight::SEMIBOLD))
+            .child(
+                h_flex()
+                    .gap_4()
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .gap_1()
+                            .child(settings_controls::text("Variables").text_sm())
+                            .child(
+                                settings_controls::text(
+                                    "API keys, base URLs, and other per-instance CLI settings.",
+                                )
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground),
+                            ),
+                    )
+                    .child(
+                        Button::new("add-variable")
+                            .label("Add variable")
+                            .outline()
+                            .compact()
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.add(json!({"name":"","value":"","sensitive":true}), window, cx)
+                            })),
+                    ),
+            )
+            .children(rows)
+            .when(!self.rows.is_empty(), |view| {
+                view.child(
+                    settings_controls::text(
+                        "Sensitive values are stored separately and never returned to the app.",
+                    )
+                    .text_xs(),
+                )
+            })
+            .when(
+                self.rows
+                    .iter()
+                    .any(|row| row.value["valueRedacted"] == true),
+                |view| {
+                    view.child(
+                        settings_controls::text(
+                            "Enter a new value to rename a saved one or make it plain text.",
+                        )
+                        .text_xs(),
+                    )
+                },
+            )
+            .when_some(self.error.clone(), |view, error| {
+                view.child(settings_controls::text(error).text_color(cx.theme().danger))
+            })
     }
 }
 
