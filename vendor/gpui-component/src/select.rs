@@ -150,6 +150,12 @@ where
     D: SearchableListDelegate + 'static,
     <D::Item as SearchableListItem>::Value: PartialEq + Clone,
 {
+    pub fn set_option_roles(&mut self, cx: &mut Context<Self>) {
+        self.state.list.update(cx, |list, cx| {
+            list.set_accessibility_roles(gpui::Role::ListBox, gpui::Role::ListBoxOption, cx);
+        });
+    }
+
     /// Create a new Select state.
     pub fn new(
         delegate: D,

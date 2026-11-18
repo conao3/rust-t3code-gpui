@@ -1,0 +1,202 @@
+{
+  "name": "composer-host-routing-draft-and-cycle",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 2000,
+  "steps": [
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread in Multi host fixture"
+      }
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "press",
+      "value": "backspace"
+    },
+    {
+      "action": "type",
+      "value": "primary host draft"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "primary host draft"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+h"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "option",
+        "name": "parity-secondary"
+      },
+      "native": {
+        "role": "list item",
+        "name": "parity-secondary"
+      }
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "option",
+        "name": "parity-secondary"
+      },
+      "native": {
+        "role": "list item",
+        "name": "parity-secondary"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText",
+        "name": "parity-secondary",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Run on"
+        }
+      },
+      "native": {
+        "role": "label",
+        "name": "parity-secondary",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Run on"
+        }
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "primary host draft"
+    },
+    {
+      "action": "type",
+      "value": " continued on secondary"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "primary host draft continued on secondary"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+h"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText",
+        "name": "helios",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Run on"
+        }
+      },
+      "native": {
+        "role": "label",
+        "name": "helios",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Run on"
+        }
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "primary host draft continued on secondary"
+    },
+    {
+      "action": "press",
+      "value": "ctrl+alt+h"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "StaticText",
+        "name": "parity-secondary",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Run on"
+        }
+      },
+      "native": {
+        "role": "label",
+        "name": "parity-secondary",
+        "ancestor": {
+          "role": "combobox",
+          "name": "Run on"
+        }
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "textbox",
+        "name": "Message New thread"
+      },
+      "value": "primary host draft continued on secondary"
+    },
+    {
+      "action": "press",
+      "value": "enter"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "Stop generation"
+      },
+      "screenshot": false
+    },
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "Stop generation"
+      }
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    }
+  ]
+}

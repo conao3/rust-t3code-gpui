@@ -5188,15 +5188,25 @@ impl<M: InputModeKind> Render for InputBaseState<M> {
                                     segments.push((cursor, self.text.slice(cursor..self.text.len()).to_string()));
                                 }
                             }
-                            let lengths = value.chars().map(|character| character.len_utf8() as u8).collect::<Vec<_>>();
+                            let has_tokens = !spans.is_empty();
                             this.aria_value(value.clone())
-                                .when(!spans.is_empty(), |this| this.child(
-                                    div().id("inline-editor-value").role(gpui::Role::TextRun).aria_value(value)
-                                        .a11y_synthetic_children(move |builder| builder.parent_node().set_character_lengths(lengths))
-                                        .absolute()
-                                ))
-                                .children(segments.into_iter().map(|(start, text)| {
-                                    div().id(("inline-text", start)).role(gpui::Role::Label).aria_label(text).absolute().size(px(1.))
+                                .when(has_tokens, |this| this.a11y_synthetic_children(move |builder| {
+                                    let bounds = builder.parent_node().bounds();
+                                    let mut text = gpui::accesskit::Node::new(gpui::Role::TextRun);
+                                    text.set_value(value.clone());
+                                    text.set_character_lengths(value.chars().map(|character| character.len_utf8() as u8).collect::<Vec<_>>());
+                                    if let Some(bounds) = bounds {
+                                        text.set_bounds(bounds);
+                                    }
+                                    builder.push_child(builder.synthetic_node_id("inline-editor-value"), text);
+                                    for (start, value) in segments {
+                                        let mut text = gpui::accesskit::Node::new(gpui::Role::Label);
+                                        text.set_label(value);
+                                        if let Some(bounds) = bounds {
+                                            text.set_bounds(bounds);
+                                        }
+                                        builder.push_child(builder.synthetic_node_id(("inline-text", start)), text);
+                                    }
                                 }))
                         },
                     )

@@ -23,7 +23,7 @@ def texts(nodes):
                 or parent.get("name", "").endswith(
                     (" queued message", " queued messages")
                 )
-                or parent.get("role") in {"menu", "listbox", "dialog"}
+                or parent.get("role") in {"menu", "listbox", "list box", "dialog"}
                 or parent.get("role") == "heading"
                 and parent.get("name", "").startswith(
                     ("What should", "Choose a project")
