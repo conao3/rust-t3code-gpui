@@ -75,5 +75,8 @@
         "name": "New thread"
       }
     }
-  ]
+  ],
+  "environment": {
+    "stream_ms": 600000
+  }
 }

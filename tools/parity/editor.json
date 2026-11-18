@@ -32,29 +32,29 @@
       "action": "checkpoint",
       "selector": {
         "role": "menuitem",
-        "name": "Files"
+        "name": "VS Code"
       },
       "native": {
         "role": "menu item",
-        "name": "Files"
+        "name": "VS Code"
       }
     },
     {
       "action": "click",
       "selector": {
         "role": "menuitem",
-        "name": "Files"
+        "name": "VS Code"
       },
       "native": {
         "role": "menu item",
-        "name": "Files"
+        "name": "VS Code"
       }
     },
     {
       "action": "checkpoint",
       "selector": {
         "role": "button",
-        "name": "Open in Files"
+        "name": "Open in VS Code"
       }
     },
     {
