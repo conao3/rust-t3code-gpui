@@ -15,6 +15,13 @@
       }
     },
     {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": "Usage"
+      }
+    },
+    {
       "action": "press",
       "value": "c"
     },
