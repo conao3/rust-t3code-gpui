@@ -1026,6 +1026,7 @@ pub fn user_message_jump(rows: &[Row], from: usize, inside: bool, forward: bool)
 pub struct Queued {
     pub run_id: String,
     pub text: String,
+    pub created_at: Option<String>,
 }
 
 /// The runs waiting in the thread's queue, in queue order, with the text of their messages.
@@ -1043,15 +1044,18 @@ pub fn queued(state: &ThreadState) -> Vec<Queued> {
     runs.into_iter()
         .map(|run| {
             let message_id = text(run, "userMessageId");
-            let body = state
+            let message = state
                 .list("messages")
                 .iter()
-                .find(|m| text(m, "id") == message_id)
-                .map(|m| text(m, "text").to_string())
-                .unwrap_or_default();
+                .find(|m| text(m, "id") == message_id);
             Queued {
                 run_id: text(run, "id").to_string(),
-                text: body,
+                text: message
+                    .map(|m| text(m, "text").to_string())
+                    .unwrap_or_default(),
+                created_at: message
+                    .and_then(|message| message["createdAt"].as_str())
+                    .map(str::to_owned),
             }
         })
         .collect()

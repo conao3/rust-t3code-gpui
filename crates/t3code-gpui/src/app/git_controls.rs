@@ -517,15 +517,6 @@ impl Root {
             &self.conversation.workspace_status.remote,
             busy,
         );
-        let scripts = self.project_scripts();
-        let script_focus = focus.clone();
-        let script_root = cx.entity().downgrade();
-        let no_scripts = scripts.is_empty();
-        let primary_script = scripts
-            .iter()
-            .find(|script| script["runOnWorktreeCreate"] != true && script["runOnSettle"] != true)
-            .or_else(|| scripts.iter().find(|script| script["runOnSettle"] != true))
-            .cloned();
         let local = self.conversation.workspace_status.local.clone();
         let remote = self.conversation.workspace_status.remote.clone();
         v_flex()
@@ -537,8 +528,31 @@ impl Root {
                     .aria_label("Git actions")
                     .child(
                         Button::new("git-commit")
-                            .label(label)
+                            .accessibility_label(label.clone())
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .gap_2p5()
+                                    .child(
+                                        Icon::new(match action {
+                                            "publish" | "push" | "commit_push" => {
+                                                gpui_kit::assets::IconName::CloudUpload
+                                            }
+                                            "pull" => gpui_kit::assets::IconName::CloudDownload,
+                                            "commit" => {
+                                                gpui_kit::assets::IconName::GitCommitHorizontal
+                                            }
+                                            _ => gpui_kit::assets::IconName::GitPullRequest,
+                                        })
+                                        .size(px(14.)),
+                                    )
+                                    .child(text!(id = "git-primary-label", label)),
+                            )
                             .ghost()
+                            .h(px(32.))
+                            .px_2p5()
+                            .text_size(px(13.))
+                            .justify_start()
                             .flex_1()
                             .disabled(!enabled)
                             .on_click(cx.listener(move |root, _, window, cx| {
@@ -608,11 +622,38 @@ impl Root {
                             }),
                     ),
             )
+            .children(
+                self.git_state
+                    .progress
+                    .last()
+                    .filter(|_| busy)
+                    .cloned()
+                    .map(|progress| div().text_xs().px_2().truncate().child(progress)),
+            )
+            .children(
+                self.git_state
+                    .result
+                    .clone()
+                    .map(|result| div().text_xs().px_2().child(result)),
+            )
+            .into_any_element()
+    }
+    pub(super) fn render_project_scripts(&self, cx: &Context<Self>) -> AnyElement {
+        let focus = self.focus.clone();
+        let scripts = self.project_scripts();
+        let script_focus = focus.clone();
+        let script_root = cx.entity().downgrade();
+        let no_scripts = scripts.is_empty();
+        let primary_script = scripts
+            .iter()
+            .find(|script| script["runOnWorktreeCreate"] != true && script["runOnSettle"] != true)
+            .or_else(|| scripts.iter().find(|script| script["runOnSettle"] != true))
+            .cloned();
+        v_flex()
             .child(
                 h_flex()
                     .id("project-scripts")
                     .role(accesskit::Role::Group)
-                    .aria_label("Project scripts")
                     .when_some(primary_script, |row, script| {
                         let name = script["name"].as_str().unwrap_or_default().to_string();
                         row.child(
@@ -700,29 +741,25 @@ impl Root {
                     .when(no_scripts, |row| {
                         row.child(
                             Button::new("add-project-script")
-                                .label("Add project script")
+                                .child(
+                                    h_flex()
+                                        .w_full()
+                                        .gap_2p5()
+                                        .child(Icon::new(IconName::Plus).size(px(16.)))
+                                        .child(text!("Add project script")),
+                                )
                                 .accessibility_label("Add project script")
                                 .ghost()
                                 .w_full()
+                                .h(px(32.))
+                                .px_2p5()
+                                .justify_start()
+                                .text_size(px(13.))
                                 .on_click(cx.listener(|root, _, window, cx| {
                                     root.open_script_editor(Value::Null, window, cx)
                                 })),
                         )
                     }),
-            )
-            .children(
-                self.git_state
-                    .progress
-                    .last()
-                    .filter(|_| busy)
-                    .cloned()
-                    .map(|progress| div().text_xs().px_2().truncate().child(progress)),
-            )
-            .children(
-                self.git_state
-                    .result
-                    .clone()
-                    .map(|result| div().text_xs().px_2().child(result)),
             )
             .into_any_element()
     }

@@ -1,0 +1,80 @@
+{
+  "name": "composer-model-search",
+  "viewport": [
+    1400,
+    900
+  ],
+  "theme": "dark",
+  "settle_ms": 700,
+  "steps": [
+    {
+      "action": "click",
+      "selector": {
+        "role": "button",
+        "name": "New thread"
+      }
+    },
+    {
+      "action": "press",
+      "value": "ctrl+shift+e"
+    },
+    {
+      "action": "focus",
+      "selector": {
+        "role": "combobox",
+        "name": "Search models..."
+      },
+      "native": {
+        "role": "textbox",
+        "name": "Search models..."
+      }
+    },
+    {
+      "action": "type",
+      "value": "favorites"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "option",
+        "name": "GPT-6-Luna , Codex Add to favorites Ctrl+1"
+      },
+      "native": {
+        "role": "list item",
+        "name": "GPT-6-Luna , Codex Add to favorites Ctrl+1"
+      },
+      "count": 0
+    },
+    {
+      "action": "press",
+      "value": "ctrl+a"
+    },
+    {
+      "action": "type",
+      "value": "Luna"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "option",
+        "name": "GPT-6-Luna , Codex Add to favorites Ctrl+1"
+      },
+      "native": {
+        "role": "list item",
+        "name": "GPT-6-Luna , Codex Add to favorites Ctrl+1"
+      }
+    },
+    {
+      "action": "press",
+      "value": "escape"
+    },
+    {
+      "action": "checkpoint",
+      "selector": {
+        "role": "dialog",
+        "name": ""
+      },
+      "count": 0
+    }
+  ]
+}

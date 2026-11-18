@@ -1,5 +1,34 @@
 use super::*;
 
+#[derive(PartialEq)]
+pub(super) struct QueueStamp {
+    queued: Vec<timeline::Queued>,
+    editing: Option<String>,
+    expanded: bool,
+    light: bool,
+    font_size: f32,
+    timestamp_format: crate::timestamp::Format,
+}
+
+pub(super) struct QueuePane {
+    pub(super) root: WeakEntity<Root>,
+    pub(super) pane_id: u64,
+    pub(super) stamp: Option<QueueStamp>,
+}
+
+impl Render for QueuePane {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.root
+            .update(cx, |root, cx| {
+                root.with_conversation(self.pane_id, |root| {
+                    div().w_full().children(root.render_queue(cx))
+                })
+            })
+            .expect("queue root is alive")
+            .expect("queue pane exists")
+    }
+}
+
 pub(super) struct Edit {
     target: (String, String),
     pub(super) run_id: String,
@@ -10,7 +39,143 @@ pub(super) struct Edit {
     context: Option<Value>,
 }
 
+fn resume_target(state: &t3_client::projection::ThreadState) -> Option<(Option<String>, bool)> {
+    let held = state
+        .list("runs")
+        .iter()
+        .any(|run| run["status"] == "queued" && run["queueHeld"] == true);
+    let latest = state
+        .list("runs")
+        .iter()
+        .filter(|run| {
+            run["status"] != "queued"
+                && !(run["status"] == "cancelled" && run["startedAt"].is_null())
+        })
+        .max_by_key(|run| {
+            (
+                run["completedAt"].is_null(),
+                run["completedAt"].as_str().unwrap_or_default(),
+                run["ordinal"].as_u64().unwrap_or(0),
+            )
+        });
+    let session_error = state
+        .list("providerSessions")
+        .iter()
+        .rev()
+        .find(|session| session["providerInstanceId"] == state.thread()["providerInstanceId"])
+        .and_then(|session| session["lastError"].as_str());
+    let run = latest
+        .filter(|run| {
+            run["status"] == "interrupted"
+                || (run["status"] == "failed"
+                    && state
+                        .list("turnItems")
+                        .iter()
+                        .filter(|item| {
+                            item["type"] == "error"
+                                && item["status"] == "failed"
+                                && item["runId"] == run["id"]
+                                && item["nodeId"] == run["rootNodeId"]
+                        })
+                        .max_by_key(|item| {
+                            (
+                                item["updatedAt"].as_str().unwrap_or_default(),
+                                item["ordinal"].as_u64().unwrap_or(0),
+                                item["id"].as_str().unwrap_or_default(),
+                            )
+                        })
+                        .is_some_and(|item| {
+                            item["failure"]["class"] == "usage_limit"
+                                && session_error
+                                    .is_none_or(|error| item["failure"]["message"] == error)
+                        }))
+        })
+        .and_then(|run| run["id"].as_str())
+        .map(str::to_owned);
+    (run.is_some() || held).then_some((run, held))
+}
+
 impl Root {
+    pub(super) fn sync_queue_pane(&self, cx: &mut Context<Self>) {
+        let stamp = QueueStamp {
+            queued: self.conversation.queued.clone(),
+            editing: self
+                .conversation
+                .queue_edit
+                .as_ref()
+                .map(|edit| edit.run_id.clone()),
+            expanded: self.conversation.queue_expanded,
+            light: self.settings.light_theme,
+            font_size: self.settings.font_size_interface,
+            timestamp_format: self.settings.timestamp_format,
+        };
+        let queue = self.conversation.timeline_pane.read(cx).queue.clone();
+        let changed = queue.update(cx, |pane, cx| {
+            if pane.stamp.as_ref() == Some(&stamp) {
+                return false;
+            }
+            pane.stamp = Some(stamp);
+            cx.notify();
+            true
+        });
+        if changed && !self.conversation.queued.is_empty() {
+            let index = self.conversation.rows.len();
+            self.conversation.list_state.splice(index..index + 1, 1);
+            self.conversation
+                .timeline_pane
+                .update(cx, |_, cx| cx.notify());
+        }
+    }
+
+    pub(super) fn can_resume_composer(&self) -> bool {
+        self.conversation.open.as_ref().is_some_and(|open| {
+            resume_target(&open.watch.state().lock().expect("thread")).is_some()
+        })
+    }
+
+    pub(super) fn resume_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(open) = self.conversation.open.as_ref() else {
+            return;
+        };
+        let Some((run_id, held)) = resume_target(&open.watch.state().lock().expect("thread"))
+        else {
+            return;
+        };
+        let Some((environment, model, mode, _)) = self.composer_target() else {
+            return;
+        };
+        let thread = open.watch.thread_id().to_string();
+        let Some(connection) = self.connection(&environment) else {
+            return;
+        };
+        let Some(key) = self.composer_key() else {
+            return;
+        };
+        if !self.conversation.composer_sends.insert(key.clone()) {
+            return;
+        }
+        let runtime = self.runtime.clone();
+        self.spawn_pane_in(window, cx, async move |this, cx| {
+            let result = on_runtime(&runtime, async move {
+                if let Some(run) = run_id {
+                    connection.set_runtime_mode(&thread, &mode).await?;
+                    connection.set_interaction_mode(&thread, "default").await?;
+                    let mut command = json!({"type":"message.dispatch", "threadId":thread, "messageId":uuid::Uuid::new_v4().to_string(), "createdBy":"user", "creationSource":"web", "manualContinuationOfRunId":run, "text":"Continue where you left off.", "attachments":[], "dispatchMode":{"type":"start_immediately"}});
+                    if let Some(model) = model { command["modelSelection"] = model; }
+                    connection.dispatch(command).await?;
+                }
+                if held { connection.dispatch(json!({"type":"queue.resume", "threadId":thread})).await?; }
+                Ok::<_, anyhow::Error>(())
+            }).await;
+            let _ = this.update_in(cx, |root, _, cx| {
+                root.conversation.composer_sends.remove(&key);
+                root.conversation.message = result.err().map(|error| format!("Could not resume thread: {error:#}"));
+                cx.notify();
+            });
+        }).detach();
+        cx.notify();
+    }
+
     pub(super) fn edit_latest_queued(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.conversation.composer.read(cx).cursor() != 0
             || !self
@@ -273,5 +438,51 @@ impl Root {
             });
         })
         .detach();
+    }
+}
+
+#[cfg(test)]
+mod resume_tests {
+    use super::resume_target;
+    use serde_json::{Value, json};
+
+    #[test]
+    fn resume_follows_execution_order_and_held_queue() {
+        let mut state = t3_client::projection::ThreadState::default();
+        state.projection.insert("runs".into(), json!([
+            {"id":"stopped", "ordinal":1, "status":"interrupted", "completedAt":"2026-11-18T10:00:00Z"},
+            {"id":"held", "ordinal":2, "status":"queued", "queueHeld":true},
+            {"id":"cancelled", "ordinal":3, "status":"cancelled", "startedAt":null}
+        ]));
+        assert_eq!(resume_target(&state), Some((Some("stopped".into()), true)));
+        state.projection.get_mut("runs").unwrap()[0]["status"] = json!("completed");
+        assert_eq!(resume_target(&state), Some((None, true)));
+        state.projection.get_mut("runs").unwrap()[1]["queueHeld"] = json!(false);
+        assert_eq!(resume_target(&state), None);
+        state.projection.get_mut("runs").unwrap()[0]["status"] = json!("failed");
+        state.projection.get_mut("runs").unwrap()[0]["rootNodeId"] = json!("root");
+        state.projection.insert("turnItems".into(), json!([
+            {"id":"error", "ordinal":1, "type":"error", "status":"failed", "runId":"stopped", "nodeId":"root", "failure":{"class":"usage_limit"}}
+        ]));
+        assert_eq!(resume_target(&state), Some((Some("stopped".into()), false)));
+        state
+            .projection
+            .insert("thread".into(), json!({"providerInstanceId":"codex"}));
+        state.projection.get_mut("turnItems").unwrap()[0]["failure"]["message"] =
+            json!("Usage limit reached");
+        state.projection.insert(
+            "providerSessions".into(),
+            json!([
+                {"providerInstanceId":"codex", "lastError":"Usage limit reached"},
+                {"providerInstanceId":"other", "lastError":"Disconnected"}
+            ]),
+        );
+        assert_eq!(resume_target(&state), Some((Some("stopped".into()), false)));
+        state.projection.get_mut("providerSessions").unwrap()[0]["lastError"] =
+            json!("Disconnected");
+        assert_eq!(resume_target(&state), None);
+        state.projection.get_mut("providerSessions").unwrap()[0]["lastError"] = Value::Null;
+        state.projection.get_mut("turnItems").unwrap()[0]["nodeId"] = json!("child");
+        assert_eq!(resume_target(&state), None);
     }
 }

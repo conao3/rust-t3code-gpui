@@ -5169,7 +5169,13 @@ impl<M: InputModeKind> Render for InputBaseState<M> {
                         accessibility.value_exposed
                             && !self.masked
                             && (window.is_a11y_active() || cfg!(feature = "test-support")),
-                        |this| this.aria_value(self.text.to_string()),
+                        |this| {
+                            let mut value = self.text.to_string();
+                            for span in self.token_spans().iter().rev() {
+                                value.replace_range(span.range(), span.token().label());
+                            }
+                            this.aria_value(value)
+                        },
                     )
                     .on_a11y_action(gpui::AccessibleAction::Focus, {
                         let entity = entity.clone();

@@ -144,6 +144,12 @@ impl ConversationState {
             rows: vec![],
             row_views: vec![],
             timeline_pane: cx.new(|cx| TimelinePane {
+                queue: cx.new(|_| composer_queue::QueuePane {
+                    root: root.clone(),
+                    pane_id: id,
+                    stamp: None,
+                }),
+                has_queue: false,
                 views: vec![],
                 list: list_state.clone(),
                 minimap: cx.new(|cx| super::minimap::Minimap::new(list_state.clone(), window, cx)),
