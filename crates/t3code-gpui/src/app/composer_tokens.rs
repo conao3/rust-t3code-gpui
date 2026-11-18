@@ -2,10 +2,10 @@ use super::*;
 use gpui_kit::base::input::{InlineToken, InputContent};
 use std::sync::LazyLock;
 
-pub(super) fn content(text: String) -> InputContent {
+fn content(text: String, instances: &[models::Instance]) -> InputContent {
     static TOKENS: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(
-            r#"(?m)(^|\s)(@(?:"(?:\\.|[^"\\])*"|[^\s@"]+)|[$¥€£][a-zA-Z0-9][a-zA-Z0-9:_-]*)"#,
+            r#"(?m)(^|\s)(@(?:"(?:\\.|[^"\\])*"|[^\s@"]+)|\p{Sc}[a-zA-Z0-9][a-zA-Z0-9:_-]*)"#,
         )
         .expect("composer tokens")
     });
@@ -80,10 +80,73 @@ pub(super) fn content(text: String) -> InputContent {
             )
             .expect("valid composer token");
     }
+    static MODELS: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r#"model:([a-zA-Z][a-zA-Z0-9_-]*)/([^\s,"']+)"#).expect("model mentions")
+    });
+    for capture in MODELS.captures_iter(&text) {
+        let found = capture.get(0).expect("model mention");
+        if text[..found.start()]
+            .chars()
+            .next_back()
+            .is_some_and(|c| !c.is_whitespace() && !",([\"'".contains(c))
+        {
+            continue;
+        }
+        let mut slug = &capture[2];
+        while let Some(last) = slug.chars().next_back() {
+            let opening = match last {
+                ')' => Some('('),
+                ']' => Some('['),
+                _ => None,
+            };
+            if !".;:!?".contains(last)
+                && !opening
+                    .is_some_and(|open| slug.matches(open).count() < slug.matches(last).count())
+            {
+                break;
+            }
+            slug = &slug[..slug.len() - last.len_utf8()];
+        }
+        let Some(model) = instances
+            .iter()
+            .find(|instance| instance.instance_id == capture[1])
+            .and_then(|instance| instance.models.iter().find(|model| model.slug == slug))
+        else {
+            continue;
+        };
+        let end = found.start() + "model:".len() + capture[1].len() + 1 + slug.len();
+        if content
+            .tokens()
+            .iter()
+            .any(|token| token.range().start < end && found.start() < token.range().end)
+        {
+            continue;
+        }
+        let source = &text[found.start()..end];
+        content = content
+            .with_token(
+                found.start()..end,
+                InlineToken::new(source.to_string(), source.to_string())
+                    .with_label(model.full_name.clone()),
+            )
+            .expect("valid model mention");
+    }
     content
 }
 
 impl Root {
+    pub(super) fn composer_content(&self, text: String) -> InputContent {
+        let catalog = self
+            .composer_target()
+            .and_then(|(environment, ..)| self.model_catalogs.get(&environment));
+        content(
+            text,
+            catalog
+                .map(|(_, instances)| instances.as_slice())
+                .unwrap_or_default(),
+        )
+    }
+
     pub(super) fn accept_token(
         &mut self,
         trigger: &completion::Trigger,
@@ -95,12 +158,14 @@ impl Root {
             return false;
         }
         let source = suggestion.insert.trim_end();
-        let text = if trigger.kind == completion::TriggerKind::Path {
+        let is_file =
+            trigger.kind == completion::TriggerKind::Path && !source.starts_with("model:");
+        let text = if is_file {
             file_link(&source[1..])
         } else {
             source.to_string()
         };
-        let label = if trigger.kind == completion::TriggerKind::Path {
+        let label = if is_file {
             suggestion
                 .label
                 .trim_start_matches('@')
@@ -144,6 +209,14 @@ fn file_link(path: &str) -> String {
     format!("[{label}]({destination})")
 }
 
+pub(super) fn file_path(source: &str) -> Option<String> {
+    if let Some(path) = source.strip_prefix('@') {
+        return Some(path.trim_matches('"').to_string());
+    }
+    let (_, destination) = source.split_once("](")?;
+    decode_path(destination.strip_suffix(')')?)
+}
+
 fn decode_path(encoded: &str) -> Option<String> {
     let mut bytes = vec![];
     let mut input = encoded.bytes();
@@ -162,6 +235,21 @@ fn decode_path(encoded: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::file_link;
+    #[test]
+    fn model_mentions_keep_balanced_slugs_and_exclude_prose_punctuation() {
+        let instances = crate::models::instances(&serde_json::json!({"providers":[{
+            "instanceId":"codex", "driver":"codex", "enabled":true,
+            "models":[{"slug":"model[1m]", "name":"Model"}]
+        }]}));
+        let text = "日本語 (model:codex/model[1m]). model:codex/model[1m]! xmodel:codex/model[1m] model:unknown/model[1m]";
+        let result = super::content(text.into(), &instances);
+        assert_eq!(result.tokens().len(), 2);
+        for token in result.tokens() {
+            assert_eq!(&text[token.range()], "model:codex/model[1m]");
+            assert_eq!(token.token().label().as_ref(), "Model");
+        }
+    }
+
     #[test]
     fn file_links_match_reference_serialization() {
         for (path, expected) in [

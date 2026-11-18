@@ -608,9 +608,10 @@ impl Root {
             self.with_conversation(id, |root| {
                 if let Some(text) = root.conversation.pending_composer.take() {
                     root.conversation.draft_text = text.clone();
-                    root.conversation.composer.update(cx, |state, cx| {
-                        state.set_value(composer_tokens::content(text), window, cx)
-                    });
+                    let content = root.composer_content(text);
+                    root.conversation
+                        .composer
+                        .update(cx, |state, cx| state.set_value(content, window, cx));
                 }
                 let target = format!(
                     "{:?}:{}",

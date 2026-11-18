@@ -5174,7 +5174,30 @@ impl<M: InputModeKind> Render for InputBaseState<M> {
                             for span in self.token_spans().iter().rev() {
                                 value.replace_range(span.range(), span.token().label());
                             }
-                            this.aria_value(value)
+                            let spans = self.token_spans();
+                            let mut cursor = 0;
+                            let mut segments = Vec::new();
+                            if !spans.is_empty() {
+                                for span in spans {
+                                    if cursor < span.range().start {
+                                        segments.push((cursor, self.text.slice(cursor..span.range().start).to_string()));
+                                    }
+                                    cursor = span.range().end;
+                                }
+                                if cursor < self.text.len() {
+                                    segments.push((cursor, self.text.slice(cursor..self.text.len()).to_string()));
+                                }
+                            }
+                            let lengths = value.chars().map(|character| character.len_utf8() as u8).collect::<Vec<_>>();
+                            this.aria_value(value.clone())
+                                .when(!spans.is_empty(), |this| this.child(
+                                    div().id("inline-editor-value").role(gpui::Role::TextRun).aria_value(value)
+                                        .a11y_synthetic_children(move |builder| builder.parent_node().set_character_lengths(lengths))
+                                        .absolute()
+                                ))
+                                .children(segments.into_iter().map(|(start, text)| {
+                                    div().id(("inline-text", start)).role(gpui::Role::Label).aria_label(text).absolute().size(px(1.))
+                                }))
                         },
                     )
                     .on_a11y_action(gpui::AccessibleAction::Focus, {

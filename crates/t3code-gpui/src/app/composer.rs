@@ -144,6 +144,11 @@ impl Root {
                 return;
             };
             let seq = self.conversation.completion_seq;
+            let model_suggestions = self
+                .model_catalogs
+                .get(&environment)
+                .map(|(_, instances)| completion::model_suggestions(instances, &trigger.query))
+                .unwrap_or_default();
             let runtime = self.runtime.clone();
             let query = trigger.query.clone();
             self.spawn_pane(cx, async move |this, cx| {
@@ -166,7 +171,10 @@ impl Root {
                     }
                     root.conversation.completion = found.ok().map(|result| Completion {
                         trigger,
-                        suggestions: completion::path_suggestions(&result),
+                        suggestions: model_suggestions
+                            .into_iter()
+                            .chain(completion::path_suggestions(&result))
+                            .collect(),
                         selected: 0,
                     });
                     cx.notify();
@@ -2192,6 +2200,13 @@ impl Root {
             v_flex()
                 .id("model-picker")
                 .role(accesskit::Role::Dialog)
+                .capture_action(self.pane_listener(
+                    cx,
+                    |root, _: &gpui_kit::base::actions::Cancel, window, cx| {
+                        root.cancel(window, cx);
+                        cx.stop_propagation();
+                    },
+                ))
                 .absolute()
                 .bottom(px(40.))
                 .right(px(48.))
@@ -2277,6 +2292,7 @@ impl Root {
                             div().flex_1().min_w_0().h_full().child(
                                 Command::new(&self.conversation.model_picker)
                                     .placeholder("Search models...")
+                                    .empty(|_, _, _| div().p_3().child(text!("No models found")))
                                     .max_h(px(300.))
                                     .group(group)
                                     .on_confirm(move |_, window, cx| close(window, cx))
@@ -2508,8 +2524,12 @@ impl Root {
                 v_flex()
                     .id("composer-completions")
                     .role(accesskit::Role::ListBox)
-                    .mx_3()
-                    .mt_2()
+                    .absolute()
+                    .bottom_full()
+                    .left_4()
+                    .right_4()
+                    .occlude()
+                    .bg(crate::appearance::composer(cx))
                     .p_1()
                     .rounded_md()
                     .border_1()
@@ -2621,6 +2641,82 @@ impl Root {
                         .text_size(px(self.settings.font_size_prompt))
                         .child(
                             Textarea::new(&self.conversation.composer)
+                                .token({
+                                    let root = self.pane_root(cx);
+                                    let providers = self
+                                        .composer_target()
+                                        .and_then(|(environment, ..)| {
+                                            self.model_catalogs.get(&environment)
+                                        })
+                                        .map(|(_, instances)| {
+                                            instances
+                                                .iter()
+                                                .map(|instance| {
+                                                    (
+                                                        instance.instance_id.clone(),
+                                                        instance.name.clone(),
+                                                    )
+                                                })
+                                                .collect::<HashMap<_, _>>()
+                                        })
+                                        .unwrap_or_default();
+                                    move |token, _, cx| {
+                                        let label = token.token().label().clone();
+                                        if token.token().text().starts_with("model:") {
+                                            let source = token.token().text().clone();
+                                            let provider = source
+                                                .strip_prefix("model:")
+                                                .and_then(|source| source.split_once('/'))
+                                                .and_then(|(instance, _)| providers.get(instance))
+                                                .cloned()
+                                                .unwrap_or_default();
+                                            return gpui_kit::component::popover::Popover::new((
+                                                "composer-model-token",
+                                                token.range().start,
+                                            ))
+                                            .trigger(
+                                                Button::new((
+                                                    "composer-model-mention",
+                                                    token.range().start,
+                                                ))
+                                                .label(label.clone())
+                                                .accessibility_label(format!("Model {label}"))
+                                                .ghost()
+                                                .compact()
+                                                .h(token.line_height()),
+                                            )
+                                            .content(move |_, _, _| {
+                                                v_flex()
+                                                    .p_2()
+                                                    .child(text!(label.clone()))
+                                                    .child(text!(provider.clone()))
+                                                    .child(text!(source.clone()))
+                                                    .into_any_element()
+                                            })
+                                            .into_any_element();
+                                        }
+                                        let Some(path) =
+                                            composer_tokens::file_path(token.token().text())
+                                        else {
+                                            return div().child(text!(label)).into_any_element();
+                                        };
+                                        let root = root.clone();
+                                        Button::new(("composer-file-token", token.range().start))
+                                            .child(text!(label))
+                                            .accessibility_label(format!("Preview {path}"))
+                                            .ghost()
+                                            .compact()
+                                            .h(token.line_height())
+                                            .px_1()
+                                            .bg(cx.theme().muted)
+                                            .on_click(move |_, _, cx| {
+                                                let _ = root.update(cx, |root, cx| {
+                                                    root.open_file(path.clone(), cx)
+                                                });
+                                            })
+                                            .into_any_element()
+                                    }
+                                })
                                 .aria_label(format!(
                                     "Message {}",
                                     self.open_entry()

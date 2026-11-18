@@ -261,8 +261,9 @@ impl Root {
             existing_attachments,
             context,
         });
+        let content = self.composer_content(text);
         self.conversation.composer.update(cx, |state, cx| {
-            state.set_value(super::composer_tokens::content(text), window, cx);
+            state.set_value(content, window, cx);
             state.focus(window, cx);
         });
         self.conversation.completion = None;
