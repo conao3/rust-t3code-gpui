@@ -397,7 +397,13 @@ impl Render for DiagramView {
                             .compact()
                             .accessibility_label(if self.copied { "Copied" } else { "Copy code" })
                             .on_click(cx.listener(move |view, _, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(source.clone()));
+                                cx.write_to_clipboard(ClipboardItem::new_string(
+                                    if source.is_empty() {
+                                        String::new()
+                                    } else {
+                                        format!("{source}\n")
+                                    },
+                                ));
                                 view.copied = true;
                                 cx.notify();
                                 cx.spawn(async move |this, cx| {
@@ -451,7 +457,6 @@ impl Render for DiagramView {
                             window.open_dialog(cx, move |dialog, window, _| {
                                 dialog
                                     .accessibility_label("Expanded image preview")
-                                    .keyboard(false)
                                     .close_button(false)
                                     .centered()
                                     .p_0()
@@ -462,12 +467,6 @@ impl Render for DiagramView {
                                         div()
                                             .relative()
                                             .top(px(18.))
-                                            .on_key_down(|event: &KeyDownEvent, window, cx| {
-                                                if event.keystroke.key == "escape" {
-                                                    window.close_dialog(cx);
-                                                    cx.stop_propagation();
-                                                }
-                                            })
                                             .h(window.viewport_size().height * 0.86)
                                             .flex()
                                             .flex_col()
@@ -549,6 +548,7 @@ impl Render for DiagramImage {
         let fit = (width / self.graphic.width).min(height / self.graphic.height);
         div()
             .id("diagram-zoom")
+            .key_context("DiagramImage")
             .bg(black())
             .border_1()
             .border_color(white().opacity(0.08))
