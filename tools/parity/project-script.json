@@ -105,7 +105,8 @@
         "name": "Terminal input"
       },
       "native": {
-        "role": "terminal"
+        "role": "textbox",
+        "name": "Terminal input"
       },
       "count": 1
     },
@@ -120,7 +121,8 @@
         "name": "Terminal input"
       },
       "native": {
-        "role": "terminal"
+        "role": "textbox",
+        "name": "Terminal input"
       },
       "count": 1
     }
