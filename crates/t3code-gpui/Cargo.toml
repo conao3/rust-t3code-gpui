@@ -12,7 +12,7 @@ clap.workspace = true
 chrono = "=0.4.45"
 chrono-tz = "=0.10.4"
 iana-time-zone = "=0.1.65"
-html-escape = "=0.2.15"
+html-escape = "=0.3.1"
 icu_calendar = "=2.4.0"
 icu_datetime = { version = "=2.4.0", default-features = false, features = ["compiled_data", "unstable"] }
 icu_locale_core = "=2.4.0"
