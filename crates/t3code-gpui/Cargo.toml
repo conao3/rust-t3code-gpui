@@ -12,7 +12,7 @@ clap.workspace = true
 chrono = "=0.4.45"
 chrono-tz = "=0.10.4"
 iana-time-zone = "=0.1.65"
-html-escape = "=0.2.15"
+html-escape = "=0.3.1"
 icu_calendar = "=2.4.0"
 icu_datetime = { version = "=2.4.0", default-features = false, features = ["compiled_data", "unstable"] }
 icu_locale_core = "=2.4.0"
@@ -20,7 +20,7 @@ sys-locale = "=0.3.2"
 gpui-kit = { version = "=0.9.1", features = ["syntect"] }
 humantime = "2.4"
 markdown = "1.0.0"
-regex = "=1.13.1"
+regex = "=1.13.2"
 serde_json.workspace = true
 serde.workspace = true
 t3-client = { path = "../t3-client" }
@@ -35,7 +35,7 @@ ratex-layout = "=0.1.16"
 ratex-types = "=0.1.16"
 ratex-svg = { version = "=0.1.16", features = ["embed-fonts"] }
 pelago = { git = "https://github.com/lazy-mutex/pelago", rev = "12676af43b6e9cd5046f5af0403a3666329eb001" }
-usvg = "=0.46.0"
+usvg = "=0.50.0"
 
 [features]
 gpui-fast = ["gpui-kit/gpui-fast"]

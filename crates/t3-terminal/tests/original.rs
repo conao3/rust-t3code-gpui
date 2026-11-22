@@ -32,10 +32,7 @@ fn difference(actual: &Value, expected: &Value, path: String) -> Option<String> 
 fn matches_original_terminal_operations() -> Result<()> {
     let oracle: Value = serde_json::from_str(include_str!("fixtures/original-terminal.json"))?;
     assert_eq!(
-        format!(
-            "{:x}",
-            Sha256::digest(include_bytes!("../assets/ghostty-vt.wasm"))
-        ),
+        hex::encode(Sha256::digest(include_bytes!("../assets/ghostty-vt.wasm"))),
         oracle["wasmSha256"].as_str().unwrap()
     );
     let version = include_str!("../assets/Ghostty-VERSION").trim().as_bytes();

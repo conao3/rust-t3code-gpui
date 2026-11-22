@@ -9,15 +9,16 @@ license.workspace = true
 anyhow.workspace = true
 serde = { workspace = true, features = ["rc"] }
 serde_json.workspace = true
-wasmtime = { version = "=50.0.1", default-features = false, features = ["std", "runtime", "cranelift", "parallel-compilation"] }
+wasmtime = { version = "=51.0.0", default-features = false, features = ["std", "runtime", "cranelift", "parallel-compilation"] }
 rayon = "=1.12.0"
 async-channel.workspace = true
-crossbeam-channel = "=0.5.15"
+crossbeam-channel = "=0.5.17"
 t3-client = { path = "../t3-client" }
 tokio.workspace = true
 
 [dev-dependencies]
-sha2 = "=0.10.9"
+hex = "0.4"
+sha2 = "=0.11.1"
 libc = "0.2"
 reqwest.workspace = true
 tempfile.workspace = true
