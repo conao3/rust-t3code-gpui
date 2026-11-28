@@ -68,6 +68,7 @@ async fn start_server() -> Server {
     loop {
         let ready = http
             .get(format!("{origin}/.well-known/t3/environment"))
+            .timeout(Duration::from_secs(2))
             .send()
             .await
             .is_ok_and(|r| r.status().is_success());

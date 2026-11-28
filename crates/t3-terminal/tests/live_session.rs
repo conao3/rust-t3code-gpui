@@ -73,6 +73,7 @@ async fn server() -> Result<Server> {
                 "{}/.well-known/t3/environment",
                 server.environment.http_base_url
             ))
+            .timeout(Duration::from_secs(2))
             .send()
             .await
             .is_ok_and(|response| response.status().is_success())
