@@ -24,7 +24,7 @@
 
 **This is an independent, unofficial project. It is not affiliated with, endorsed by, or maintained by T3 Code, T3 Tools Inc., or the upstream T3 Code team.**
 
-T3 Code GPUI is a native desktop frontend for [T3 Code](https://github.com/pingdotgg/t3code), built with GPUI through [gpui-kit](https://github.com/longbridge/gpui-kit). It talks to unmodified `t3 serve` servers over T3's WebSocket protocol (orchestration protocol 2) and renders the sidebar, a thread's timeline and a composer.
+T3 Code GPUI is a native desktop frontend for [T3 Code](https://github.com/pingdotgg/t3code), built with GPUI through [gpui-kit](https://github.com/longbridge/gpui-kit). It talks to unmodified `t3 serve` servers over T3's WebSocket protocol (orchestration protocol 2) and renders the sidebar, a thread's timeline, the composer, the right panel with Git and Lineage, and a terminal drawer.
 
 Redraws are batched: stream updates land in the client state as they arrive, and the window repaints at most every 250 ms. A streaming assistant message is split into blocks at blank lines, so only its last block is re-laid out. On X11 the window presents frames without waiting for vblank, so a frame never holds up key input (see `THIRD_PARTY_NOTICES.md` for the patched `gpui-pre-linux`).
 
@@ -47,8 +47,8 @@ Put the servers in `~/.config/t3code-gpui/environments.json` (mode 600):
 ```json
 {
   "environments": [
-    { "label": "eos", "httpBaseUrl": "http://127.0.0.1:3774", "token": "..." },
-    { "label": "helios", "httpBaseUrl": "https://helios.example.ts.net:8443", "token": "..." }
+    { "label": "local", "httpBaseUrl": "http://127.0.0.1:3774", "token": "..." },
+    { "label": "remote", "httpBaseUrl": "https://remote.example.ts.net:8443", "token": "..." }
   ]
 }
 ```
@@ -58,8 +58,12 @@ Put the servers in `~/.config/t3code-gpui/environments.json` (mode 600):
 ```sh
 nix run                                   # open the window
 t3code-gpui environment list-environments
-t3code-gpui environment check-environment --label eos
+t3code-gpui environment check-environment --label local
 ```
+
+<p align="center"><img src="docs/assets/window.png" alt="The T3 Code GPUI window with a thread list, a reply with a code block, the composer and the Git panel" width="880"></p>
+
+The screenshot shows a demo project on a temporary `t3 serve`, in the light theme.
 
 The application draws its own title bar, combining navigation and window controls. Drag the title or an empty area of the bar to move the window, double-click to maximize or restore, and use the buttons at the right to minimize, maximize, or close.
 
