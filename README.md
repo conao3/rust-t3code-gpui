@@ -63,9 +63,15 @@ t3code-gpui environment check-environment --label local
 
 <p align="center"><img src="docs/assets/window.png" alt="The T3 Code GPUI window with a thread list, a reply with a code block, the composer and the Git panel" width="880"></p>
 
-The screenshot shows a demo project on a temporary `t3 serve`, in the light theme.
+The screenshots in this README show demo projects on temporary `t3 serve` servers, in the light theme.
 
 The application draws its own title bar, combining navigation and window controls. Drag the title or an empty area of the bar to move the window, double-click to maximize or restore, and use the buttons at the right to minimize, maximize, or close.
+
+The bottom-panel button in the title bar opens the terminal drawer, a shell that runs on the thread's server.
+
+<p align="center"><img src="images/terminal.png" alt="The terminal drawer under a thread, with a shell in the project directory" width="880"></p>
+
+<p align="center"><img src="images/new-thread.png" alt="The new-thread pane with a message in the composer, above the checkout, branch and permission selectors" width="880"></p>
 
 The first environment is the primary host. A new thread in a project that several hosts share starts on the first host that has it. It takes the project's default model, or else the model of the project's latest thread, and the runtime mode of the latest thread (full access when the project has none).
 
@@ -78,6 +84,8 @@ The first environment is the primary host. A new thread in a project that severa
 | Ctrl+Shift+S, Alt+S | Settle the thread and open the next unsettled one (unsettle a settled thread) |
 | Ctrl+Shift+O | Start a new thread (Ctrl+N too, outside the composer) |
 | Escape | Leave the new-thread pane |
+
+<p align="center"><img src="images/question.png" alt="A question card in the timeline with two options and a Submit button" width="880"></p>
 
 Approval and question cards in the timeline take a click. Text in the composer answers the first open question that takes free text. The host chips above the thread list show one host's threads. A thread that becomes Done or starts waiting for input raises a desktop notification, unless it is the thread open in the focused window. "Open in browser" opens the same thread in the server's web UI.
 
